@@ -1,0 +1,13 @@
+<svg width="180" height="180" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rounded square -->
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="#3b82f6"/>
+  
+  <!-- Stylized "L" letter with modern design -->
+  <path d="M16 12V32H32V28H20V12H16Z" fill="white" fill-opacity="0.9"/>
+  
+  <!-- Decorative diagonal line for modern touch -->
+  <path d="M26 12L36 22" stroke="white" stroke-width="3" stroke-linecap="round" stroke-opacity="0.7"/>
+  
+  <!-- Small accent dot -->
+  <circle cx="36" cy="12" r="3" fill="white" fill-opacity="0.9"/>
+</svg>

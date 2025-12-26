@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String?       @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  accounts      Account[]
+  metaAccount   MetaAccount?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model MetaAccount {
+  id                   String     @id @default(cuid())
+  userId               String     @unique
+  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metaUserId           String     @unique
+  accessToken          String     @db.Text
+  accessTokenExpires   DateTime
+  adAccountId          String?
+  adAccountName        String?
+  pageId               String?
+  pageName             String?
+  pageAccessToken      String?    @db.Text
+  campaigns            Campaign[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+}
+
+model Campaign {
+  id              String            @id @default(cuid())
+  metaCampaignId  String            @unique
+  name            String
+  objective       String            @default("MESSAGES") // MESSAGES, OUTCOME_TRAFFIC, etc.
+  status          String            // ACTIVE, PAUSED, ARCHIVED
+  dailyBudget     Float             @default(20.0) // USD
+  metaAccountId   String
+  metaAccount     MetaAccount       @relation(fields: [metaAccountId], references: [id])
+  videoPath       String            @db.Text // Local path or S3 URL
+  videoAssetId    String?           // Meta video asset ID
+  adSets          AdSet[]
+  insights        CampaignInsight[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model AdSet {
+  id               String          @id @default(cuid())
+  metaAdSetId      String          @unique
+  campaignId       String
+  campaign         Campaign        @relation(fields: [campaignId], references: [id])
+  status           String          // ACTIVE, PAUSED
+  targeting        Json            // Store targeting criteria
+  dailyBudget      Float           @default(20.0)
+  ads              Ad[]
+  insights         AdSetInsight[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model Ad {
+  id            String        @id @default(cuid())
+  metaAdId      String        @unique
+  adSetId       String
+  adSet         AdSet         @relation(fields: [adSetId], references: [id])
+  status        String        // ACTIVE, PAUSED
+  adCreativeId  String
+  adCreative    AdCreative    @relation(fields: [adCreativeId], references: [id])
+  isWinner      Boolean       @default(false)
+  insights      AdInsight[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model AdCreative {
+  id                 String   @id @default(cuid())
+  metaCreativeId     String   @unique
+  videoAssetId       String
+  primaryTextTH      String   @db.Text
+  primaryTextEN      String   @db.Text
+  headlineTH         String?  @db.Text
+  headlineEN         String?  @db.Text
+  ctaMessagePromptTH String   @db.Text
+  ctaMessagePromptEN String   @db.Text
+  ads                Ad[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model CampaignInsight {
+  id             String   @id @default(cuid())
+  date           DateTime
+  campaignId     String
+  campaign       Campaign @relation(fields: [campaignId], references: [id])
+  spend          Float
+  messages       Int
+  costPerMessage Float
+  createdAt      DateTime @default(now())
+
+  @@unique([campaignId, date])
+}
+
+model AdInsight {
+  id             String   @id @default(cuid())
+  date           DateTime
+  adId           String
+  ad             Ad       @relation(fields: [adId], references: [id])
+  spend          Float
+  messages       Int
+  costPerMessage Float
+  createdAt      DateTime @default(now())
+  
+  @@unique([adId, date])
+}
+
+model AdSetInsight {
+  id             String   @id @default(cuid())
+  date           DateTime
+  adSetId        String
+  adSet          AdSet    @relation(fields: [adSetId], references: [id])
+  spend          Float
+  messages       Int
+  costPerMessage Float?
+  createdAt      DateTime @default(now())
+  
+  @@unique([adSetId, date])
+}
+
+model DecisionLog {
+  id         String   @id @default(cuid())
+  entityType String   // "Campaign", "AdSet", "Ad"
+  entityId   String
+  action     String   // "PAUSE", "RESUME", "MARK_WINNER"
+  reason     String   @db.Text
+  metadata   Json?    // Additional context
+  createdAt  DateTime @default(now())
+  
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  action       String   // "CREATE_CAMPAIGN", "PAUSE_AD", "API_CALL"
+  entityType   String?
+  entityId     String?
+  campaignId   String?
+  campaign     Campaign? @relation(fields: [campaignId], references: [id])
+  adId         String?
+  ad           Ad?      @relation(fields: [adId], references: [id])
+  details      Json?
+  ipAddress    String?
+  userAgent    String?  @db.Text
+  createdAt    DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

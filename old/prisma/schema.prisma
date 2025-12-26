@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  password       String?
+  image          String?
+  facebookAdToken String?  @db.Text
+  facebookName   String?   // Name from connected Facebook account
+  
+  // Google Sheets Integration
+  googleRefreshToken String? @db.Text
+  googleEmail        String?
+  googleName         String?
+
+  role           String    @default("host") // host, admin, staff - new users are host by default
+  permissions    Json?     // Custom permissions array for granular access control
+  
+  // User Settings
+  language       String    @default("en")
+  timezone       String    @default("auto")
+  currency       String    @default("usd")
+  theme          String    @default("light")
+  primaryColor   String    @default("sky")
+  compactMode    Boolean   @default(false)
+  showAnimations Boolean   @default(true)
+  emailNotifications Boolean @default(true)
+  campaignAlerts    Boolean @default(true)
+  weeklyReports     Boolean @default(false)
+  budgetAlerts      Boolean @default(true)
+  twoFactorEnabled  Boolean @default(false)
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  accounts       Account[]
+  sessions       Session[]
+  adAccounts     AdAccount[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AdAccount {
+  id        String   @id
+  userId    String
+  name      String
+  currency  String?
+  status    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email, token])
+}
+
+// Activity Log for tracking user actions
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  userEmail   String
+  userName    String?
+  action      String   // login, logout, send_message, create_team, add_member, etc.
+  details     String?  @db.Text // JSON details
+  ipAddress   String?
+  userAgent   String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+// Google Sheets Export Configuration
+model ExportConfig {
+  id                String   @id @default(cuid())
+  userId            String
+  name              String   // Config name for identification
+  spreadsheetUrl    String   @db.Text // Google Sheets URL
+  spreadsheetId     String   // Extracted from URL
+  spreadsheetName   String?  // Actual filename from Google Sheets
+  sheetName         String   // Sheet/Tab name
+  dataType          String   // accounts, campaigns, adsets, ads
+  accountIds        String?  @db.Text // JSON array of selected ad account IDs
+  columnMapping     String   @db.Text // JSON mapping of data columns to sheet columns
+  
+  // Auto Export Settings
+  autoExportEnabled Boolean  @default(false)
+  exportFrequency   String?  // daily, hourly
+  exportHour        Int?     // Hour of day (0-23) for daily export
+  exportInterval    Int?     // Hours between exports for hourly
+  appendMode        Boolean  @default(true) // true = append new rows, false = replace all
+  includeDate       Boolean  @default(true) // Add date column
+  
+  // Timezone Support
+  adAccountTimezone    String?  // e.g., "Asia/Bangkok"
+  useAdAccountTimezone Boolean  @default(false)
+  exportMinute         Int?     @default(0) // Minute of hour (0-59)
+  
+  // Status tracking
+  lastExportAt      DateTime?
+  lastExportStatus  String?  // success, failed
+  lastExportError   String?  @db.Text
+  lastExportRows    Int?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@index([autoExportEnabled])
+}
+
+// ===== Dashboard Sync Models (from ads-master) =====
+
+model SyncData {
+  id                  String    @id @default(cuid())
+  team                String
+  b                   String?
+  adser               String
+  date                DateTime
+  message             Int       @default(0)
+  messageMeta         Int       @default(0)
+  lostMessages        Int       @default(0)
+  netMessages         Int       @default(0)
+  planSpend           Float     @default(0)
+  spend               Float     @default(0)
+  planMessage         Int       @default(0)
+  l                   Int       @default(0)
+  deposit             Float     @default(0)
+  n                   Int       @default(0)
+  turnoverAdser       Float     @default(0)
+  p                   Float     @default(0)
+  turnover            Float     @default(0)
+  cover               Float     @default(0)
+  pageBlocks7days     Int       @default(0)
+  pageBlocks30days    Int       @default(0)
+  silent              Int       @default(0)
+  duplicate           Int       @default(0)
+  hasUser             Int       @default(0)
+  spam                Int       @default(0)
+  blocked             Int       @default(0)
+  under18             Int       @default(0)
+  over50              Int       @default(0)
+  foreign             Int       @default(0)
+  sheetName           String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  @@index([team])
+  @@index([adser])
+  @@index([date])
+  @@index([sheetName])
+  @@unique([team, adser, date, sheetName])
+}
+
+model ExchangeRate {
+  id          String   @id @default(cuid())
+  rate        Float    // USD to THB rate
+  timestamp   DateTime @default(now())
+  
+  @@index([timestamp])
+}
+
+// Dashboard Goal settings (Admin only)
+model DashboardGoal {
+  id              String    @id @default(cuid())
+  tabId           Int       @unique // 1=หวย, 2=บาคาร่า, 3=หวยม้า, 4=ฟุตบอลแอเรีย
+  cover           Float     @default(0)  // เป้า Cover ($)
+  cpm             Float     @default(0)  // เป้า CPM
+  deposit         Float     @default(0)  // เป้ายอดเติม ($)
+  loss            Float     @default(0)  // เป้ายอดเสีย (%)
+  repeat          Float     @default(0)  // เป้าทักซ้ำ (%)
+  child           Float     @default(0)  // เป้าเด็ก (%)
+  costPerDeposit  Float     @default(0)  // เป้าต้นทุน/เติม ($)
+  updatedAt       DateTime  @updatedAt
+  updatedBy       String?   // Admin user ID ที่อัปเดตล่าสุด
+}
+
+// Email Whitelist - Only approved emails can access the site
+model AllowedEmail {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  note        String?  // Optional note about this email (e.g., "Admin", "Team Lead")
+  createdAt   DateTime @default(now())
+  createdBy   String?  // User ID who added this email
+
+  @@index([email])
+}

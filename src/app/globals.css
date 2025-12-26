@@ -1,0 +1,106 @@
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 30% 96%;
+    /* Soft cool gray/slate background */
+    --foreground: 230 25% 15%;
+    /* Deep slate text */
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+
+    /* Deep Blue Primary */
+    --primary: 215 75% 50%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 220 20% 92%;
+    --secondary-foreground: 230 25% 15%;
+
+    --muted: 220 20% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 215 75% 92%;
+    /* Light blue accent */
+    --accent-foreground: 215 75% 45%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 15% 90%;
+    --input: 220 15% 90%;
+    --ring: 215 75% 50%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 230 25% 10%;
+    /* Deep dark slate */
+    --foreground: 210 40% 98%;
+
+    --card: 230 25% 12%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 230 25% 12%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 215 80% 60%;
+    /* Brighter blue for dark mode */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 230 20% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 230 20% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 215 60% 25%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 230 20% 20%;
+    --input: 230 20% 20%;
+    --ring: 215 80% 60%;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 dark:bg-black/40 backdrop-blur-lg border border-white/20 dark:border-white/10 shadow-sm;
+  }
+
+  .glass-card {
+    @apply bg-white/95 dark:bg-card/95 backdrop-blur-md border border-white/20 dark:border-white/5 shadow-sm rounded-xl;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors font-sans;
+    font-family: var(--font-sarabun), var(--font-roboto), sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-sarabun), var(--font-roboto), sans-serif;
+    @apply tracking-tight;
+  }
+}
