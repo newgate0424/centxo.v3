@@ -478,7 +478,7 @@ export default function CampaignsPage() {
           prev.map(c => c.id === campaignId ? { ...c, status: currentStatus } : c)
         );
         const error = await response.json();
-        alert(error.error || 'Failed to toggle campaign status');
+        alert(error.error || t('campaigns.error.toggle', 'Failed to toggle campaign status'));
       }
     } catch (error) {
       // Revert on error
@@ -486,7 +486,7 @@ export default function CampaignsPage() {
         prev.map(c => c.id === campaignId ? { ...c, status: currentStatus } : c)
       );
       console.error('Error toggling campaign:', error);
-      alert('Failed to toggle campaign status');
+      alert(t('campaigns.error.toggle', 'Failed to toggle campaign status'));
     }
   };
 
@@ -551,7 +551,7 @@ export default function CampaignsPage() {
   };
 
   const handleDeleteCampaign = async (campaignId: string) => {
-    if (!confirm('Are you sure you want to delete this campaign?')) return;
+    if (!confirm(t('campaigns.deleteConfirm', 'Are you sure you want to delete this campaign?'))) return;
     // TODO: Implement delete
     console.log('Delete campaign:', campaignId);
   };
@@ -601,14 +601,14 @@ export default function CampaignsPage() {
     // Age
     if (targeting.age_min || targeting.age_max) {
       const ageMin = targeting.age_min || '18';
-      const ageMax = targeting.age_max || '65+';
-      parts.push(`อายุ: ${ageMin}-${ageMax}`);
+      const ageMax = targeting.age_max || t('campaigns.targeting.noLimit', '65+');
+      parts.push(`${t('campaigns.targeting.age', 'Age')}: ${ageMin}-${ageMax}`);
     }
 
     // Countries
     if (targeting.geo_locations?.countries && targeting.geo_locations.countries.length > 0) {
       const countries = targeting.geo_locations.countries.join(', ');
-      parts.push(`ประเทศ: ${countries}`);
+      parts.push(`${t('campaigns.targeting.country', 'Country')}: ${countries}`);
     }
 
     // Interests
@@ -622,7 +622,7 @@ export default function CampaignsPage() {
         }
       });
       if (interests.length > 0) {
-        parts.push(`ความสนใจ: ${interests.slice(0, 3).join(', ')}${interests.length > 3 ? '...' : ''}`);
+        parts.push(`${t('campaigns.targeting.interests', 'Interests')}: ${interests.slice(0, 3).join(', ')}${interests.length > 3 ? '...' : ''}`);
       }
     }
 
@@ -638,14 +638,14 @@ export default function CampaignsPage() {
     // Age
     if (targeting.age_min || targeting.age_max) {
       const ageMin = targeting.age_min || '18';
-      const ageMax = targeting.age_max || '65+';
-      parts.push(`อายุ: ${ageMin}-${ageMax}`);
+      const ageMax = targeting.age_max || t('campaigns.targeting.noLimit', '65+');
+      parts.push(`${t('campaigns.targeting.age', 'Age')}: ${ageMin}-${ageMax}`);
     }
 
     // Countries
     if (targeting.geo_locations?.countries && targeting.geo_locations.countries.length > 0) {
       const countries = targeting.geo_locations.countries.join(', ');
-      parts.push(`ประเทศ: ${countries}`);
+      parts.push(`${t('campaigns.targeting.country', 'Country')}: ${countries}`);
     }
 
     // Interests (all interests, not limited to 3)
@@ -659,7 +659,7 @@ export default function CampaignsPage() {
         }
       });
       if (interests.length > 0) {
-        parts.push(`ความสนใจ: ${interests.join(', ')}`);
+        parts.push(`${t('campaigns.targeting.interests', 'Interests')}: ${interests.join(', ')}`);
       }
     }
 
@@ -672,8 +672,8 @@ export default function CampaignsPage() {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between flex-shrink-0">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('campaigns.title', 'All Campaigns')}</h1>
-            <p className="text-gray-600">{t('campaigns.subtitle', 'Manage and optimize your campaigns')}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('campaigns.title', 'All Campaigns')}</h1>
+            <p className="text-gray-600 dark:text-gray-400">{t('campaigns.subtitle', 'Manage and optimize your campaigns')}</p>
           </div>
           <Link href="/launch">
             <Button className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -698,7 +698,7 @@ export default function CampaignsPage() {
               placeholder={t('campaigns.search', 'Search campaigns...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
             />
           </div>
 
@@ -712,7 +712,7 @@ export default function CampaignsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'paused')}
-            className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white"
+            className="px-3 py-2 border border-gray-200 dark:border-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-sm bg-white dark:bg-zinc-950"
           >
             <option value="all">{t('campaigns.filter.allStatus', 'All Status')}</option>
             <option value="active">{t('campaigns.filter.active', 'Active')}</option>
@@ -752,13 +752,13 @@ export default function CampaignsPage() {
 
         {/* Tabs */}
         <div className="flex-shrink-0">
-          <div className="border-b border-gray-200">
+          <div className="border-b border-gray-200 dark:border-zinc-800">
             <nav className="-mb-px flex gap-2">
               <button
                 onClick={() => setActiveTab('campaigns')}
                 className={`${activeTab === 'campaigns'
-                  ? 'border-gray-200 border-b-white text-primary bg-white -mb-px'
-                  : 'border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  ? 'border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-950 text-primary bg-white dark:bg-zinc-950 -mb-px'
+                  : 'border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
                   } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center gap-2 rounded-t-lg`}
               >
                 <span>{t('campaigns.tabs.campaigns', 'Campaigns')}</span>
@@ -781,32 +781,34 @@ export default function CampaignsPage() {
               <button
                 onClick={() => setActiveTab('adsets')}
                 className={`${activeTab === 'adsets'
-                  ? 'border-gray-200 border-b-white text-primary bg-white -mb-px'
-                  : 'border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center gap-2 rounded-t-lg`}
+                  ? 'border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-950 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-950 -mb-px'
+                  : 'border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
+                  } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center justify-start rounded-t-lg`}
               >
-                <span>{t('campaigns.tabs.adsets', 'Ad Sets')}</span>
-                {selectedAdSetIds.size > 0 && (
-                  <>
-                    <span className="flex-1" />
-                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      Selected {selectedAdSetIds.size}
-                      <span
-                        onClick={(e) => { e.stopPropagation(); setSelectedAdSetIds(new Set()); }}
-                        className="hover:bg-blue-200 rounded-full p-0.5 transition-colors cursor-pointer"
-                        title="Clear selection"
-                      >
-                        <X className="h-3 w-3" />
+                <span className="flex items-center gap-2">
+                  {t('campaigns.tabs.adSets', 'Ad sets')}
+                  {selectedAdSetIds.size > 0 && (
+                    <>
+                      <span className="flex-1" />
+                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        Selected {selectedAdSetIds.size}
+                        <span
+                          onClick={(e) => { e.stopPropagation(); setSelectedAdSetIds(new Set()); }}
+                          className="hover:bg-blue-200 rounded-full p-0.5 transition-colors cursor-pointer"
+                          title="Clear selection"
+                        >
+                          <X className="h-3 w-3" />
+                        </span>
                       </span>
-                    </span>
-                  </>
-                )}
+                    </>
+                  )}
+                </span>
               </button>
               <button
                 onClick={() => setActiveTab('ads')}
                 className={`${activeTab === 'ads'
-                  ? 'border-gray-200 border-b-white text-primary bg-white -mb-px'
-                  : 'border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  ? 'border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-950 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-950 -mb-px'
+                  : 'border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
                   } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center justify-start rounded-t-lg`}
               >
                 {t('campaigns.tabs.ads', 'Ads')}
@@ -816,60 +818,60 @@ export default function CampaignsPage() {
         </div>
 
         {/* Campaigns List */}
-        <div className="bg-white border border-gray-200 border-t-0 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">{activeTab === 'campaigns' && (
+        <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 border-t-0 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">{activeTab === 'campaigns' && (
           <>
-            <div className="overflow-auto flex-1 border-t border-gray-200 rounded-tr-xl">
+            <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-tr-xl">
               <table className="w-full min-w-max">
-                <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10 rounded-tr-xl">
+                <thead className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-10 rounded-tr-xl">
                   <tr>
-                    <th className="px-3 py-2 text-center text-sm font-semibold text-gray-900 w-12 border-r border-gray-200"></th>
-                    <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 w-20 border-r border-gray-200">ปิด/เปิด</th>
-                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Ad Acc</th>
-                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Campaign</th>
-                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Status</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Results</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Cost per result</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Budget</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Reach</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Impressions</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Post engagements</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Clicks (all)</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Messaging contacts</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Amount spent</th>
-                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Created</th>
-                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px]">Actions</th>
+                    <th className="px-3 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 w-12 border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.number', '#')}</th>
+                    <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 w-20 border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.toggle', 'Active')}</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.adAccount', 'Ad Acc')}</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.name', 'Campaign')}</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.status', 'Status')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.results', 'Results')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.costPerResult', 'Cost per result')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.budget', 'Budget')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.reach', 'Reach')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.impressions', 'Impressions')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.postEngagements', 'Post engagements')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.clicks', 'Clicks (all)')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.messagingContacts', 'Messaging contacts')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.amountSpent', 'Amount spent')}</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.created', 'Created')}</th>
+                    <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 border-b border-gray-200">
+                <tbody className="divide-y divide-gray-200 dark:divide-zinc-800 border-b border-gray-200 dark:border-zinc-800">
                   {loading ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="animate-pulse">
-                        <td className="px-3 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-4"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 w-8 bg-gray-200 rounded-full mx-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                        <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
-                        <td className="px-2 py-2"><div className="h-6 bg-gray-200 rounded w-24 ml-auto"></div></td>
+                        <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-4"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 w-8 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></td>
+                        <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></td>
+                        <td className="px-2 py-2"><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></td>
                       </tr>
                     ))
                   ) : filteredCampaigns.length === 0 ? (
                     <tr>
                       <td colSpan={16} className="text-center py-16">
-                        <p className="text-gray-600 mb-4">{campaigns.length === 0 ? 'No campaigns yet' : 'No campaigns match your filters'}</p>
+                        <p className="text-gray-600 dark:text-gray-400 mb-4">{campaigns.length === 0 ? t('campaigns.noCampaigns', 'No campaigns yet') : t('campaigns.noMatch', 'No campaigns match your filters')}</p>
                         {campaigns.length === 0 && (
                           <Link href="/launch">
                             <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                              Create Your First Campaign
+                              {t('campaigns.createFirst', 'Create Your First Campaign')}
                             </Button>
                           </Link>
                         )}
@@ -877,9 +879,9 @@ export default function CampaignsPage() {
                     </tr>
                   ) : (
                     filteredCampaigns.map((campaign, index) => (
-                      <tr key={campaign.id} className="hover:bg-gray-50 transition-colors border-b border-gray-200">
+                      <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800">
                         <td
-                          className="px-3 py-2 text-center text-sm text-gray-600 border-r border-gray-200 cursor-pointer hover:bg-gray-100"
+                          className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800"
                           onClick={() => handleToggleCampaignSelection(campaign.id, !selectedCampaignIds.has(campaign.id))}
                         >
                           <div className="flex justify-center">
@@ -891,7 +893,7 @@ export default function CampaignsPage() {
                             />
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-center border-r border-gray-200">
+                        <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
                           <button
                             onClick={() => handleToggleCampaign(campaign.id, campaign.status)}
                             className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${campaign.status === 'ACTIVE'
@@ -906,7 +908,7 @@ export default function CampaignsPage() {
                             />
                           </button>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div
@@ -917,14 +919,14 @@ export default function CampaignsPage() {
                                 {getAdAccountName(campaign.adAccountId)}
                               </div>
                             </PopoverTrigger>
-                            <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                              <div className="text-sm font-medium mb-2">Ad Account</div>
-                              <div className="text-sm text-gray-700">{getAdAccountName(campaign.adAccountId)}</div>
-                              <div className="text-xs text-gray-500 mt-1">Click to open in Meta Ads Manager</div>
+                            <PopoverContent className="w-96 max-h-64 overflow-auto bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800" align="start">
+                              <div className="text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">{t('campaigns.tooltips.adAccount', 'Ad Account')}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{getAdAccountName(campaign.adAccountId)}</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('campaigns.tooltips.openMeta', 'Click to open in Meta Ads Manager')}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-900 border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div
@@ -935,13 +937,13 @@ export default function CampaignsPage() {
                                 {campaign.name}
                               </div>
                             </PopoverTrigger>
-                            <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                              <div className="text-sm font-medium mb-2">Campaign Name</div>
-                              <div className="text-sm text-gray-700 whitespace-pre-wrap">{campaign.name}</div>
+                            <PopoverContent className="w-96 max-h-64 overflow-auto bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800" align="start">
+                              <div className="text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">{t('campaigns.tooltips.campaignName', 'Campaign Name')}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{campaign.name}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm border-r border-gray-200 dark:border-zinc-800">
                           <div className="inline-flex items-center gap-2">
                             <span className={`inline-block w-2 h-2 rounded-full ${campaign.status === 'ACTIVE'
                               ? 'bg-green-500'
@@ -949,12 +951,12 @@ export default function CampaignsPage() {
                                 ? 'bg-yellow-500'
                                 : 'bg-gray-400'
                               }`}></span>
-                            <span className="text-sm text-gray-900">
-                              {campaign.status === 'ACTIVE' ? 'Active' : campaign.status === 'PAUSED' ? 'Paused' : campaign.status}
+                            <span className="text-sm text-gray-900 dark:text-gray-100">
+                              {campaign.status === 'ACTIVE' ? t('campaigns.status.active', 'ACTIVE') : campaign.status === 'PAUSED' ? t('campaigns.status.paused', 'PAUSED') : campaign.status}
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -963,11 +965,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Results</div>
-                              <div className="text-sm text-gray-700">{campaign.results?.toLocaleString() ?? '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.results?.toLocaleString() ?? '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -976,11 +978,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Cost per result</div>
-                              <div className="text-sm text-gray-700">{campaign.costPerResult ? `$${campaign.costPerResult.toFixed(2)}` : '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.costPerResult ? `$${campaign.costPerResult.toFixed(2)}` : '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -993,14 +995,14 @@ export default function CampaignsPage() {
                                   if (budget > 0) {
                                     return (
                                       <div className="flex flex-col items-end">
-                                        <span className="text-xs text-gray-500">Campaign {budgetType}</span>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">Campaign {budgetType}</span>
                                         <span className="font-medium">{formatCurrency(budget, campaign.currency)}</span>
                                       </div>
                                     );
                                   }
                                   return (
                                     <div className="flex flex-col items-end">
-                                      <span className="text-xs text-gray-500">Ad Set Budget</span>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">Ad Set Budget</span>
                                       <span className="text-gray-400">-</span>
                                     </div>
                                   );
@@ -1008,27 +1010,28 @@ export default function CampaignsPage() {
                               </div>
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
-                              <div className="text-sm font-medium mb-2">Budget Information</div>
+                              <div className="text-sm font-medium mb-2">{t('campaigns.tooltips.budgetInfo', 'Budget Information')}</div>
                               {campaign.dailyBudget && campaign.dailyBudget > 0 && (
-                                <div className="text-sm text-gray-700 mb-1">
-                                  <span className="font-medium">Campaign Daily:</span> {formatCurrency(campaign.dailyBudget, campaign.currency)}
+                                <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                  <span className="font-medium">{t('campaigns.tooltips.campaignDaily', 'Campaign Daily:')}</span> {formatCurrency(campaign.dailyBudget, campaign.currency)}
                                 </div>
                               )}
                               {campaign.lifetimeBudget && campaign.lifetimeBudget > 0 && (
-                                <div className="text-sm text-gray-700 mb-1">
-                                  <span className="font-medium">Campaign Lifetime:</span> {formatCurrency(campaign.lifetimeBudget, campaign.currency)}
+                                <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                  <span className="font-medium">{t('campaigns.tooltips.campaignLifetime', 'Campaign Lifetime:')}</span> {formatCurrency(campaign.lifetimeBudget, campaign.currency)}
                                 </div>
                               )}
                               {(!campaign.dailyBudget || campaign.dailyBudget === 0) && (!campaign.lifetimeBudget || campaign.lifetimeBudget === 0) && (
-                                <div className="text-sm text-gray-500">
-                                  No campaign budget set.<br />
-                                  Budget is managed at ad set level.
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {t('campaigns.tooltips.noBudget', 'No campaign budget set.\nBudget is managed at ad set level.').split('\n').map((line, i) => (
+                                    <span key={i} className="block">{line}</span>
+                                  ))}
                                 </div>
                               )}
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1037,11 +1040,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Reach</div>
-                              <div className="text-sm text-gray-700">{campaign.reach?.toLocaleString() ?? '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.reach?.toLocaleString() ?? '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1050,11 +1053,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Impressions</div>
-                              <div className="text-sm text-gray-700">{campaign.impressions?.toLocaleString() ?? '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.impressions?.toLocaleString() ?? '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1063,11 +1066,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Post engagements</div>
-                              <div className="text-sm text-gray-700">{campaign.postEngagements?.toLocaleString() ?? '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.postEngagements?.toLocaleString() ?? '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1076,11 +1079,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Clicks (all)</div>
-                              <div className="text-sm text-gray-700">{campaign.clicks?.toLocaleString() ?? '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.clicks?.toLocaleString() ?? '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1089,11 +1092,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Messaging contacts</div>
-                              <div className="text-sm text-gray-700">{campaign.messagingContacts?.toLocaleString() ?? '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.messagingContacts?.toLocaleString() ?? '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1102,11 +1105,11 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Amount spent</div>
-                              <div className="text-sm text-gray-700">{campaign.amountSpent ? `$${campaign.amountSpent.toFixed(2)}` : '-'}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.amountSpent ? `$${campaign.amountSpent.toFixed(2)}` : '-'}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                           <Popover>
                             <PopoverTrigger asChild>
                               <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1115,7 +1118,7 @@ export default function CampaignsPage() {
                             </PopoverTrigger>
                             <PopoverContent className="w-64" align="start">
                               <div className="text-sm font-medium mb-2">Created</div>
-                              <div className="text-sm text-gray-700">{campaign.createdAt}</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.createdAt}</div>
                             </PopoverContent>
                           </Popover>
                         </td>
@@ -1123,20 +1126,20 @@ export default function CampaignsPage() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => handleToggleCampaign(campaign.id, campaign.status)}
-                              className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                               title={campaign.status === 'ACTIVE' ? 'Pause' : 'Resume'}
                             >
                               {campaign.status === 'ACTIVE' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                             </button>
                             <button
-                              className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                              className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
                               title="Edit"
                             >
                               <Edit2 className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteCampaign(campaign.id)}
-                              className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                              className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                               title="Delete"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1157,9 +1160,9 @@ export default function CampaignsPage() {
             <>
               <div className="overflow-auto flex-1">
                 <table className="w-full min-w-max">
-                  <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                  <thead className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-10">
                     <tr>
-                      <th className="px-3 py-2 text-center text-sm font-semibold text-gray-900 w-12 border-r border-gray-200">
+                      <th className="px-3 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 w-12 border-r border-gray-200 dark:border-zinc-800">
                         <div className="flex justify-center">
                           <Checkbox
                             checked={
@@ -1172,50 +1175,50 @@ export default function CampaignsPage() {
                           />
                         </div>
                       </th>
-                      <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 w-20 border-r border-gray-200">ปิด/เปิด</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Ad Acc</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Ad Set Name</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Target</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Status</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Results</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Cost per result</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Budget</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Reach</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Impressions</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Post engagements</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Clicks (all)</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Messaging contacts</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Amount spent</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Daily Budget</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Optimization</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Bid Amount</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Created</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px]">Actions</th>
+                      <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 w-20 border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.toggle', 'Active')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.adAccount', 'Ad Acc')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.adSetName', 'Ad Set Name')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.target', 'Target')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.status', 'Status')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.results', 'Results')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.costPerResult', 'Cost per result')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.budget', 'Budget')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.reach', 'Reach')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.impressions', 'Impressions')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.postEngagements', 'Post engagements')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.clicks', 'Clicks (all)')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.messagingContacts', 'Messaging contacts')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.amountSpent', 'Amount spent')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('launch.dailyBudget', 'Daily Budget')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.optimization', 'Optimization')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.bidAmount', 'Bid Amount')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.created', 'Created')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 border-b border-gray-200">
+                  <tbody className="divide-y divide-gray-200 border-b border-gray-200 dark:border-zinc-800">
                     {loading ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <tr key={i} className="animate-pulse">
-                          <td className="px-3 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-6 bg-gray-200 rounded-full w-11 mx-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-40"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                          <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 rounded-full w-11 mx-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-40"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-20 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-16 ml-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
                           <td className="px-2 py-2"><div className="h-6 bg-gray-200 rounded w-24 ml-auto"></div></td>
                         </tr>
                       ))
@@ -1228,7 +1231,7 @@ export default function CampaignsPage() {
                     }).length === 0 ? (
                       <tr>
                         <td colSpan={20} className="text-center py-16">
-                          <p className="text-gray-600 mb-4">{filteredAdSets.length === 0 ? 'No ad sets found' : 'No ad sets match your filters'}</p>
+                          <p className="text-gray-600 dark:text-gray-400 mb-4">{filteredAdSets.length === 0 ? 'No ad sets found' : 'No ad sets match your filters'}</p>
                         </td>
                       </tr>
                     ) : (
@@ -1239,9 +1242,9 @@ export default function CampaignsPage() {
                           (statusFilter === 'paused' && a.status === 'PAUSED');
                         return matchesSearch && matchesStatus;
                       }).map((adSet, index) => (
-                        <tr key={adSet.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={adSet.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
                           <td
-                            className="px-3 py-2 text-center text-sm text-gray-600 border-r border-gray-200 cursor-pointer hover:bg-gray-100"
+                            className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800"
                             onClick={() => handleToggleAdSetSelection(adSet.id, !selectedAdSetIds.has(adSet.id))}
                           >
                             <div className="flex justify-center">
@@ -1253,7 +1256,7 @@ export default function CampaignsPage() {
                               />
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-center border-r border-gray-200">
+                          <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
                             <button
                               onClick={() => handleToggleAdSet(adSet.id, adSet.status)}
                               className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${adSet.status === 'ACTIVE'
@@ -1268,7 +1271,7 @@ export default function CampaignsPage() {
                               />
                             </button>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div
@@ -1280,13 +1283,13 @@ export default function CampaignsPage() {
                                 </div>
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                                <div className="text-sm font-medium mb-2">Ad Account</div>
-                                <div className="text-sm text-gray-700">{getAdAccountName(adSet.adAccountId)}</div>
-                                <div className="text-xs text-gray-500 mt-1">Click to open in Meta Ads Manager</div>
+                                <div className="text-sm font-medium mb-2">{t('campaigns.tooltips.adAccount', 'Ad Account')}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{getAdAccountName(adSet.adAccountId)}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('campaigns.tooltips.openMeta', 'Click to open in Meta Ads Manager')}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-900 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div
@@ -1298,12 +1301,12 @@ export default function CampaignsPage() {
                                 </div>
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                                <div className="text-sm font-medium mb-2">Ad Set Name</div>
-                                <div className="text-sm text-gray-700 whitespace-pre-wrap">{adSet.name}</div>
+                                <div className="text-sm font-medium mb-2">{t('campaigns.tooltips.adSetName', 'Ad Set Name')}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{adSet.name}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-1 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div
@@ -1315,12 +1318,12 @@ export default function CampaignsPage() {
                                 </div>
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                                <div className="text-sm font-medium mb-2">Target</div>
-                                <div className="text-sm text-gray-700 whitespace-pre-wrap">{formatTargetingFull(adSet.targeting)}</div>
+                                <div className="text-sm font-medium mb-2">{t('campaigns.columns.target', 'Target')}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{formatTargetingFull(adSet.targeting)}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm border-r border-gray-200 dark:border-zinc-800">
                             <div className="inline-flex items-center gap-2">
                               <span className={`inline-block w-2 h-2 rounded-full ${adSet.status === 'ACTIVE'
                                 ? 'bg-green-500'
@@ -1328,12 +1331,12 @@ export default function CampaignsPage() {
                                   ? 'bg-yellow-500'
                                   : 'bg-gray-400'
                                 }`}></span>
-                              <span className="text-sm text-gray-900">
-                                {adSet.status === 'ACTIVE' ? 'Active' : adSet.status === 'PAUSED' ? 'Paused' : adSet.status}
+                              <span className="text-sm text-gray-900 dark:text-gray-100">
+                                {adSet.status === 'ACTIVE' ? t('campaigns.status.active', 'ACTIVE') : adSet.status === 'PAUSED' ? t('campaigns.status.paused', 'PAUSED') : adSet.status}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1342,11 +1345,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Results</div>
-                                <div className="text-sm text-gray-700">{adSet.results?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.results?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1355,11 +1358,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Cost per result</div>
-                                <div className="text-sm text-gray-700">{adSet.costPerResult ? `$${adSet.costPerResult.toFixed(2)}` : '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.costPerResult ? `$${adSet.costPerResult.toFixed(2)}` : '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1368,11 +1371,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Budget</div>
-                                <div className="text-sm text-gray-700">{adSet.budget ? `$${adSet.budget.toFixed(2)}` : '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.budget ? `$${adSet.budget.toFixed(2)}` : '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1381,11 +1384,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Reach</div>
-                                <div className="text-sm text-gray-700">{adSet.reach?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.reach?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1394,11 +1397,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Impressions</div>
-                                <div className="text-sm text-gray-700">{adSet.impressions?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.impressions?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1407,11 +1410,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Post engagements</div>
-                                <div className="text-sm text-gray-700">{adSet.postEngagements?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.postEngagements?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1420,11 +1423,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Clicks (all)</div>
-                                <div className="text-sm text-gray-700">{adSet.clicks?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.clicks?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1433,11 +1436,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Messaging contacts</div>
-                                <div className="text-sm text-gray-700">{adSet.messagingContacts?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.messagingContacts?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1446,11 +1449,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Amount spent</div>
-                                <div className="text-sm text-gray-700">{adSet.amountSpent ? `$${adSet.amountSpent.toFixed(2)}` : '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.amountSpent ? `$${adSet.amountSpent.toFixed(2)}` : '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1458,12 +1461,12 @@ export default function CampaignsPage() {
                                 </div>
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
-                                <div className="text-sm font-medium mb-2">{adSet.dailyBudget > 0 ? 'Daily Budget' : 'Lifetime Budget'}</div>
-                                <div className="text-sm text-gray-700">${adSet.dailyBudget > 0 ? adSet.dailyBudget.toFixed(2) : adSet.lifetimeBudget.toFixed(2)}</div>
+                                <div className="text-sm font-medium mb-2">{adSet.dailyBudget > 0 ? t('launch.dailyBudget', 'Daily Budget') : t('launch.lifetimeBudget', 'Lifetime Budget')}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">${adSet.dailyBudget > 0 ? adSet.dailyBudget.toFixed(2) : adSet.lifetimeBudget.toFixed(2)}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="truncate cursor-pointer hover:text-blue-600" title={adSet.optimizationGoal}>
@@ -1471,12 +1474,12 @@ export default function CampaignsPage() {
                                 </div>
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                                <div className="text-sm font-medium mb-2">Optimization Goal</div>
-                                <div className="text-sm text-gray-700">{adSet.optimizationGoal}</div>
+                                <div className="text-sm font-medium mb-2">{t('campaigns.columns.optimization', 'Optimization Goal')}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.optimizationGoal}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1485,11 +1488,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Bid Amount</div>
-                                <div className="text-sm text-gray-700">${adSet.bidAmount.toFixed(2)}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">${adSet.bidAmount.toFixed(2)}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1498,26 +1501,26 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Created</div>
-                                <div className="text-sm text-gray-700">{adSet.createdAt}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.createdAt}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
                           <td className="px-2 py-2">
                             <div className="flex items-center justify-end gap-1">
                               <button
-                                className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                 title={adSet.status === 'ACTIVE' ? 'Pause' : 'Resume'}
                               >
                                 {adSet.status === 'ACTIVE' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                               </button>
                               <button
-                                className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
                                 title="Edit"
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
                               <button
-                                className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                                 title="Delete"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1538,39 +1541,39 @@ export default function CampaignsPage() {
             <>
               <div className="overflow-auto flex-1">
                 <table className="w-full min-w-max">
-                  <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+                  <thead className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-10">
                     <tr>
                       {/* Removed Index Header */}
-                      <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 w-20 border-r border-gray-200">ปิด/เปิด</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Ad Acc</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Page</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Ad Name</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Target</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Status</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Results</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Cost per result</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Budget</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Reach</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Impressions</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Post engagements</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Clicks (all)</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Messaging contacts</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Amount spent</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Title</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Body</th>
-                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">Created</th>
-                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px]">Actions</th>
+                      <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 w-20 border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.toggle', 'Active')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.adAccount', 'Ad Acc')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.page', 'Page')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.adName', 'Ad Name')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.target', 'Target')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.status', 'Status')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.results', 'Results')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.costPerResult', 'Cost per result')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.budget', 'Budget')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.reach', 'Reach')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.impressions', 'Impressions')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.postEngagements', 'Post engagements')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.clicks', 'Clicks (all)')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.messagingContacts', 'Messaging contacts')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.amountSpent', 'Amount spent')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.title', 'Title')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.body', 'Body')}</th>
+                      <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px] border-r border-gray-200 dark:border-zinc-800">{t('campaigns.columns.created', 'Created')}</th>
+                      <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 border-b border-gray-200">
+                  <tbody className="divide-y divide-gray-200 border-b border-gray-200 dark:border-zinc-800">
                     {loading ? (
                       Array.from({ length: 5 }).map((_, i) => (
                         <tr key={i} className="animate-pulse">
-                          <td className="px-3 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-6 bg-gray-200 rounded-full w-11 mx-auto"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200">
+                          <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 rounded-full w-11 mx-auto"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-gray-200 rounded"></div>
                               <div className="flex-1 space-y-2">
@@ -1579,11 +1582,11 @@ export default function CampaignsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-40"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-40"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-56"></div></td>
-                          <td className="px-4 py-2 border-r border-gray-200"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-40"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 rounded-full w-16"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-40"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-56"></div></td>
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-24"></div></td>
                           <td className="px-2 py-2"><div className="h-6 bg-gray-200 rounded w-24 ml-auto"></div></td>
                         </tr>
                       ))
@@ -1598,7 +1601,7 @@ export default function CampaignsPage() {
                     }).length === 0 ? (
                       <tr>
                         <td colSpan={20} className="text-center py-16">
-                          <p className="text-gray-600 mb-4">{ads.length === 0 ? 'No ads found' : 'No ads match your filters'}</p>
+                          <p className="text-gray-600 dark:text-gray-400 mb-4">{ads.length === 0 ? 'No ads found' : 'No ads match your filters'}</p>
                         </td>
                       </tr>
                     ) : (
@@ -1611,9 +1614,9 @@ export default function CampaignsPage() {
                           (statusFilter === 'paused' && a.status === 'PAUSED');
                         return matchesSearch && matchesStatus;
                       }).map((ad, index) => (
-                        <tr key={ad.id} className="hover:bg-gray-50 transition-colors">
+                        <tr key={ad.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
                           {/* Removed Index Column */}
-                          <td className="px-4 py-2 text-center border-r border-gray-200">
+                          <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
                             <button
                               onClick={() => handleToggleAd(ad.id, ad.status)}
                               className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${ad.status === 'ACTIVE'
@@ -1628,7 +1631,7 @@ export default function CampaignsPage() {
                               />
                             </button>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div
@@ -1641,12 +1644,12 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
                                 <div className="text-sm font-medium mb-2">Ad Account</div>
-                                <div className="text-sm text-gray-700">{getAdAccountName(ad.adAccountId)}</div>
-                                <div className="text-xs text-gray-500 mt-1">Click to open in Meta Ads Manager</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{getAdAccountName(ad.adAccountId)}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Click to open in Meta Ads Manager</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <div style={{ maxWidth: '280px' }}>
                               <div
                                 className="truncate cursor-pointer hover:text-blue-600 hover:underline"
@@ -1656,25 +1659,25 @@ export default function CampaignsPage() {
                                 {ad.pageName || '-'}
                               </div>
                               {ad.pageId && (
-                                <div className="text-xs text-gray-500 truncate" title={ad.pageId}>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={ad.pageId}>
                                   ID: {ad.pageId}
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-2 border-r border-gray-200">
+                          <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
                             <div className="flex items-center gap-3">
                               {ad.imageUrl ? (
                                 <img
                                   src={ad.imageUrl}
                                   alt={ad.name}
-                                  className="w-10 h-10 object-cover rounded border border-gray-200"
+                                  className="w-10 h-10 object-cover rounded border border-gray-200 dark:border-zinc-800"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                   }}
                                 />
                               ) : (
-                                <div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                                <div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 dark:border-zinc-800 flex items-center justify-center">
                                   <span className="text-xs text-gray-400">No Image</span>
                                 </div>
                               )}
@@ -1684,23 +1687,23 @@ export default function CampaignsPage() {
                                     className="flex flex-col min-w-0 cursor-pointer"
                                     style={{ maxWidth: '280px' }}
                                   >
-                                    <div className="text-sm text-gray-900 truncate hover:text-blue-600" title={ad.name}>
+                                    <div className="text-sm text-gray-900 dark:text-gray-100 truncate hover:text-blue-600" title={ad.name}>
                                       {ad.name}
                                     </div>
-                                    <div className="text-xs text-gray-500 truncate" title={ad.id}>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={ad.id}>
                                       ID: {ad.id}
                                     </div>
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
                                   <div className="text-sm font-medium mb-2">Ad Name</div>
-                                  <div className="text-sm text-gray-700 whitespace-pre-wrap">{ad.name}</div>
-                                  <div className="text-xs text-gray-500 mt-2">ID: {ad.id}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ad.name}</div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">ID: {ad.id}</div>
                                 </PopoverContent>
                               </Popover>
                             </div>
                           </td>
-                          <td className="px-4 py-1 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div
@@ -1713,11 +1716,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
                                 <div className="text-sm font-medium mb-2">Target</div>
-                                <div className="text-sm text-gray-700 whitespace-pre-wrap">{formatTargetingFull(ad.targeting)}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{formatTargetingFull(ad.targeting)}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm border-r border-gray-200 dark:border-zinc-800">
                             <div className="inline-flex items-center gap-2">
                               <span className={`inline-block w-2 h-2 rounded-full ${ad.status === 'ACTIVE'
                                 ? 'bg-green-500'
@@ -1725,12 +1728,12 @@ export default function CampaignsPage() {
                                   ? 'bg-yellow-500'
                                   : 'bg-gray-400'
                                 }`}></span>
-                              <span className="text-sm text-gray-900">
+                              <span className="text-sm text-gray-900 dark:text-gray-100">
                                 {ad.status === 'ACTIVE' ? 'Active' : ad.status === 'PAUSED' ? 'Paused' : ad.status}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1739,11 +1742,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Results</div>
-                                <div className="text-sm text-gray-700">{ad.results?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.results?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1752,11 +1755,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Cost per result</div>
-                                <div className="text-sm text-gray-700">{ad.costPerResult ? `$${ad.costPerResult.toFixed(2)}` : '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.costPerResult ? `$${ad.costPerResult.toFixed(2)}` : '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1765,11 +1768,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Budget</div>
-                                <div className="text-sm text-gray-700">{ad.budget ? `$${ad.budget.toFixed(2)}` : '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.budget ? `$${ad.budget.toFixed(2)}` : '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1778,11 +1781,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Reach</div>
-                                <div className="text-sm text-gray-700">{ad.reach?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.reach?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1791,11 +1794,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Impressions</div>
-                                <div className="text-sm text-gray-700">{ad.impressions?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.impressions?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1804,11 +1807,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Post engagements</div>
-                                <div className="text-sm text-gray-700">{ad.postEngagements?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.postEngagements?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1817,11 +1820,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Clicks (all)</div>
-                                <div className="text-sm text-gray-700">{ad.clicks?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.clicks?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1830,11 +1833,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Messaging contacts</div>
-                                <div className="text-sm text-gray-700">{ad.messagingContacts?.toLocaleString() ?? '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.messagingContacts?.toLocaleString() ?? '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 text-right border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1843,11 +1846,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Amount spent</div>
-                                <div className="text-sm text-gray-700">{ad.amountSpent ? `$${ad.amountSpent.toFixed(2)}` : '-'}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.amountSpent ? `$${ad.amountSpent.toFixed(2)}` : '-'}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="truncate cursor-pointer hover:text-blue-600" title={ad.title}>
@@ -1856,31 +1859,12 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
                                 <div className="text-sm font-medium mb-2">Title</div>
-                                <div className="text-sm text-gray-700 whitespace-pre-wrap">{ad.title}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ad.title}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <div
-                                  className="cursor-pointer hover:text-blue-600 hover:underline"
-                                  style={{ maxWidth: '280px' }}
-                                  onClick={() => ad.pageId && window.open(`https://www.facebook.com/${ad.pageId}`, '_blank')}
-                                >
-                                  <div className="truncate" title={ad.pageName}>
-                                    {ad.pageName || '-'}
-                                  </div>
-                                </div>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                                <div className="text-sm font-medium mb-2">Page</div>
-                                <div className="text-sm text-gray-700">{ad.pageName || '-'}</div>
-                                <div className="text-xs text-gray-500 mt-1">Click to open Facebook page</div>
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="truncate cursor-pointer hover:text-blue-600" style={{ maxWidth: '280px' }} title={ad.body}>
@@ -1889,11 +1873,11 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
                                 <div className="text-sm font-medium mb-2">Body</div>
-                                <div className="text-sm text-gray-700 whitespace-pre-wrap">{ad.body}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ad.body}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
-                          <td className="px-4 py-2 text-sm text-gray-600 border-r border-gray-200">
+                          <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
                             <Popover>
                               <PopoverTrigger asChild>
                                 <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -1902,26 +1886,26 @@ export default function CampaignsPage() {
                               </PopoverTrigger>
                               <PopoverContent className="w-64" align="start">
                                 <div className="text-sm font-medium mb-2">Created</div>
-                                <div className="text-sm text-gray-700">{ad.createdAt}</div>
+                                <div className="text-sm text-gray-700 dark:text-gray-300">{ad.createdAt}</div>
                               </PopoverContent>
                             </Popover>
                           </td>
                           <td className="px-2 py-2">
                             <div className="flex items-center justify-end gap-1">
                               <button
-                                className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                 title={ad.status === 'ACTIVE' ? 'Pause' : 'Resume'}
                               >
                                 {ad.status === 'ACTIVE' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                               </button>
                               <button
-                                className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
                                 title="Edit"
                               >
                                 <Edit2 className="h-4 w-4" />
                               </button>
                               <button
-                                className="inline-flex items-center justify-center p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                                 title="Delete"
                               >
                                 <Trash2 className="h-4 w-4" />

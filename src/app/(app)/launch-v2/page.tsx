@@ -86,7 +86,7 @@ export default function LaunchPage() {
   // AI Chat Widget State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([
-    { role: 'ai', content: 'สวัสดีครับ! ผมคือ AI Assistant พร้อมช่วยคุณสร้างโฆษณา มีอะไรให้ช่วยไหมครับ? 🤖' }
+    { role: 'ai', content: t('launch.ai.greeting', 'Hello! I am your AI Assistant...') }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -116,12 +116,12 @@ export default function LaunchPage() {
   });
 
   const campaignObjectives = [
-    { id: 'OUTCOME_AWARENESS', name: 'การรับรู้', description: 'เพิ่มการรับรู้แบรนด์' },
-    { id: 'OUTCOME_TRAFFIC', name: 'จำนวนผู้เข้าชม', description: 'เพิ่มการเข้าชมเว็บไซต์' },
-    { id: 'OUTCOME_ENGAGEMENT', name: 'การมีส่วนร่วม', description: 'เพิ่มการมีส่วนร่วมกับโพสต์', specialNote: 'แคมเปญการมีส่วนร่วมแบบสร้างเอง' },
-    { id: 'OUTCOME_LEADS', name: 'ข้อมูลลูกค้า', description: 'รวบรวมข้อมูลลูกค้าเป้าหมาย' },
-    { id: 'OUTCOME_APP_PROMOTION', name: 'การโปรโมทแอพ', description: 'เพิ่มการดาวน์โหลดแอพ' },
-    { id: 'OUTCOME_SALES', name: 'ยอดขาย', description: 'เพิ่มยอดขายสินค้า' },
+    { id: 'OUTCOME_AWARENESS', name: t('launch.objective.awareness', 'Awareness'), description: t('launch.objective.awarenessDesc', 'Increase brand awareness') },
+    { id: 'OUTCOME_TRAFFIC', name: t('launch.objective.traffic', 'Traffic'), description: t('launch.objective.trafficDesc', 'Drive traffic to your website') },
+    { id: 'OUTCOME_ENGAGEMENT', name: t('launch.objective.engagement', 'Engagement'), description: t('launch.objective.engagementDesc', 'Get more page likes, response, etc.'), specialNote: t('launch.objective.engagementNote', 'Engagement Campaign') },
+    { id: 'OUTCOME_LEADS', name: t('launch.objective.leads', 'Leads'), description: t('launch.objective.leadsDesc', 'Collect leads for your business') },
+    { id: 'OUTCOME_APP_PROMOTION', name: t('launch.objective.appPromotion', 'App Promotion'), description: t('launch.objective.appPromotionDesc', 'Get more people to install your app') },
+    { id: 'OUTCOME_SALES', name: t('launch.objective.sales', 'Sales'), description: t('launch.objective.salesDesc', 'Find people likely to purchase') },
   ];
 
   // Fetch uploaded videos on mount
@@ -190,7 +190,7 @@ export default function LaunchPage() {
       const maxSize = 1.5 * 1024 * 1024 * 1024; // 1.5GB in bytes
 
       if (file.size > maxSize) {
-        setError(`ไฟล์ ${file.name} มีขนาดใหญ่กว่า 1.5GB`);
+        setError(t('launch.error.fileSize', `File ${file.name} is larger than 1.5GB`).replace('{name}', file.name));
         return;
       }
 
@@ -199,7 +199,7 @@ export default function LaunchPage() {
       const isImage = file.type.startsWith('image/');
 
       if (!isVideo && !isImage) {
-        setError('กรุณาอัปโหลดไฟล์วิดีโอหรือรูปภาพเท่านั้น');
+        setError(t('launch.error.fileType', 'Please upload video or image files only'));
         return;
       }
 
@@ -224,7 +224,7 @@ export default function LaunchPage() {
     if (file) {
       // Validate file is image
       if (!file.type.startsWith('image/')) {
-        setError('กรุณาอัปโหลดไฟล์รูปภาพเท่านั้น');
+        setError(t('launch.error.imageOnly', 'Please upload image files only'));
         return;
       }
 
@@ -270,12 +270,13 @@ export default function LaunchPage() {
     setIsAiTyping(true);
 
     // Simulate AI response (can be replaced with real API call)
+    // Simulate AI response (can be replaced with real API call)
     setTimeout(() => {
       const aiResponses = [
-        `เข้าใจครับ! สำหรับ "${userMessage}" ผมแนะนำให้ลองใส่ข้อมูลสินค้าและกลุ่มเป้าหมายในฟอร์มด้านซ้าย เพื่อให้ AI สร้างโฆษณาได้ตรงใจมากขึ้นครับ 💡`,
-        `คำถามดีมากครับ! หากคุณกำลังโปรโมท "${formData.productDescription || 'สินค้าของคุณ'}" ผมแนะนำให้เลือก Objective เป็น "การมีส่วนร่วม" หรือ "ยอดขาย" ครับ 🎯`,
-        `สำหรับกลุ่มเป้าหมาย ผมแนะนำให้ระบุ เพศ, อายุ, และความสนใจ ให้ชัดเจน เช่น "ผู้หญิง 25-40 ปี สนใจแฟชั่น" ครับ 👥`,
-        `เทคนิคสำคัญ: ใส่รูปสินค้าที่ชัดเจน และเขียนข้อความสั้นๆ กระชับ จะช่วยเพิ่ม Engagement ได้มากครับ! 📈`,
+        t('launch.ai.suggestion1', 'I understand! For "{message}", I recommend...').replace('{message}', userMessage),
+        t('launch.ai.suggestion2', 'Great question! If you are promoting...').replace('{product}', formData.productDescription || 'your product'),
+        t('launch.ai.suggestion3', 'For target audience, clarify gender...'),
+        t('launch.ai.suggestion4', 'Pro tip: Use clear product images...'),
       ];
       const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
       setChatMessages(prev => [...prev, { role: 'ai', content: randomResponse }]);
@@ -289,31 +290,31 @@ export default function LaunchPage() {
 
     // Validation
     if (!formData.mediaFile && selectedExistingVideos.length === 0) {
-      setError('กรุณาอัปโหลดไฟล์หรือเลือกจากวิดีโอที่มีอยู่');
+      setError(t('launch.error.required', 'Please fill in all required fields'));
       return;
     }
     if (!formData.selectedAdAccount) {
-      setError('กรุณาเลือก Ad Account');
+      setError(t('launch.error.required', 'Please fill in all required fields'));
       return;
     }
     if (!formData.campaignObjective) {
-      setError('กรุณาเลือกวัตถุประสงค์แคมเปญ');
+      setError(t('launch.error.required', 'Please fill in all required fields'));
       return;
     }
     if (!formData.selectedPage) {
-      setError('กรุณาเลือกเพจ');
+      setError(t('launch.error.required', 'Please fill in all required fields'));
       return;
     }
     if (formData.adSetCount < formData.campaignCount) {
-      setError('จำนวน AdSet ต้องมากกว่าหรือเท่ากับจำนวน Campaign');
+      setError(t('launch.error.adSetCount', 'AdSet count must be greater than or equal to Campaign count'));
       return;
     }
     if (formData.adsCount < formData.adSetCount) {
-      setError('จำนวน Ads ต้องมากกว่าหรือเท่ากับจำนวน AdSet');
+      setError(t('launch.error.adsCount', 'Ads count must be greater than or equal to AdSet count'));
       return;
     }
     if (!formData.selectedPage) {
-      setError('กรุณาเลือก Facebook Page');
+      setError(t('launch.error.required', 'Please fill in all required fields'));
       return;
     }
 
@@ -323,13 +324,13 @@ export default function LaunchPage() {
     // Initialize progress dialog
     setIsProgressDialogOpen(true);
     const initialSteps: ProgressStep[] = [
-      { id: 'prepare', label: 'เตรียมข้อมูล', status: 'loading', detail: 'กำลังตรวจสอบไฟล์และข้อมูล...' },
-      { id: 'ai', label: 'วิเคราะห์ด้วย AI', status: 'pending', detail: 'รอดำเนินการ...' },
-      { id: 'upload', label: 'อัปโหลดไฟล์', status: 'pending', detail: 'รอดำเนินการ...' },
-      { id: 'campaign', label: 'สร้างแคมเปญ', status: 'pending', detail: 'รอดำเนินการ...' },
-      { id: 'adsets', label: 'สร้าง AdSets', status: 'pending', detail: 'รอดำเนินการ...' },
-      { id: 'ads', label: 'สร้าง Ads', status: 'pending', detail: 'รอดำเนินการ...' },
-      { id: 'complete', label: 'เสร็จสมบูรณ์', status: 'pending', detail: 'รอดำเนินการ...' },
+      { id: 'prepare', label: t('launch.progress.prepare', 'Preparing Data'), status: 'loading', detail: t('launch.progress.description', 'Please wait...') },
+      { id: 'ai', label: t('launch.progress.ai', 'AI Analysis'), status: 'pending', detail: t('launch.progress.description', 'Please wait...') },
+      { id: 'upload', label: t('launch.progress.upload', 'Uploading Files'), status: 'pending', detail: t('launch.progress.description', 'Please wait...') },
+      { id: 'campaign', label: t('launch.progress.campaign', 'Creating Campaign'), status: 'pending', detail: t('launch.progress.description', 'Please wait...') },
+      { id: 'adsets', label: t('launch.progress.adsets', 'Creating AdSets'), status: 'pending', detail: t('launch.progress.description', 'Please wait...') },
+      { id: 'ads', label: t('launch.progress.ads', 'Creating Ads'), status: 'pending', detail: t('launch.progress.description', 'Please wait...') },
+      { id: 'complete', label: t('launch.progress.complete', 'Completed'), status: 'pending', detail: t('launch.progress.description', 'Please wait...') },
     ];
     setProgressSteps(initialSteps);
 
@@ -447,16 +448,16 @@ export default function LaunchPage() {
           throw new Error(data.error || 'Failed to create campaign');
         }
 
-        updateStep('campaign', 'completed', 'สร้างแคมเปญสำเร็จ');
-        updateStep('adsets', 'completed', `สร้าง ${formData.adSetCount} AdSets สำเร็จ`);
-        updateStep('ads', 'completed', `สร้าง ${formData.adsCount} Ads สำเร็จ`);
-        updateStep('complete', 'completed', '🎉 เสร็จสมบูรณ์!');
+        updateStep('campaign', 'completed', t('launch.success', 'Campaign created successfully!'));
+        updateStep('adsets', 'completed', t('launch.progress.complete', 'Completed'));
+        updateStep('ads', 'completed', t('launch.progress.complete', 'Completed'));
+        updateStep('complete', 'completed', t('launch.progress.complete', 'Completed'));
 
         allMediaFiles.forEach(media => {
           setUploadProgress(prev => ({ ...prev, [media.name]: 100 }));
         });
 
-        setSuccess(`สร้าง 1 แคมเปญด้วย ${allMediaFiles.length} ไฟล์สำเร็จ!`);
+        setSuccess(t('launch.success', 'Campaign created successfully!'));
       } else if (allMediaFiles.length === 1) {
         // Single file → Create campaigns according to campaignCount
         const media = allMediaFiles[0];
@@ -534,14 +535,14 @@ export default function LaunchPage() {
           throw new Error(data.error || `Failed to create campaign`);
         }
 
-        updateStep('campaign', 'completed', `สร้าง ${formData.campaignCount} แคมเปญสำเร็จ`);
-        updateStep('adsets', 'completed', `สร้าง ${formData.adSetCount} AdSets สำเร็จ`);
-        updateStep('ads', 'completed', `สร้าง ${formData.adsCount} Ads สำเร็จ`);
-        updateStep('complete', 'completed', '🎉 เสร็จสมบูรณ์!');
+        updateStep('campaign', 'completed', t('launch.success', 'Campaign created successfully!'));
+        updateStep('adsets', 'completed', t('launch.progress.complete', 'Completed'));
+        updateStep('ads', 'completed', t('launch.progress.complete', 'Completed'));
+        updateStep('complete', 'completed', t('launch.progress.complete', 'Completed'));
 
         setUploadProgress(prev => ({ ...prev, [media.name]: 100 }));
 
-        setSuccess(`สร้าง ${formData.campaignCount} แคมเปญสำเร็จ!`);
+        setSuccess(t('launch.success', 'Campaign created successfully!'));
       }
 
       // Redirect to campaigns page after successful creation
@@ -628,17 +629,17 @@ export default function LaunchPage() {
                 >
                   <Loader2 className="h-5 w-5 text-blue-600" />
                 </motion.div>
-                กำลังสร้างแคมเปญ
+                {t('launch.progress.title', 'Creating Campaign')}
               </DialogTitle>
               <DialogDescription>
-                กรุณารอสักครู่ ระบบกำลังดำเนินการ...
+                {t('launch.progress.description', 'Please wait...')}
               </DialogDescription>
             </DialogHeader>
 
             {/* Progress Bar */}
             <div className="py-2">
               <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
-                <span>ความคืบหน้า</span>
+                <span>{t('launch.progress.title', 'Progress')}</span>
                 <span>{Math.round((progressSteps.filter(s => s.status === 'completed').length / progressSteps.length) * 100)}%</span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -741,7 +742,7 @@ export default function LaunchPage() {
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
-                  ไปที่แคมเปญ 🎉
+                  {t('launch.goToCampaigns', 'Go to Campaigns')} 🎉
                 </Button>
               </motion.div>
             )}
@@ -768,7 +769,7 @@ export default function LaunchPage() {
             <div>
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-bold text-foreground">1. อัปโหลดไฟล์ (ทีละไฟล์)</h2>
+                  <h2 className="text-lg font-bold text-foreground">{t('launch.step1', '1. Upload File')}</h2>
                 </div>
                 <button
                   type="button"
@@ -786,10 +787,10 @@ export default function LaunchPage() {
                   <DialogHeader className="flex-shrink-0">
                     <DialogTitle className="flex items-center gap-2">
                       <Folder className="h-5 w-5 text-blue-600" />
-                      ไฟล์ที่เคยอัปโหลด
+                      {t('launch.uploadFile', 'Upload File')}
                     </DialogTitle>
                     <DialogDescription>
-                      เลือกไฟล์ที่ต้องการใช้สำหรับแคมเปญนี้
+                      {t('launch.uploadFile', 'Select file to upload')}
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1272,48 +1273,48 @@ export default function LaunchPage() {
 
             {/* V2: Product & Target Audience Description */}
             <div className="mt-6 space-y-4">
-              <h2 className="text-lg font-bold text-foreground">1.5 ข้อมูลสินค้าและกลุ่มเป้าหมาย (V2)</h2>
+              <h2 className="text-lg font-bold text-foreground">{t('launch.v2.productInfo', '1.5 Product & Target Audience (V2)')}</h2>
 
               {/* Product Description */}
               <div>
                 <Label htmlFor="product-description" className="text-sm font-medium text-gray-700">
-                  สินค้าของคุณคืออะไร? <span className="text-gray-400">(ไม่บังคับ)</span>
+                  {t('launch.v2.productDesc', 'What is your product?')} <span className="text-gray-400">{t('launch.v2.optional', '(Optional)')}</span>
                 </Label>
                 <textarea
                   id="product-description"
                   value={formData.productDescription}
                   onChange={(e) => setFormData({ ...formData, productDescription: e.target.value })}
-                  placeholder="เช่น เครื่องสำอางเกาหลีนำเข้า ราคาไม่แพง คุณภาพดี ช่วยบำรุงผิวหน้าให้ขาวใส"
+                  placeholder={t('launch.v2.productPlaceholder', 'e.g. Imported Korean cosmetics, affordable, good quality, helps whiten skin')}
                   className="w-full mt-2 p-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={3}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  อธิบายสินค้าหรือบริการของคุณเพื่อให้ AI สร้างข้อความโฆษณาที่ตรงกับสินค้ามากขึ้น
+                  {t('launch.v2.productNote', 'Describe your product or service to help AI generate more relevant ad copies.')}
                 </p>
               </div>
 
               {/* Target Audience Description */}
               <div>
                 <Label htmlFor="target-audience" className="text-sm font-medium text-gray-700">
-                  กลุ่มเป้าหมายของคุณ <span className="text-gray-400">(ไม่บังคับ)</span>
+                  {t('launch.v2.targetAudience', 'Your Target Audience')} <span className="text-gray-400">{t('launch.v2.optional', '(Optional)')}</span>
                 </Label>
                 <textarea
                   id="target-audience"
                   value={formData.targetAudienceDescription}
                   onChange={(e) => setFormData({ ...formData, targetAudienceDescription: e.target.value })}
-                  placeholder="เช่น ผู้หญิง อายุ 18-35 ปี สนใจเรื่องความงาม ชอบซื้อของออนไลน์ อยู่ในกรุงเทพและปริมณฑล"
+                  placeholder={t('launch.v2.targetPlaceholder', 'e.g. Women aged 18-35, interested in beauty, online shopping, living in Bangkok')}
                   className="w-full mt-2 p-3 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={3}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  ระบุลักษณะของกลุ่มเป้าหมายที่คุณต้องการเข้าถึง เพื่อให้ AI วิเคราะห์ Targeting ได้แม่นยำขึ้น
+                  {t('launch.v2.targetNote', 'Specify your target audience to help AI analyze targeting more accurately.')}
                 </p>
               </div>
             </div>
 
             {/* Step 2: Select Ad Account */}
             <div data-step="2">
-              <h2 className="text-lg font-bold text-foreground mb-4">2. เลือก Ad Account</h2>
+              <h2 className="text-lg font-bold text-foreground mb-4">{t('launch.step2', '2. Select Ad Account')}</h2>
               {selectedAccounts.length > 0 ? (
                 <div className="space-y-2">
                   <Select
@@ -1321,7 +1322,7 @@ export default function LaunchPage() {
                     onValueChange={(value) => setFormData({ ...formData, selectedAdAccount: value })}
                   >
                     <SelectTrigger id="ad-account" className="w-full h-12">
-                      <SelectValue placeholder="เลือก Ad Account..." />
+                      <SelectValue placeholder={t('launch.selectAdAccount', 'Select Ad Account...')} />
                     </SelectTrigger>
                     <SelectContent>
                       {selectedAccounts.map((account) => (
@@ -1337,14 +1338,14 @@ export default function LaunchPage() {
                 </div>
               ) : (
                 <div className="p-6 border-2 border-dashed border-gray-300 rounded-lg text-center">
-                  <p className="text-sm text-gray-600 mb-3">ยังไม่ได้เลือก Ad Account</p>
+                  <p className="text-sm text-gray-600 mb-3">{t('accounts.noAccounts', 'No ad accounts connected')}</p>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => router.push('/settings?tab=integrations')}
                     className="text-blue-600 border-blue-600 hover:bg-blue-50"
                   >
-                    ไปตั้งค่า Ad Account
+                    {t('accounts.connectNew', 'Connect New Account')}
                   </Button>
                 </div>
               )}
@@ -1352,14 +1353,14 @@ export default function LaunchPage() {
 
             {/* Step 3: Select Campaign Objective */}
             <div>
-              <h2 className="text-lg font-bold text-foreground mb-4">3. เลือกวัตถุประสงค์แคมเปญ</h2>
+              <h2 className="text-lg font-bold text-foreground mb-4">{t('launch.step3', '3. Select Campaign Objective')}</h2>
               <div className="space-y-2">
                 <Select
                   value={formData.campaignObjective}
                   onValueChange={(value) => setFormData({ ...formData, campaignObjective: value })}
                 >
                   <SelectTrigger id="campaign-objective" className="w-full h-12">
-                    <SelectValue placeholder="เลือกวัตถุประสงค์..." />
+                    <SelectValue placeholder={t('launch.selectObjective', 'Select Objective...')} />
                   </SelectTrigger>
                   <SelectContent>
                     {campaignObjectives.map((objective) => (
@@ -1374,7 +1375,7 @@ export default function LaunchPage() {
                 </Select>
                 {formData.campaignObjective === 'OUTCOME_ENGAGEMENT' && (
                   <p className="text-xs text-blue-600 mt-2 font-medium">
-                    ℹ️ แคมเปญการมีส่วนร่วมแบบสร้างเอง
+                    ℹ️ {t('launch.objective.engagementNote', 'Engagement Campaign')}
                   </p>
                 )}
               </div>
@@ -1382,7 +1383,7 @@ export default function LaunchPage() {
 
             {/* Step 4: Select Facebook Pages */}
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-4">4. เลือก Facebook Page</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-4">{t('launch.step4', '4. Select Facebook Page')}</h2>
               {contextPages.length > 0 ? (
                 <div className="space-y-3">
                   {/* Dropdown Trigger */}
@@ -1393,8 +1394,8 @@ export default function LaunchPage() {
                   >
                     <span className="text-sm text-gray-700">
                       {formData.selectedPage
-                        ? contextPages.find(p => p.id === formData.selectedPage)?.name || 'เลือก Facebook Page...'
-                        : 'เลือก Facebook Page...'}
+                        ? contextPages.find(p => p.id === formData.selectedPage)?.name || t('launch.selectPage', 'Select Facebook Page...')
+                        : t('launch.selectPage', 'Select Facebook Page...')}
                     </span>
                     <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform ${isPageDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -1407,7 +1408,7 @@ export default function LaunchPage() {
                       <div className="p-3 border-b border-gray-200">
                         <Input
                           type="text"
-                          placeholder="ค้นหา Page (ชื่อหรือ ID)..."
+                          placeholder={t('campaigns.search', 'Search...')}
                           value={pageSearchQuery}
                           onChange={(e) => setPageSearchQuery(e.target.value)}
                           className="h-10"
@@ -1447,7 +1448,7 @@ export default function LaunchPage() {
                           ))
                         ) : (
                           <div className="p-6 text-center text-gray-500 text-sm">
-                            ไม่พบ Page ที่ค้นหา
+                            {t('campaigns.noMatch', 'No pages found')}
                           </div>
                         )}
                       </div>
@@ -1456,14 +1457,14 @@ export default function LaunchPage() {
                 </div>
               ) : (
                 <div className="p-6 border-2 border-dashed border-gray-300 rounded-lg text-center">
-                  <p className="text-sm text-gray-600 mb-3">ยังไม่ได้เลือก Facebook Pages</p>
+                  <p className="text-sm text-gray-600 mb-3">{t('accounts.noAccounts', 'No pages connected')}</p>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => router.push('/settings?tab=integrations')}
                     className="text-blue-600 border-blue-600 hover:bg-blue-50"
                   >
-                    ไปตั้งค่า Facebook Pages
+                    {t('accounts.connectNew', 'Connect New Page')}
                   </Button>
                 </div>
               )}
@@ -1471,13 +1472,13 @@ export default function LaunchPage() {
 
             {/* Step 5: Set Budget */}
             <div>
-              <h2 className="text-lg font-bold text-foreground mb-4">5. กำหนดงบประมาณ</h2>
+              <h2 className="text-lg font-bold text-foreground mb-4">{t('launch.step5', '5. Set Budget')}</h2>
               <div className="space-y-4">
                 {/* Budget Type and Amount - 2 Column Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="budget-type" className="text-sm font-medium text-muted-foreground mb-2 block">
-                      ประเภทงบประมาณ
+                      {t('launch.budgetType', 'Budget Type')}
                     </Label>
                     <select
                       id="budget-type"
@@ -1492,7 +1493,7 @@ export default function LaunchPage() {
 
                   <div>
                     <Label htmlFor="budget-input" className="text-sm font-medium text-muted-foreground mb-2 block">
-                      {formData.budgetType === 'daily' ? 'งบประมาณต่อวัน' : 'งบประมาณรวม'}
+                      {formData.budgetType === 'daily' ? t('launch.dailyBudget') : t('launch.lifetimeBudget')}
                     </Label>
                     <Input
                       id="budget-input"
@@ -1509,7 +1510,7 @@ export default function LaunchPage() {
                         }
                       }}
                       className="h-12 text-lg font-semibold"
-                      placeholder="กรอกงบประมาณ"
+                      placeholder={t('launch.amount', 'Amount')}
                     />
                   </div>
                 </div>
@@ -1522,7 +1523,7 @@ export default function LaunchPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="start-time" className="text-sm font-medium text-muted-foreground mb-2 block">
-                          วันที่เริ่มต้น
+                          {t('launch.startDate', 'Start Date')}
                         </Label>
                         <Input
                           id="start-time"
@@ -1535,7 +1536,7 @@ export default function LaunchPage() {
 
                       <div>
                         <Label htmlFor="end-time" className="text-sm font-medium text-muted-foreground mb-2 block">
-                          วันที่สิ้นสุด
+                          {t('launch.endDate', 'End Date')}
                         </Label>
                         <Input
                           id="end-time"
@@ -1741,13 +1742,13 @@ export default function LaunchPage() {
               </div>
             </div>
 
-            {/* Step 6: Campaign Structure */}
+            {/* Step 6: Campaign Structure - This is now Step 6 instead of 7 */}
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-4">6. กำหนดสัดส่วนโครงสร้าง</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-4">{t('launch.step6', '6. Campaign Structure')}</h2>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="campaign-count" className="text-sm font-medium text-gray-700">
-                    Campaigns
+                    {t('launch.campaigns', 'Campaigns')}
                   </Label>
                   <Input
                     id="campaign-count"
@@ -1767,7 +1768,7 @@ export default function LaunchPage() {
                 </div>
                 <div>
                   <Label htmlFor="adset-count" className="text-sm font-medium text-gray-700">
-                    AdSets
+                    {t('launch.adsets', 'AdSets')}
                   </Label>
                   <Input
                     id="adset-count"
@@ -1788,7 +1789,7 @@ export default function LaunchPage() {
                 </div>
                 <div>
                   <Label htmlFor="ads-count" className="text-sm font-medium text-gray-700">
-                    Ads
+                    {t('launch.ads', 'Ads')}
                   </Label>
                   <Input
                     id="ads-count"
@@ -1808,22 +1809,25 @@ export default function LaunchPage() {
               </div>
 
               <p className="text-sm text-gray-600 mt-3">
-                จะสร้าง {formData.campaignCount} Campaign, {formData.adSetCount} AdSets, และ {formData.adsCount} Ads
+                {t('launch.structureNote', 'Will create {campaigns} Campaign, {adsets} AdSets, and {ads} Ads')
+                  .replace('{campaigns}', formData.campaignCount.toString())
+                  .replace('{adsets}', formData.adSetCount.toString())
+                  .replace('{ads}', formData.adsCount.toString())}
               </p>
             </div>
 
-            {/* Step 7: Thailand Beneficiary (Required) */}
+            {/* Step 7: Beneficiary (v2 has this as step 7) */}
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-4">7. ระบุผู้รับผลประโยชน์ (สำหรับประเทศไทย) *</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-4">{t('launch.step7', '7. Beneficiary Info (Thailand Only) *')}</h2>
               <div>
                 <Label htmlFor="beneficiary-select" className="text-sm font-medium text-gray-700 mb-2 block">
-                  เลือกผู้รับผลประโยชน์
+                  {t('launch.beneficiary.select', 'Select Beneficiary')}
                 </Label>
 
                 {loadingBeneficiaries ? (
                   <div className="h-12 flex items-center justify-center border border-gray-300 rounded-lg bg-gray-50">
                     <Loader2 className="h-5 w-5 animate-spin text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-600">กำลังโหลด...</span>
+                    <span className="text-sm text-gray-600">{t('launch.beneficiary.loading', 'Loading...')}</span>
                   </div>
                 ) : beneficiaries.length > 0 ? (
                   <Select
@@ -1831,7 +1835,7 @@ export default function LaunchPage() {
                     onValueChange={(value) => setFormData({ ...formData, beneficiaryName: value })}
                   >
                     <SelectTrigger id="beneficiary-select" className="w-full h-12">
-                      <SelectValue placeholder="เลือกผู้รับผลประโยชน์..." />
+                      <SelectValue placeholder={t('launch.beneficiary.select', 'Select Beneficiary...')} />
                     </SelectTrigger>
                     <SelectContent>
                       {beneficiaries.map((beneficiary) => (
@@ -1848,22 +1852,22 @@ export default function LaunchPage() {
                   <div className="p-4 border border-yellow-300 bg-yellow-50 rounded-lg">
                     <p className="text-sm text-yellow-800 flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
-                      ไม่พบ Beneficiary - กรุณาตั้งค่าใน Meta Ads Manager
+                      {t('launch.beneficiary.notFound', 'No Beneficiary found - Please set up in Meta Ads Manager')}
                     </p>
                   </div>
                 )}
 
                 <p className="text-xs text-gray-600 mt-2">
-                  ตามกฎหมายไทย ต้องระบุผู้รับผลประโยชน์ที่ตรวจสอบยืนยันแล้ว (Verified Beneficiary)
+                  {t('launch.beneficiary.note', 'According to Thai law, a Verified Beneficiary is required.')}
                 </p>
                 {beneficiaries.length > 0 && (
                   <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" />
-                    พบ {beneficiaries.length} Beneficiary จากบัญชีโฆษณา
+                    {t('launch.beneficiary.found', 'Found {count} Beneficiary from Ad Account').replace('{count}', beneficiaries.length.toString())}
                   </p>
                 )}
                 <p className="text-xs text-blue-600 mt-1">
-                  💡 ดูข้อมูลเพิ่มเติมได้ที่ Meta Ads Manager &gt; Settings &gt; Page Transparency
+                  {t('launch.beneficiary.info', 'See more at Meta Ads Manager > Settings > Page Transparency')}
                 </p>
               </div>
             </div>
@@ -1875,13 +1879,13 @@ export default function LaunchPage() {
                   <span className="text-white text-lg">🤖</span>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-900 mb-2">AI จะจัดการอัตโนมัติ</h3>
+                  <h3 className="text-sm font-bold text-gray-900 mb-2">{t('launch.ai.autoTitle', 'AI will manage automatically')}</h3>
                   <ul className="text-xs text-gray-700 space-y-1">
-                    <li>✓ สร้างแคมเปญใน Facebook Ads Manager</li>
-                    <li>✓ อัปโหลดวิดีโอไปยัง Facebook</li>
-                    <li>✓ สร้าง Ad Creative และข้อความโฆษณา</li>
-                    <li>✓ ตั้งค่า Targeting และ Budget</li>
-                    <li>✓ เปิดใช้งานโฆษณาทันที</li>
+                    <li>✓ {t('launch.ai.autoList1', 'Create campaign in Facebook Ads Manager')}</li>
+                    <li>✓ {t('launch.ai.autoList2', 'Upload videos to Facebook')}</li>
+                    <li>✓ {t('launch.ai.autoList3', 'Create Ad Creative and copy')}</li>
+                    <li>✓ {t('launch.ai.autoList4', 'Set Targeting and Budget')}</li>
+                    <li>✓ {t('launch.ai.autoList5', 'Activate ads immediately')}</li>
                   </ul>
                 </div>
               </div>
@@ -1894,7 +1898,7 @@ export default function LaunchPage() {
                 onClick={() => router.back()}
                 className="border-gray-300 text-gray-900 hover:bg-gray-50"
               >
-                ยกเลิก
+                {t('launch.cancel', 'Cancel')}
               </Button>
               <Button
                 onClick={handleStart}
@@ -1904,16 +1908,16 @@ export default function LaunchPage() {
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    กำลังสร้างแคมเปญ...
+                    {t('launch.progress.campaign', 'Creating Campaign...')}
                   </>
                 ) : (
-                  'สร้างแคมเปญและเริ่มยิงแอด'
+                  t('launch.createAndRun', 'Create & Run Campaign')
                 )}
               </Button>
             </div>
 
             <p className="text-xs text-gray-500 text-center pt-4">
-              ⚡ AI will automatically generate optimized copies, create variations, and manage your campaigns
+              {t('launch.ai.footer', 'AI will automatically generate optimized copies, create variations, and manage your campaigns')}
             </p>
           </div>
         </div>
@@ -1937,8 +1941,8 @@ export default function LaunchPage() {
                     <MessageCircle className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">AI Assistant</p>
-                    <p className="text-xs text-blue-100">พร้อมช่วยเหลือคุณ</p>
+                    <p className="font-semibold text-sm">{t('launch.chat.assistant', 'AI Assistant')}</p>
+                    <p className="text-xs text-blue-100">{t('launch.chat.subtitle', 'Ready to help')}</p>
                   </div>
                 </div>
                 <button
@@ -1994,7 +1998,7 @@ export default function LaunchPage() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleChatSend()}
-                    placeholder="พิมพ์ข้อความ..."
+                    placeholder={t('launch.chat.placeholder', 'Type a message...')}
                     className="flex-1 px-4 py-2 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <button

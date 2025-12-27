@@ -13,7 +13,7 @@ type LanguageContextValue = {
 const LanguageContext = React.createContext<LanguageContextValue | undefined>(undefined)
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = React.useState<SupportedLanguage>('th')
+  const [language, setLanguageState] = React.useState<SupportedLanguage>('en')
   const [isReady, setIsReady] = React.useState(false)
 
   React.useEffect(() => {

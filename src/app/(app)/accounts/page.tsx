@@ -129,8 +129,8 @@ export default function AccountsPage() {
     }
 
     const confirmMessage = action === 'reset'
-      ? `รีเซ็ตยอดใช้จ่ายของ ${account.name}?`
-      : `ลบวงเงินของ ${account.name}?`;
+      ? t('accounts.spendingLimit.confirm.reset', `Reset spending for ${account.name}?`).replace('{name}', account.name)
+      : t('accounts.spendingLimit.confirm.delete', `Delete limit for ${account.name}?`).replace('{name}', account.name);
 
     if (!confirm(confirmMessage)) return;
 
@@ -153,7 +153,10 @@ export default function AccountsPage() {
 
       // Refresh accounts
       await fetchAccounts();
-      alert(action === 'reset' ? 'รีเซ็ตยอดใช้จ่ายแล้ว!' : 'ลบวงเงินแล้ว!');
+      alert(action === 'reset'
+        ? t('accounts.spendingLimit.success.reset', 'Limit reset successfully!')
+        : t('accounts.spendingLimit.success.delete', 'Limit deleted successfully!')
+      );
     } catch (err: any) {
       alert(err.message || 'เกิดข้อผิดพลาด');
     } finally {
@@ -166,7 +169,7 @@ export default function AccountsPage() {
 
     // Validation for change action
     if (spendingLimitAction === 'change' && (!newLimitValue || parseFloat(newLimitValue) <= 0)) {
-      alert('กรุณากรอกวงเงินให้ถูกต้อง');
+      alert(t('accounts.spendingLimit.error.invalid', 'Please enter a valid amount'));
       return;
     }
 
@@ -207,7 +210,7 @@ export default function AccountsPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-2">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <p className="text-sm text-gray-500">Loading accounts...</p>
+          <p className="text-sm text-gray-500">{t('accounts.loading', 'Loading accounts...')}</p>
         </div>
       </div>
     );
@@ -217,8 +220,8 @@ export default function AccountsPage() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
-          <Button onClick={fetchAccounts}>Try Again</Button>
+          <p className="text-red-500 mb-4">{error || t('accounts.error', 'Failed to load accounts')}</p>
+          <Button onClick={fetchAccounts}>{t('accounts.tryAgain', 'Try Again')}</Button>
         </div>
       </div>
     );
@@ -234,12 +237,12 @@ export default function AccountsPage() {
         <div className="glass-card p-12">
           <div className="text-center">
             <Building2 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Ad Accounts Selected</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('accounts.noSelectedTitle', 'No Ad Accounts Selected')}</h3>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Please select at least one ad account in Settings to view account details.
+              {t('accounts.noSelectedDesc', 'Please select at least one ad account in Settings to view account details.')}
             </p>
             <Link href="/settings?tab=ad-accounts">
-              <Button>Go to Settings</Button>
+              <Button>{t('accounts.goToSettings', 'Go to Settings')}</Button>
             </Link>
           </div>
         </div>
@@ -260,37 +263,37 @@ export default function AccountsPage() {
             <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
               <tr>
                 <th className="px-3 py-2 text-left text-sm font-semibold text-gray-900 w-16 border-r border-gray-200">
-                  #
+                  {t('accounts.table.rank', '#')}
                 </th>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  {t('accounts.accountName')}
+                  {t('accounts.table.accountName')}
                 </th>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  {t('accounts.status')}
+                  {t('accounts.table.status')}
                 </th>
                 <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  Active Ads
+                  {t('accounts.table.activeAds', 'Active Ads')}
                 </th>
                 <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200 pr-12">
-                  Spending Cap
+                  {t('accounts.table.spendingCap', 'Spending Cap')}
                 </th>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  Payment Method
+                  {t('accounts.table.paymentMethod', 'Payment Method')}
                 </th>
                 <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  Time Zone
+                  {t('accounts.table.timezone', 'Time Zone')}
                 </th>
                 <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  Nationality
+                  {t('accounts.table.nationality', 'Nationality')}
                 </th>
                 <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  Currency
+                  {t('accounts.table.currency', 'Currency')}
                 </th>
                 <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 max-w-[280px] border-r border-gray-200">
-                  Limit
+                  {t('accounts.table.limit', 'Limit')}
                 </th>
                 <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 max-w-[280px]">
-                  Action
+                  {t('accounts.table.action', 'Action')}
                 </th>
               </tr>
             </thead>
@@ -329,7 +332,7 @@ export default function AccountsPage() {
               ) : accounts.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="px-4 py-8 text-center text-gray-500">
-                    No ad accounts found
+                    {t('accounts.noAccountsFound', 'No ad accounts found')}
                   </td>
                 </tr>
               ) : (
@@ -392,7 +395,7 @@ export default function AccountsPage() {
                               openSpendingLimitDialog(account);
                             }}
                           >
-                            ตั้งวงเงิน
+                            {t('accounts.actions.setLimit', 'Set Limit')}
                           </button>
                         )}
                       </td>
@@ -445,20 +448,20 @@ export default function AccountsPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleSpendingLimitAction(account, 'change')}>
                               <Edit3 className="h-4 w-4 mr-2" />
-                              {account.spendingCap ? 'แก้ไขวงเงิน' : 'ตั้งวงเงิน'}
+                              {account.spendingCap ? t('accounts.actions.editLimit', 'Edit Limit') : t('accounts.actions.setLimit', 'Set Limit')}
                             </DropdownMenuItem>
                             {account.spendingCap && (
                               <>
                                 <DropdownMenuItem onClick={() => handleSpendingLimitAction(account, 'reset')}>
                                   <RotateCcw className="h-4 w-4 mr-2" />
-                                  รีเซ็ตยอดใช้จ่าย
+                                  {t('accounts.actions.resetLimit', 'Reset Spent')}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleSpendingLimitAction(account, 'delete')}
                                   className="text-red-600 focus:text-red-600"
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
-                                  ลบวงเงิน
+                                  {t('accounts.actions.deleteLimit', 'Delete Limit')}
                                 </DropdownMenuItem>
                               </>
                             )}
@@ -466,7 +469,7 @@ export default function AccountsPage() {
                               onClick={() => window.open(`https://business.facebook.com/adsmanager/manage/accounts?act=${account.account_id}`, '_blank')}
                             >
                               <ExternalLink className="h-4 w-4 mr-2" />
-                              เปิดใน Meta
+                              {t('accounts.actions.openMeta', 'Open in Meta')}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -481,12 +484,12 @@ export default function AccountsPage() {
       </div >
 
       {/* Spending Limit Dialog - Exact Screenshot Design */}
-      < Dialog open={spendingLimitDialogOpen} onOpenChange={setSpendingLimitDialogOpen} >
+      <Dialog open={spendingLimitDialogOpen} onOpenChange={setSpendingLimitDialogOpen}>
         <DialogContent className="sm:max-w-[420px] p-0 gap-0">
           {/* Header */}
           <div className="flex items-center gap-2 px-6 pt-6 pb-2">
             <span className="text-blue-600 text-xl font-bold">$</span>
-            <span className="text-[17px] font-semibold text-[#0E1B25]">Set Spending Limit</span>
+            <span className="text-[17px] font-semibold text-[#0E1B25]">{t('accounts.spendingLimit.title', 'Set Spending Limit')}</span>
             <button
               onClick={() => setSpendingLimitDialogOpen(false)}
               className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
@@ -506,7 +509,7 @@ export default function AccountsPage() {
               {/* Money Info */}
               <div className="space-y-1">
                 <div className="text-[15px]">
-                  <span className="font-medium text-[#0F172A]">Money Left: </span>
+                  <span className="font-medium text-[#0F172A]">{t('accounts.spendingLimit.moneyLeft', 'Money Left')}: </span>
                   <span className="text-[#0F172A]">
                     ${selectedAccountForLimit.spendingCap
                       ? Math.max(0, (selectedAccountForLimit.spendingCap - (selectedAccountForLimit.spentAmount || 0))).toFixed(2)
@@ -515,11 +518,11 @@ export default function AccountsPage() {
                   </span>
                 </div>
                 <div className="text-[15px]">
-                  <span className="text-[#0F172A]">Spent </span>
+                  <span className="text-[#0F172A]">{t('accounts.spendingLimit.spent', 'Spent')} </span>
                   <span className="text-blue-600 font-medium">
                     ${(selectedAccountForLimit.spentAmount || 0).toFixed(2)}
                   </span>
-                  <span className="text-[#0F172A]"> • Limit: </span>
+                  <span className="text-[#0F172A]"> • {t('accounts.table.limit', 'Limit')}: </span>
                   <span className="text-blue-600 font-medium">
                     ${selectedAccountForLimit.spendingCap?.toFixed(2) || '∞'}
                   </span>
@@ -529,7 +532,7 @@ export default function AccountsPage() {
               {/* Reset notice */}
               {spendingLimitAction === 'reset' && (
                 <p className="text-sm text-[#64748B]">
-                  The spent amount will be reset to 0 after resetting
+                  {t('accounts.spendingLimit.resetNotice', 'The spent amount will be reset to 0 after resetting')}
                 </p>
               )}
 
@@ -537,7 +540,7 @@ export default function AccountsPage() {
               {selectedAccountForLimit.spendingCap && (
                 <div className="space-y-3 pt-1">
                   <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                    CHOOSE AN ACTION
+                    {t('accounts.spendingLimit.chooseAction', 'CHOOSE AN ACTION')}
                   </div>
                   <div className="flex gap-6">
                     <label className="flex items-center gap-2 cursor-pointer group">
@@ -551,7 +554,7 @@ export default function AccountsPage() {
                         onChange={() => setSpendingLimitAction('change')}
                         className="hidden"
                       />
-                      <span className="text-[15px] text-[#0F172A]">Change Limit</span>
+                      <span className="text-[15px] text-[#0F172A]">{t('accounts.spendingLimit.change', 'Change Limit')}</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer group">
                       <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${spendingLimitAction === 'reset' ? 'border-blue-600' : 'border-gray-300'}`}>
@@ -564,7 +567,7 @@ export default function AccountsPage() {
                         onChange={() => setSpendingLimitAction('reset')}
                         className="hidden"
                       />
-                      <span className="text-[15px] text-[#0F172A]">Reset Limit</span>
+                      <span className="text-[15px] text-[#0F172A]">{t('accounts.spendingLimit.reset', 'Reset Limit')}</span>
                     </label>
                   </div>
                 </div>
@@ -574,7 +577,7 @@ export default function AccountsPage() {
               {(spendingLimitAction === 'change' || !selectedAccountForLimit.spendingCap) && (
                 <div className="space-y-2">
                   <div className="text-[15px] text-[#64748B]">
-                    New Spending Limit
+                    {t('accounts.spendingLimit.newLimit', 'New Spending Limit')}
                   </div>
                   <div className="relative">
                     <Input
@@ -600,19 +603,19 @@ export default function AccountsPage() {
                 {isUpdatingLimit ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
+                    {t('accounts.spendingLimit.update', 'Updating...')}
                   </>
                 ) : (
                   <>
                     <Edit3 className="h-4 w-4 mr-2" />
-                    {spendingLimitAction === 'reset' ? 'Reset Limit' : 'Change Limit'}
+                    {spendingLimitAction === 'reset' ? t('accounts.spendingLimit.reset', 'Reset Limit') : t('accounts.spendingLimit.change', 'Change Limit')}
                   </>
                 )}
               </Button>
             </div>
           )}
         </DialogContent>
-      </Dialog >
+      </Dialog>
     </div >
   );
 }
