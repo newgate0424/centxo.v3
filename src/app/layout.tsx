@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import AuthProvider from '@/app/providers/auth-provider';
 import { AdAccountProvider } from '@/contexts/AdAccountContext';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -7,15 +8,15 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { Roboto, Sarabun } from 'next/font/google';
 import './globals.css';
 
-const roboto = Roboto({ 
-  weight: ['300', '400', '500', '700'],
-  subsets: ['latin'], 
-  variable: '--font-roboto' 
+const roboto = Roboto({
+    weight: ['300', '400', '500', '700'],
+    subsets: ['latin'],
+    variable: '--font-roboto'
 });
-const sarabun = Sarabun({ 
-  weight: ['300', '400', '500', '600', '700'],
-  subsets: ['latin', 'thai'], 
-  variable: '--font-sarabun' 
+const sarabun = Sarabun({
+    weight: ['300', '400', '500', '600', '700'],
+    subsets: ['latin', 'thai'],
+    variable: '--font-sarabun'
 });
 
 export const metadata: Metadata = {
@@ -50,6 +51,7 @@ export default function RootLayout({
                             </AdAccountProvider>
                         </AuthProvider>
                         <Toaster />
+                        <SonnerToaster />
                     </LanguageProvider>
                 </ThemeProvider>
             </body>

@@ -108,19 +108,24 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], accessToken: strin
     insightsTimeRange = `time_range({'since':'${since}','until':'${until}'})`;
   }
 
-  // Chunk requests to avoid rate limiting - reduced to 3 to be more conservative
-  // Facebook Graph API has rate limits, and insights queries count more heavily
-  const CHUNK_SIZE = 3;
+  // Chunk requests to avoid rate limiting
+  // Increased from 3 to 10 for better performance while respecting limits
+  const CHUNK_SIZE = 10;
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
 
     await Promise.all(chunk.map(async (adAccountId) => {
       try {
-        // First, fetch account currency
-        const accountResponse = await fetch(
-          `https://graph.facebook.com/v22.0/${adAccountId}?fields=currency&access_token=${accessToken}`
-        );
+        // Run requests in parallel
+        const [accountResponse, campaignsResponse] = await Promise.all([
+          fetch(
+            `https://graph.facebook.com/v22.0/${adAccountId}?fields=currency&access_token=${accessToken}`
+          ),
+          fetch(
+            `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=id,name,status,effective_status,configured_status,objective,daily_budget,lifetime_budget,spend_cap,issues_info,adsets{effective_status,ads{effective_status}},created_time,insights.${insightsTimeRange}{spend,actions,cost_per_action_type,reach,impressions,clicks}&limit=500&access_token=${accessToken}`
+          )
+        ]);
 
         let accountCurrency = 'USD';
         if (accountResponse.ok) {
@@ -128,12 +133,8 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], accessToken: strin
           accountCurrency = accountData.currency || 'USD';
         }
 
-        const response = await fetch(
-          `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=id,name,status,objective,daily_budget,lifetime_budget,created_time,insights.${insightsTimeRange}{spend,actions,cost_per_action_type,reach,impressions,clicks}&access_token=${accessToken}`
-        );
-
-        if (response.ok) {
-          const data = await response.json();
+        if (campaignsResponse.ok) {
+          const data = await campaignsResponse.json();
           const campaigns = data.data || [];
 
           // Transform to our format
@@ -168,9 +169,17 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], accessToken: strin
               id: campaign.id,
               name: campaign.name,
               status: campaign.status,
+              effectiveStatus: campaign.effective_status,
+              configuredStatus: campaign.configured_status,
               objective: campaign.objective,
+              adSets: campaign.adsets?.data?.map((a: any) => ({
+                effectiveStatus: a.effective_status,
+                ads: a.ads?.data?.map((ad: any) => ({ effectiveStatus: ad.effective_status })) || []
+              })) || [],
               dailyBudget: parseFloat(campaign.daily_budget || '0') / 100,
               lifetimeBudget: parseFloat(campaign.lifetime_budget || '0') / 100,
+              spendCap: parseFloat(campaign.spend_cap || '0') / 100,
+              issuesInfo: campaign.issues_info || [],
               createdAt: new Date(campaign.created_time),
               metrics: {
                 spend: spend,
@@ -197,8 +206,8 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], accessToken: strin
 
           allCampaigns.push(...formatted);
         } else {
-          const errorData = await response.json();
-          errors.push(`Failed to fetch for account ${adAccountId}: ${errorData.error?.message || response.statusText}`);
+          const errorData = await campaignsResponse.json();
+          errors.push(`Failed to fetch for account ${adAccountId}: ${errorData.error?.message || campaignsResponse.statusText}`);
         }
       } catch (err) {
         console.error(`Error fetching campaigns for account ${adAccountId}:`, err);

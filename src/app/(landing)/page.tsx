@@ -4,8 +4,19 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Users, Zap, BarChart3, Shield, ArrowRight, ChevronDown, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function LandingPage() {
+    const { status } = useSession();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (status === 'authenticated') {
+            router.push('/dashboard');
+        }
+    }, [status, router]);
     const features = [
         {
             icon: Sparkles,

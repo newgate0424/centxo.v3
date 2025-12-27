@@ -239,7 +239,14 @@ export async function POST(request: NextRequest) {
     // Step 0: AI Analysis of Media
     console.log('🤖 Analyzing media with AI...');
     let aiAnalysis;
+    let analysisLogId: string | undefined;
     let fileSizeMB: number | undefined;
+    // Add context for AI based on file type or user input
+    const userProductContext = formData.get('productContext') as string;
+    const productContext = isVideo
+      ? (userProductContext ? `${userProductContext}. นี่คือวิดีโอโฆษณาสินค้า...` : `นี่คือวิดีโอโฆษณาสินค้า...`)
+      : userProductContext;
+
     try {
       // Convert media to data URI for AI analysis
       let mediaDataUri = mediaUrl;
@@ -270,11 +277,7 @@ export async function POST(request: NextRequest) {
 
       console.log(`🤖 Sending to AI for analysis...`);
 
-      // Add context for AI based on file type or user input
-      const userProductContext = formData.get('productContext') as string;
-      const productContext = isVideo
-        ? (userProductContext ? `${userProductContext}. นี่คือวิดีโอโฆษณาสินค้า...` : `นี่คือวิดีโอโฆษณาสินค้า...`)
-        : userProductContext;
+      console.log(`🤖 Sending to AI for analysis...`);
 
       // Generate random context for high entropy
       const randomSeed = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -320,56 +323,58 @@ export async function POST(request: NextRequest) {
         ageRange: `${aiAnalysis.ageMin}-${aiAnalysis.ageMax}`,
       });
     } catch (aiError) {
-      console.error('AI Analysis failed, using defaults:', aiError);
-      // Fallback to default values with variations
+      console.error('AI Analysis failed, using smart fallback:', aiError);
+
+      // Import services dynamically to avoid top-level issues
+      const { generateSmartTargeting } = await import('@/lib/services/targetingService');
+      const { generateAdCopies } = await import('@/lib/services/aiCopyService');
+
+      // Generate Smart Targeting
+      const smartTargeting = await generateSmartTargeting(productContext);
+
+      // Generate Smart Copies (this now tries Gemini 1.5 Flash, or falls back to templates)
+      const smartCopies = await generateAdCopies({
+        productContext,
+        numberOfVariations: Math.max(adsCount, 5)
+      });
+
+      // Create diverse interest groups from the smart targeting list
+      // We have ~5-10 interests. We can slice them into groups.
+      const interestList = smartTargeting.interests;
+      const interestGroups = [];
+
+      // Create at least 3 groups or as many as requested
+      const groupsNeeded = Math.max(adSetCount, 3);
+
+      for (let i = 0; i < groupsNeeded; i++) {
+        // Shuffle/Rotate interests for diversity
+        const shuffled = [...interestList].sort(() => Math.random() - 0.5);
+        // Pick 3-5 interests per group
+        const count = 3 + Math.floor(Math.random() * 3);
+        interestGroups.push({
+          name: `Targeting Group ${String.fromCharCode(65 + i)}`,
+          interests: shuffled.slice(0, count)
+        });
+      }
+
+      // Map copies to variations format
+      const adCopyVariations = smartCopies.map(copy => ({
+        primaryText: copy.primaryTextTH,
+        headline: copy.headlineTH || '✨ คลิกเลย!'
+      }));
+
+      // Fallback object with dynamic data
       aiAnalysis = {
-        primaryText: '🔥 สินค้าคุณภาพ ราคาดี พร้อมส่งทันที! สนใจทักแชทสอบถามได้เลยครับ 💬',
-        headline: '✨ คลิกดูสินค้าและทักแชทเลย!',
+        primaryText: adCopyVariations[0]?.primaryText || '🔥 สินค้าคุณภาพ ราคาดี พร้อมส่งทันที! สนใจทักแชทสอบถามได้เลยครับ 💬',
+        headline: adCopyVariations[0]?.headline || '✨ คลิกดูสินค้าและทักแชทเลย!',
         ctaMessage: 'ทักแชทเลย',
-        interests: ['Shopping and Fashion', 'Online Shopping'],
-        ageMin: 20,
-        ageMax: 65,
-        productCategory: 'สินค้าทั่วไป',
-        confidence: 0.5,
-        interestGroups: [
-          { name: 'กลุ่มทั่วไป', interests: ['Shopping and Fashion', 'Online Shopping'] },
-          { name: 'มนุษย์เงินเดือน', interests: ['Shopping', 'E-commerce'] },
-          { name: 'วัยรุ่น', interests: ['Fashion', 'Beauty'] },
-        ],
-        adCopyVariations: [
-          {
-            primaryText: '🔥 สินค้าคุณภาพ ราคาดี พร้อมส่งทันที! สนใจทักแชทสอบถามได้เลยครับ 💬',
-            headline: '✨ คลิกดูสินค้าและทักแชทเลย!'
-          },
-          {
-            primaryText: '💥 โปรโมชั่นพิเศษวันนี้! ลดราคาสุดคุ้ม ทักแชทเลยครับ 🎉',
-            headline: '🎁 โปรโมชั่นพิเศษวันนี้!'
-          },
-          {
-            primaryText: '⭐ ของดีมีคุณภาพ ราคาถูกกว่าใคร สอบถามได้เลยครับ ✨',
-            headline: '💎 สินค้าคุณภาพราคาพิเศษ'
-          },
-          {
-            primaryText: '📦 มีของพร้อมส่งทันที! จัดส่งฟรีทั่วไทย ทักมาเลยครับ 🚚',
-            headline: '🚀 พร้อมส่ง จัดส่งฟรี!'
-          },
-          {
-            primaryText: '💰 ลดราคาพิเศษ! คุ้มสุดๆ สั่งเลยวันนี้ อย่าพลาดโอกาสดีๆ 🎯',
-            headline: '🔥 ลดราคาพิเศษ คุ้มสุดๆ!'
-          },
-          {
-            primaryText: '🌟 สินค้าใหม่มาแล้ว! ดีไซน์สวย คุณภาพดี ทักมาดูเลยครับ 👀',
-            headline: '✨ สินค้าใหม่! ต้องดู!'
-          },
-          {
-            primaryText: '🎊 ของขวัญสุดพิเศษ! เหมาะสำหรับคนสำคัญของคุณ ทักแชทเลยครับ 💝',
-            headline: '🎁 ของขวัญสุดพิเศษ'
-          },
-          {
-            primaryText: '⚡ สต็อกมีจำกัด! รีบสั่งก่อนของหมด ทักแชทสอบถามเลยครับ 🔥',
-            headline: '⚠️ สต็อกมีจำกัด รีบด่วน!'
-          },
-        ],
+        interests: interestList,
+        ageMin: smartTargeting.minAge || 20,
+        ageMax: smartTargeting.maxAge || 65,
+        productCategory: 'สินค้าแนะนำ',
+        confidence: 0.8, // Fallback confidence
+        interestGroups: interestGroups,
+        adCopyVariations: adCopyVariations,
       };
     }
 
@@ -752,8 +757,19 @@ export async function POST(request: NextRequest) {
 
       // Convert interest names to IDs using Facebook Targeting Search API
       if (interestGroup.interests && interestGroup.interests.length > 0) {
-        console.log(`🔍 Searching interest IDs for AdSet ${i + 1}:`, interestGroup.interests);
-        const interestObjects = await getInterestIds(interestGroup.interests, accessToken);
+        console.log(`🔍 Resolving interest IDs for AdSet ${i + 1}...`);
+
+        let interestObjects: any[] = [];
+        const firstInterest = interestGroup.interests[0];
+
+        if (typeof firstInterest === 'string') {
+          // It's a list of names, we need to search IDs
+          console.log(`🔍 Searching interest IDs for:`, interestGroup.interests);
+          interestObjects = await getInterestIds(interestGroup.interests as string[], accessToken);
+        } else if (typeof firstInterest === 'object' && firstInterest !== null) {
+          // It's already objects with IDs (from DB/Smart Targeting)
+          interestObjects = interestGroup.interests;
+        }
 
         if (interestObjects.length > 0) {
           loopTargeting.flexible_spec = [

@@ -6,6 +6,7 @@ import { Loader2, ExternalLink, CreditCard, Building2, Edit3, RotateCcw, Trash2,
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from "@/components/ui/button";
+import { showCustomToast } from "@/utils/custom-toast";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -169,7 +170,7 @@ export default function AccountsPage() {
 
     // Validation for change action
     if (spendingLimitAction === 'change' && (!newLimitValue || parseFloat(newLimitValue) <= 0)) {
-      alert(t('accounts.spendingLimit.error.invalid', 'Please enter a valid amount'));
+      showCustomToast(t('accounts.spendingLimit.error.invalid', 'Please enter a valid amount'));
       return;
     }
 
@@ -197,9 +198,9 @@ export default function AccountsPage() {
       const message = spendingLimitAction === 'reset'
         ? `รีเซ็ตวงเงินสำหรับ ${selectedAccountForLimit.name} แล้ว`
         : `อัพเดตวงเงินเป็น ${newLimitValue} ${selectedAccountForLimit.currency} สำหรับ ${selectedAccountForLimit.name}`;
-      alert(message);
+      showCustomToast(message);
     } catch (err: any) {
-      alert(err.message || 'เกิดข้อผิดพลาดในการอัพเดตวงเงิน');
+      showCustomToast(err.message || 'เกิดข้อผิดพลาดในการอัพเดตวงเงิน');
     } finally {
       setIsUpdatingLimit(false);
     }

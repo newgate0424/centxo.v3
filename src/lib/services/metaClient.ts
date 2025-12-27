@@ -115,6 +115,15 @@ class MetaAPIClient {
     });
   }
 
+  // Search details for interests/targeting
+  async searchInterests(query: string) {
+    return this.makeRequest(`/search`, 'GET', {
+      type: 'adtarget',
+      q: query,
+      target_class: 'interests',
+    });
+  }
+
   // Upload video to Meta
   async uploadVideo(adAccountId: string, videoUrl: string, title: string) {
     return this.makeRequest(`/${adAccountId}/advideos`, 'POST', {

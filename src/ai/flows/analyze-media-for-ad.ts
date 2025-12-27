@@ -17,7 +17,8 @@ const AnalyzeMediaInputSchema = z.object({
    productContext: z.string().optional().describe('Additional context about the product/service (optional)'),
    isVideoFile: z.boolean().optional().describe('Whether the mediaUrl is a local video file path (not data URI)'),
    adSetCount: z.number().optional().describe('Number of AdSets requesting unique targets'),
-   randomContext: z.string().optional().describe('Random seed string to ensure high entropy/uniqueness')
+   randomContext: z.string().optional().describe('Random seed string to ensure high entropy/uniqueness'),
+   pastSuccessExamples: z.array(z.string()).optional().describe('List of past successful ad copies or analysis notes to learn from')
 });
 
 export type AnalyzeMediaInput = z.infer<typeof AnalyzeMediaInputSchema>;
@@ -83,6 +84,20 @@ Your PRIMARY JOB is to correctly identify the product and create compelling Face
 - User says "กระเป๋าแบรนด์เนม" → Category = "แฟชั่น", NOT "ความงาม"
 {{else}}
 **No user input provided. Analyze the media visually.**
+{{/if}}
+
+{{#if pastSuccessExamples}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧠 LEARN FROM SUCCESS (PATTERN MATCHING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The following are examples of ads that worked well for this user in the past. 
+Use them to understand the preferred **Tone**, **Style**, and **Key Selling Points**.
+
+{{#each pastSuccessExamples}}
+- {{this}}
+{{/each}}
+
+**INSTRUCTION:** Adopt the *winning elements* from above (e.g. if they use emojis heavily, do so. If they focus on price, do so).
 {{/if}}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

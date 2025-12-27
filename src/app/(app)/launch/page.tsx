@@ -411,6 +411,11 @@ export default function LaunchPage() {
         });
 
         setSuccess(t('launch.success', 'Campaign created successfully!'));
+
+        // Store campaign ID for redirect
+        if (data.campaignId) {
+          sessionStorage.setItem('newCampaignId', data.campaignId);
+        }
       } else if (allMediaFiles.length === 1) {
         // Single file → Create campaigns according to campaignCount
         const media = allMediaFiles[0];
@@ -489,11 +494,16 @@ export default function LaunchPage() {
         setUploadProgress(prev => ({ ...prev, [media.name]: 100 }));
 
         setSuccess(t('launch.success', 'Campaign created successfully!'));
+
+        // Store campaign ID for redirect
+        if (data.campaignId) {
+          sessionStorage.setItem('newCampaignId', data.campaignId);
+        }
       }
 
       // Redirect to campaigns page after successful creation
       setTimeout(() => {
-        router.push('/campaigns');
+        router.push('/campaigns?tab=ads&refresh=true');
       }, 1500); // Give user time to see success message
 
       // Reset form
@@ -682,7 +692,7 @@ export default function LaunchPage() {
                   onClick={() => {
                     setIsProgressDialogOpen(false);
                     // Force refresh when returning to campaigns page
-                    router.push('/campaigns?refresh=true');
+                    router.push('/campaigns?tab=ads&refresh=true');
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >

@@ -25,6 +25,10 @@ export async function GET(request: NextRequest) {
     // Split comma-separated IDs
     const adAccountIds = adAccountId.split(',').filter(Boolean);
 
+    // Get date range parameters
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
+
     // Get Facebook access token
     const accessToken = (session as any).accessToken;
 
@@ -36,7 +40,8 @@ export async function GET(request: NextRequest) {
     }
 
     const forceRefresh = searchParams.get('refresh') === 'true';
-    const cacheKey = generateCacheKey('meta:ads', session.user.id!, adAccountIds.sort().join(','));
+    const dateRangeKey = dateFrom && dateTo ? `${dateFrom}_${dateTo}` : 'all';
+    const cacheKey = generateCacheKey('meta:ads', session.user.id!, `${adAccountIds.sort().join(',')}:${dateRangeKey}`);
 
     if (forceRefresh) {
       await deleteCache(cacheKey);
@@ -50,7 +55,7 @@ export async function GET(request: NextRequest) {
       CacheTTL.ADS_LIST,
       STALE_TTL,
       async () => {
-        return await fetchAdsFromMeta(adAccountIds, accessToken);
+        return await fetchAdsFromMeta(adAccountIds, accessToken, dateFrom, dateTo);
       }
     );
 
@@ -68,21 +73,37 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
+async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string, dateFrom?: string | null, dateTo?: string | null) {
   const allAds: any[] = [];
 
+  // Build insights time range parameter
+  let insightsTimeRange = 'date_preset(last_30d)';
+  if (dateFrom && dateTo) {
+    const fromDate = new Date(dateFrom);
+    const toDate = new Date(dateTo);
+    const since = fromDate.toISOString().split('T')[0];
+    const until = toDate.toISOString().split('T')[0];
+    insightsTimeRange = `time_range({'since':'${since}','until':'${until}'})`;
+  }
+
   // Chunk requests to avoid rate limiting
-  const CHUNK_SIZE = 3;
+  // Increased from 3 to 10 for better performance while respecting limits
+  const CHUNK_SIZE = 10;
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
 
     await Promise.all(chunk.map(async (accountId) => {
       try {
-        // First, fetch account currency
-        const accountResponse = await fetch(
-          `https://graph.facebook.com/v22.0/${accountId}?fields=currency&access_token=${accessToken}`
-        );
+        // Run requests in parallel
+        const [accountResponse, adsResponse] = await Promise.all([
+          fetch(
+            `https://graph.facebook.com/v22.0/${accountId}?fields=currency&access_token=${accessToken}`
+          ),
+          fetch(
+            `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${accessToken}`
+          )
+        ]);
 
         let accountCurrency = 'USD';
         if (accountResponse.ok) {
@@ -90,12 +111,8 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
           accountCurrency = accountData.currency || 'USD';
         }
 
-        const response = await fetch(
-          `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,effective_object_story_id,object_story_id},effective_status,created_time,insights{spend,actions,reach,impressions,clicks}&limit=100&access_token=${accessToken}`
-        );
-
-        if (response.ok) {
-          const data = await response.json();
+        if (adsResponse.ok) {
+          const data = await adsResponse.json();
 
           // Add account ID and currency to each ad
           const adsWithAccount = data.data.map((ad: any) => ({
@@ -146,6 +163,7 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
         for (let i = 0; i < pageIdsArray.length; i += PAGE_BATCH_SIZE) {
           const batch = pageIdsArray.slice(i, i + PAGE_BATCH_SIZE);
 
+
           await Promise.all(batch.map(async (pageId) => {
             try {
               const pageResponse = await fetch(
@@ -177,13 +195,29 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
     let imageUrl = null;
 
     if (ad.creative) {
-      // Try thumbnail_url first (most reliable)
+      // 1. Try thumbnail_url first (most reliable)
       imageUrl = ad.creative.thumbnail_url || ad.creative.image_url;
 
-      // If still no image, try to extract from object_story_spec
+      // 2. Try asset_feed_spec (Dynamic Creative)
+      if (!imageUrl && ad.creative.asset_feed_spec) {
+        const spec = ad.creative.asset_feed_spec;
+        if (spec.images && spec.images.length > 0) {
+          imageUrl = spec.images[0].url;
+        } else if (spec.videos && spec.videos.length > 0) {
+          imageUrl = spec.videos[0].thumbnail_url;
+        }
+      }
+
+      // 3. Try object_story_spec
       if (!imageUrl && ad.creative.object_story_spec) {
         const spec = ad.creative.object_story_spec;
-        if (spec.link_data?.picture) {
+
+        // Carousel ads (child_attachments)
+        if (spec.link_data?.child_attachments && spec.link_data.child_attachments.length > 0) {
+          imageUrl = spec.link_data.child_attachments[0].picture;
+        }
+        // Standards ads
+        else if (spec.link_data?.picture) {
           imageUrl = spec.link_data.picture;
         } else if (spec.photo_data?.url) {
           imageUrl = spec.photo_data.url;
@@ -218,10 +252,26 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
     const messagingContactsAction = actions.find((a: any) => a.action_type === 'onsite_conversion.messaging_conversation_started_7d');
     const messagingContacts = parseInt(messagingContactsAction?.value || '0');
 
+    const postEngagementAction = actions.find((a: any) => a.action_type === 'post_engagement');
+    const postEngagements = parseInt(postEngagementAction?.value || '0');
+
+    // Get Budget from Ad Set
+    let budget = 0;
+    if (ad.adset) {
+      if (ad.adset.daily_budget) {
+        budget = parseFloat(ad.adset.daily_budget) / 100;
+      } else if (ad.adset.lifetime_budget) {
+        budget = parseFloat(ad.adset.lifetime_budget) / 100;
+      }
+    }
+
     return {
       id: ad.id,
       name: ad.name,
       status: ad.status,
+      effectiveStatus: ad.effective_status,
+      configuredStatus: ad.configured_status,
+      issuesInfo: ad.issuesInfo || [],
       adsetId: ad.adset_id,
       campaignId: ad.campaign_id,
       creativeId: ad.creative?.id || '-',
@@ -235,6 +285,7 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
       currency: ad.currency,
       pageId: pageId,
       pageName: pageName || (pageId ? `Page ${pageId}` : null),
+      budget: budget,
       metrics: {
         spend: spend,
         reach: parseInt(insights?.reach || '0'),
@@ -243,7 +294,10 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string) {
         messagingContacts: messagingContacts,
         results: messagingContacts,
         costPerResult: messagingContacts > 0 ? spend / messagingContacts : 0,
+        postEngagements: postEngagements,
+        amountSpent: spend
       },
+      postLink: storyId ? `https://www.facebook.com/${storyId}` : null,
     };
   });
 

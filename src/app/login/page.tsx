@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { showCustomToast } from "@/utils/custom-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,12 +61,14 @@ function LoginPageContent() {
             });
 
             if (result?.error) {
-                alert(result.error);
-            } else {
-                router.push("/dashboard");
+                showCustomToast(result.error);
+                return;
             }
+
+            router.push("/dashboard");
         } catch (error) {
-            alert("An error occurred during sign in");
+            console.error(error);
+            showCustomToast("An error occurred during sign in");
         } finally {
             setLoading(false);
         }

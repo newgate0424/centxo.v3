@@ -1,10 +1,13 @@
 /**
  * AI Copy Generation Service
- * Uses LLM to generate ad copy variations for Thai and English
+ * Uses Google Gemini to generate ad copy variations for Thai and English
  */
 
-import { generate } from '@genkit-ai/ai';
-// import { gemini15Flash } from '@genkit-ai/google-genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// Initialize Gemini
+const apiKey = process.env.GOOGLE_GENAI_API_KEY;
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
 interface AdCopyRequest {
   productContext?: string;
@@ -35,19 +38,17 @@ Guidelines:
 7. Use emojis sparingly but effectively
 8. Encourage immediate action through messaging
 
-Response format (JSON):
-{
-  "copies": [
-    {
-      "primaryTextTH": "Thai primary text here",
-      "primaryTextEN": "English primary text here",
-      "headlineTH": "Thai headline",
-      "headlineEN": "English headline",
-      "ctaMessagePromptTH": "สวัสดีค่ะ สนใจสินค้าใช่ไหมคะ",
-      "ctaMessagePromptEN": "Hi! Interested in our product?"
-    }
-  ]
-}`;
+Response format (JSON Array):
+[
+  {
+    "primaryTextTH": "Thai primary text here",
+    "primaryTextEN": "English primary text here",
+    "headlineTH": "Thai headline",
+    "headlineEN": "English headline",
+    "ctaMessagePromptTH": "สวัสดีค่ะ สนใจสินค้าใช่ไหมคะ",
+    "ctaMessagePromptEN": "Hi! Interested in our product?"
+  }
+]`;
 
 /**
  * Generate multiple ad copy variations using AI
@@ -55,7 +56,15 @@ Response format (JSON):
 export async function generateAdCopies(request: AdCopyRequest): Promise<AdCopy[]> {
   const { productContext = 'general product', tone = 'friendly', numberOfVariations } = request;
 
-  const userPrompt = `Generate ${numberOfVariations} different ad copy variations for a Facebook Messages ad campaign.
+  if (!genAI) {
+    console.warn('⚠️ GOOGLE_GENAI_API_KEY not found. Using fallback copies.');
+    return generateFallbackCopies(numberOfVariations);
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const userPrompt = `Generate ${numberOfVariations} different ad copy variations for a Facebook Messages ad campaign.
 
 Product/Service Context: ${productContext}
 Tone: ${tone}
@@ -67,53 +76,84 @@ Create diverse variations that:
 - Vary the messaging approach
 - All encourage users to send a message
 
-Return exactly ${numberOfVariations} unique variations in JSON format.`;
+Return exactly ${numberOfVariations} unique variations in valid JSON format (Array of objects). Do not include markdown code blocks.`;
 
-  // AI generation temporarily disabled - using fallback copies
-  // TODO: Fix genkit integration when API is properly configured
-  return generateFallbackCopies(numberOfVariations);
+    const result = await model.generateContent([SYSTEM_PROMPT, userPrompt]);
+    const response = result.response;
+    const text = response.text();
+
+    // Clean up markdown if present
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    const start = cleanJson.indexOf('[');
+    const end = cleanJson.lastIndexOf(']');
+
+    if (start === -1 || end === -1) {
+      throw new Error('Invalid JSON response from AI');
+    }
+
+    const jsonStr = cleanJson.substring(start, end + 1);
+    const copies = JSON.parse(jsonStr) as AdCopy[];
+
+    // Validate and limit count
+    return copies.slice(0, numberOfVariations);
+
+  } catch (error) {
+    console.error('❌ AI Generation Failed:', error);
+    return generateFallbackCopies(numberOfVariations);
+  }
 }
 
 /**
  * Fallback copies if AI fails
  */
-function generateFallbackCopies(count: number): AdCopy[] {
+/**
+ * Fallback copies if AI fails - NOW WITH DYNAMIC CONTEXT
+ */
+function generateFallbackCopies(count: number, context: string = ''): AdCopy[] {
+  // Simple extraction of a "product name" or key term from context if possible
+  // E.g. "Selling organic dog food" -> "Organic Dog Food"
+  // This is a naive heuristic but better than nothing.
+  const cleanContext = context.replace(/Selling|Promotion|Ad for/gi, '').trim();
+  const productTerm = cleanContext.length > 0 && cleanContext.length < 30 ? cleanContext : 'สินค้า';
+  const productTermEN = cleanContext.length > 0 && cleanContext.length < 30 ? cleanContext : 'Product';
+
   const templates: AdCopy[] = [
     {
-      primaryTextTH: '🎁 โปรโมชั่นพิเศษ! ส่งข้อความมาสอบถามเลยวันนี้ รับส่วนลดทันที',
-      primaryTextEN: '🎁 Special Promotion! Message us today for instant discount',
-      headlineTH: 'สอบถามเลย รับส่วนลด',
-      headlineEN: 'Ask Now Get Discount',
+      primaryTextTH: `🎁 โปรโมชั่นพิเศษสำหรับ ${productTerm}! ส่งข้อความมาสอบถามเลยวันนี้ รับส่วนลดทันที`,
+      primaryTextEN: `🎁 Special Promotion for ${productTermEN}! Message us today for instant discount`,
+      headlineTH: `สอบถาม ${productTerm} รับส่วนลด`,
+      headlineEN: `Ask about ${productTermEN}`,
       ctaMessagePromptTH: 'สวัสดีค่ะ สนใจโปรโมชั่นใช่ไหมคะ',
       ctaMessagePromptEN: 'Hi! Interested in our promo?',
     },
     {
-      primaryTextTH: '💬 มีคำถาม? ทีมงานพร้อมตอบทุกข้อสงสัย ส่งข้อความมาได้เลย!',
-      primaryTextEN: '💬 Questions? Our team is ready to help. Send us a message!',
+      primaryTextTH: `💬 สงสัยเรื่อง ${productTerm}? ทีมงานพร้อมตอบทุกข้อสงสัย ส่งข้อความมาได้เลย!`,
+      primaryTextEN: `💬 Questions about ${productTermEN}? Our team is ready to help. Send us a message!`,
       headlineTH: 'สอบถามได้ตลอด 24/7',
       headlineEN: 'Ask Anytime 24/7',
-      ctaMessagePromptTH: 'สวัสดีครับ มีอะไรให้ช่วยไหมครับ',
-      ctaMessagePromptEN: 'Hello! How can we help?',
+      ctaMessagePromptTH: `สวัสดีครับ สนใจ ${productTerm} ครับ`,
+      ctaMessagePromptEN: `Hello! Interested in ${productTermEN}`,
     },
     {
-      primaryTextTH: '⚡ จำกัดเวลา! ส่งข้อความเลยวันนี้ รับสิทธิพิเศษก่อนใคร',
-      primaryTextEN: '⚡ Limited Time! Message today for exclusive benefits',
+      primaryTextTH: `⚡ ${productTerm} ราคาพิเศษ! ส่งข้อความเลยวันนี้ รับสิทธิก่อนใคร`,
+      primaryTextEN: `⚡ ${productTermEN} Special Price! Message today for exclusive benefits`,
       headlineTH: 'รีบด่วน! เหลือไม่กี่ที่',
-      headlineEN: 'Hurry! Limited Slots',
+      headlineEN: 'Hurry! Limited Stock',
       ctaMessagePromptTH: 'สวัสดีค่ะ รับสิทธิพิเศษเลยคะ',
       ctaMessagePromptEN: 'Hi! Get your special offer',
     },
     {
-      primaryTextTH: '✨ ค้นพบสิ่งที่คุณต้องการ! สอบถามรายละเอียดเพิ่มเติมได้ทาง Messenger',
-      primaryTextEN: '✨ Discover what you need! Ask for details via Messenger',
+      primaryTextTH: `✨ ค้นพบ ${productTerm} ที่คุณตามหา! สอบถามรายละเอียดเพิ่มเติมได้ทาง Messenger`,
+      primaryTextEN: `✨ Discover the ${productTermEN} you need! Ask for details via Messenger`,
       headlineTH: 'สอบถามฟรี ไม่มีค่าใช้จ่าย',
       headlineEN: 'Free Inquiry No Cost',
       ctaMessagePromptTH: 'สวัสดีค่ะ อยากทราบรายละเอียดคะ',
       ctaMessagePromptEN: 'Hi! Want to know more',
     },
     {
-      primaryTextTH: '🔥 ของดีมีจำนวนจำกัด ส่งข้อความมาจองก่อนของหมด!',
-      primaryTextEN: '🔥 Limited stock available! Message to reserve before sold out!',
+      primaryTextTH: `🔥 ${productTerm} ของดีมีจำนวนจำกัด ส่งข้อความมาจองก่อนของหมด!`,
+      primaryTextEN: `🔥 ${productTermEN} Limited stock! Message to reserve before sold out!`,
       headlineTH: 'จองเลย ก่อนหมด!',
       headlineEN: 'Reserve Now!',
       ctaMessagePromptTH: 'สวัสดีค่ะ อยากจองเลยคะ',
@@ -131,7 +171,13 @@ export async function generateOptimizedCopy(
   winnerCopies: AdCopy[],
   context: string
 ): Promise<AdCopy> {
-  const userPrompt = `Based on these winning ad copies that performed well:
+  if (!genAI) {
+    return generateFallbackCopies(1)[0];
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const userPrompt = `Based on these winning ad copies that performed well:
 
 ${JSON.stringify(winnerCopies, null, 2)}
 
@@ -144,11 +190,29 @@ The new copy should:
 3. Maintain the successful tone and structure
 4. Be even more compelling
 
-Return 1 copy in JSON format.`;
+Return 1 copy in valid JSON format (Object). Do not include markdown code blocks.`;
 
-  // AI generation temporarily disabled - using fallback copies
-  // TODO: Fix genkit integration when API is properly configured
-  return generateFallbackCopies(1)[0];
+    const result = await model.generateContent([SYSTEM_PROMPT, userPrompt]);
+    const response = result.response;
+    const text = response.text();
+
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    // Find first { and last }
+    const start = cleanJson.indexOf('{');
+    const end = cleanJson.lastIndexOf('}');
+
+    if (start === -1 || end === -1) {
+      throw new Error('Invalid JSON response');
+    }
+
+    const jsonStr = cleanJson.substring(start, end + 1);
+    return JSON.parse(jsonStr) as AdCopy;
+
+  } catch (error) {
+    console.error('❌ AI Optimization Failed:', error);
+    return generateFallbackCopies(1)[0];
+  }
 }
 
 /**

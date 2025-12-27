@@ -54,7 +54,7 @@ export const messages: Record<SupportedLanguage, Record<string, string>> = {
     'campaigns.status.active': 'ACTIVE',
     'campaigns.status.paused': 'PAUSED',
     'campaigns.columns.number': '#',
-    'campaigns.columns.toggle': 'Active',
+    'campaigns.columns.toggle': 'On/Off',
     'campaigns.columns.adAccount': 'Ad Acc',
     'campaigns.columns.name': 'Name',
     'campaigns.columns.status': 'Status',
@@ -91,6 +91,8 @@ export const messages: Record<SupportedLanguage, Record<string, string>> = {
     'campaigns.tooltips.campaignLifetime': 'Campaign Lifetime:',
     'campaigns.tooltips.noBudget': 'No campaign budget set.\nBudget is managed at ad set level.',
     'campaigns.tooltips.adSetName': 'Ad Set Name',
+    // Alerts
+    'campaigns.alert.selectAccount': 'Please select at least one account',
 
     // Launch
     'launch.title': 'Launch New Campaign',
@@ -285,7 +287,7 @@ export const messages: Record<SupportedLanguage, Record<string, string>> = {
     'campaigns.status.active': 'ใช้งานอยู่',
     'campaigns.status.paused': 'หยุดชั่วคราว',
     'campaigns.columns.number': '#',
-    'campaigns.columns.toggle': 'ปิด/เปิด',
+    'campaigns.columns.toggle': 'On/Off',
     'campaigns.columns.adAccount': 'บัญชีโฆษณา',
     'campaigns.columns.name': 'ชื่อ',
     'campaigns.columns.status': 'สถานะ',
@@ -322,6 +324,8 @@ export const messages: Record<SupportedLanguage, Record<string, string>> = {
     'campaigns.tooltips.campaignLifetime': 'งบตลอดอายุ (แคมเปญ):',
     'campaigns.tooltips.noBudget': 'ไม่มีงบประมาณแคมเปญ\nงบประมาณถูกจัดการที่ชุดโฆษณา',
     'campaigns.tooltips.adSetName': 'ชื่อชุดโฆษณา',
+    // Alerts
+    'campaigns.alert.selectAccount': 'กรุณาเลือกบัญชีโฆษณาอย่างน้อยหนึ่งบัญชี',
 
     // Launch
     'launch.title': 'สร้างแคมเปญใหม่',

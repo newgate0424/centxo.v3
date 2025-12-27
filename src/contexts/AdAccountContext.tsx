@@ -8,6 +8,11 @@ interface AdAccount {
   id: string;
   name: string;
   account_id: string;
+  currency?: string;
+  account_status?: number;
+  disable_reason?: number;
+  spend_cap?: string | number;
+  amount_spent?: string | number;
 }
 
 interface Page {

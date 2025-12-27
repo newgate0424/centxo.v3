@@ -110,7 +110,30 @@ export async function POST(request: NextRequest) {
 
     // 8. Create Ad Set
     console.log('Creating ad set...');
-    const targeting = createThailandTargeting(20);
+
+    // --- SMART TARGETING (DB ENHANCED) ---
+    // 1. Generate Interest Candidates from DB
+    const { interests: interestCandidates, minAge } = await import('@/lib/services/targetingService')
+      .then(m => m.generateSmartTargeting(productContext || ''));
+
+    console.log(`Generated Interest Candidates from DB: ${interestCandidates.map(i => i.name).join(', ')}`);
+
+    // 2. Use DB IDs directly (no need to re-search)
+    const validatedInterests = interestCandidates.map(i => ({ id: i.id, name: i.name }));
+
+    // 3. Construct Targeting Object
+    const targeting = createThailandTargeting(minAge);
+
+    // If we have valid interests, add them to flexible_spec
+    if (validatedInterests.length > 0) {
+      (targeting as any)['flexible_spec'] = [
+        {
+          interests: validatedInterests
+        }
+      ];
+    }
+    // --- SMART TARGETING END ---
+
     const adSetResult = await metaClient.createAdSet({
       campaignId: metaCampaignId,
       name: `AdSet - ${finalCampaignName}`,

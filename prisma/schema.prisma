@@ -117,8 +117,20 @@ model AdCreative {
   ctaMessagePromptTH String   @db.Text
   ctaMessagePromptEN String   @db.Text
   ads                Ad[]
+  aiAnalysisLogId    String?
+  aiAnalysisLog      AIAnalysisLog? @relation(fields: [aiAnalysisLogId], references: [id])
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model AIAnalysisLog {
+  id             String       @id @default(cuid())
+  mediaHash      String       @unique
+  mediaPath      String?      @db.Text
+  analysisResult Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  adCreatives    AdCreative[]
 }
 
 model CampaignInsight {
@@ -191,4 +203,18 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+}
+
+model FacebookInterest {
+  id                     String   @id @default(cuid())
+  fbId                   String   @unique
+  name                   String
+  audienceSizeLowerBound BigInt?
+  audienceSizeUpperBound BigInt?
+  path                   Json?
+  topic                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([name])
 }

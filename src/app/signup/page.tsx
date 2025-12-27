@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { showCustomToast } from "@/utils/custom-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,10 +47,9 @@ export default function SignupPage() {
                 body: JSON.stringify(formData),
             });
 
-            const data = await response.json();
-
             if (!response.ok) {
-                alert(data.error || "Registration failed");
+                const data = await response.json();
+                showCustomToast(data.error || "Registration failed");
                 return;
             }
 
@@ -61,12 +61,12 @@ export default function SignupPage() {
             });
 
             if (result?.error) {
-                alert(result.error);
+                showCustomToast(result.error);
             } else {
                 router.push("/dashboard");
             }
         } catch (error) {
-            alert("An error occurred during registration");
+            showCustomToast("An error occurred during registration");
         } finally {
             setLoading(false);
         }

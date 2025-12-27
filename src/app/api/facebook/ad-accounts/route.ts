@@ -23,9 +23,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch ad accounts from Facebook Graph API
+    // Fetch ad accounts from Facebook Graph API with detailed status fields
     const response = await fetch(
-      `https://graph.facebook.com/v22.0/me/adaccounts?fields=id,name,account_id,account_status,currency&access_token=${accessToken}`
+      `https://graph.facebook.com/v22.0/me/adaccounts?fields=id,name,account_id,account_status,disable_reason,currency,spend_cap,amount_spent,business_name,business_country_code,timezone_name,timezone_offset_hours_utc,funding_source_details&limit=500&access_token=${accessToken}`
     );
 
     if (!response.ok) {
@@ -47,7 +47,15 @@ export async function GET(request: NextRequest) {
         name: acc.name,
         account_id: acc.account_id,
         status: acc.account_status,
+        disable_reason: acc.disable_reason,
         currency: acc.currency,
+        spend_cap: acc.spend_cap ? parseFloat(acc.spend_cap) / 100 : null,
+        amount_spent: acc.amount_spent ? parseFloat(acc.amount_spent) / 100 : 0,
+        business_name: acc.business_name,
+        business_country_code: acc.business_country_code,
+        timezone_name: acc.timezone_name,
+        timezone_offset: acc.timezone_offset_hours_utc,
+        funding_source: acc.funding_source_details?.display_string || null,
       })),
       total: accounts.length,
     });
