@@ -7,16 +7,18 @@ export default function LoginLayout({
     children: React.ReactNode;
 }) {
     return (
-        <div className="min-h-screen w-full relative flex flex-col bg-background">
-            {/* Background Pattern */}
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_800px_at_100%_200px,#3b82f61a,transparent)] pointer-events-none" />
+        <div className="min-h-screen w-full relative flex flex-col bg-background overflow-hidden">
+            {/* Animated gradient background - same as landing page */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-background" />
+            <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+            <div className="absolute top-1/2 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
 
             {/* Header */}
-            <header className="absolute top-0 left-0 right-0 z-50 w-full">
+            <header className="absolute top-0 left-0 right-0 z-50 w-full backdrop-blur-sm">
                 <div className="container flex h-16 items-center justify-between px-4 sm:px-8">
-                    <Link href="/" className="flex items-center gap-2">
-                        <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-lg" />
+                    <Link href="/" className="flex items-center gap-2 group">
+                        <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-lg group-hover:scale-105 transition-transform" />
                         <span className="font-bold text-xl hidden sm:inline-block">Centxo</span>
                     </Link>
 

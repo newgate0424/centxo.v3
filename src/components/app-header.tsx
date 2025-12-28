@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { signOut } from "next-auth/react"
 import Link from "next/link"
-import { Menu, Settings, LogOut } from "lucide-react"
+import { Menu, Settings, LogOut, Sparkles } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { useLanguage } from "@/contexts/LanguageContext"
@@ -52,7 +52,7 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
 
             <div className="flex items-center space-x-3 sm:space-x-6">
                 <LanguageToggle />
-                
+
                 <ThemeToggle />
 
                 <div className="h-8 w-[1px] bg-border hidden sm:block" />
@@ -76,6 +76,15 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
                             </div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-border/50" />
+
+
+                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer focus:bg-primary/10 focus:text-primary">
+                            <Link href="/pricing" className="flex items-center w-full py-2">
+                                <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
+                                <span>{language === 'th' ? 'อัปเกรด' : 'Upgrade'}</span>
+                            </Link>
+                        </DropdownMenuItem>
+
                         <DropdownMenuItem asChild className="rounded-lg cursor-pointer focus:bg-primary/10 focus:text-primary">
                             <Link href="/settings" className="flex items-center w-full py-2">
                                 <Settings className="mr-2 h-4 w-4" />
@@ -93,6 +102,6 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-        </header>
+        </header >
     )
 }

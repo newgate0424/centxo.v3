@@ -267,7 +267,7 @@ export default function LaunchV3Wizard() {
       setProgressSteps(p => p.map(s => s.id === 'upload' ? { ...s, status: 'completed' } : s));
       setProgressSteps(p => p.map(s => s.id === 'campaign' ? { ...s, status: 'completed' } : s));
       setSuccess('Campaign Launched!');
-      setTimeout(() => router.push('/campaigns?tab=ads&refresh=true'), 2000);
+      setTimeout(() => router.push('/ads-manager?tab=ads&refresh=true'), 2000);
 
     } catch (err: any) {
       setError(err.message);

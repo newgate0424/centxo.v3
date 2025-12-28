@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Menu, Megaphone, Rocket } from "lucide-react"
+import { LayoutDashboard, Settings, LogOut, Menu, Megaphone, Rocket, CreditCard } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { signOut } from "next-auth/react"
 import { useLanguage } from "@/contexts/LanguageContext"
@@ -16,9 +16,9 @@ interface AppSidebarProps {
 
 const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, translationKey: 'nav.dashboard' },
-    { name: "Launch Campaign", href: "/launch", icon: Rocket, translationKey: 'nav.launch' },
-    { name: "Launch V3", href: "/launch-v3", icon: Rocket, translationKey: 'nav.launchV3' },
-    { name: "All Campaigns", href: "/campaigns", icon: Megaphone, translationKey: 'nav.campaigns' },
+    { name: "Ads Manager", href: "/ads-manager", icon: Megaphone, translationKey: 'nav.adsManager' },
+    { name: "Launch (New)", href: "/launch-new", icon: Rocket, translationKey: 'nav.launchNew' },
+    { name: "Launch Campaign", href: "/launch", icon: Rocket, translationKey: 'nav.launchOriginal' },
     { name: "Settings", href: "/settings", icon: Settings, translationKey: 'nav.settings' },
 ]
 

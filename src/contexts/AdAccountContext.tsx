@@ -2,6 +2,17 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Type definitions
 interface AdAccount {
@@ -50,9 +61,40 @@ const CACHE_DURATION = 10 * 60 * 1000;
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
+  const router = useRouter(); // Added useRouter
 
   // Rate Limit Circuit Breaker State
   const [isRateLimited, setIsRateLimited] = useState(false);
+  const [userPlan, setUserPlan] = useState<string>('FREE');
+  const [isLimitDialogOpen, setIsLimitDialogOpen] = useState(false); // Added new state
+
+  useEffect(() => {
+    if (session?.user) {
+      fetch('/api/user/plan')
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            console.error('Failed to fetch plan:', res.status, text.substring(0, 100)); // Log first 100 chars
+            return { plan: 'FREE' };
+          }
+          return res.json();
+        })
+        .then(data => setUserPlan(data.plan || 'FREE'))
+        .catch(err => {
+          console.error('Error fetching plan:', err);
+          setUserPlan('FREE');
+        });
+    }
+  }, [session]);
+
+  const getPlanLimit = (plan: string) => {
+    switch (plan) {
+      case 'PRO': return 50;
+      case 'PLUS': return 20;
+      // Default to FREE plan
+      default: return 10;
+    }
+  };
 
   // Initialize state from localStorage immediately to prevent race conditions
   const [selectedAccounts, setSelectedAccountsState] = useState<AdAccount[]>(() => {
@@ -269,6 +311,15 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, [(session as any)?.accessToken]);
 
   const setSelectedAccounts = (accounts: AdAccount[]) => {
+    const limit = getPlanLimit(userPlan);
+    if (accounts.length > limit) {
+      // alert(`Your current plan (${userPlan}) allows only ${limit} ad account(s). Please upgrade to add more.`);
+      // We will just slice it for set, but ideally we warn. 
+      // Since this is often called by auto-select, we might just cap it silently or log.
+      // But for manual selection, we need to block.
+      // Let's assume this setter is used for state updates, so we cap it.
+      accounts = accounts.slice(0, limit);
+    }
     setSelectedAccountsState(accounts);
     localStorage.setItem('selectedAdAccounts', JSON.stringify(accounts));
   };
@@ -281,10 +332,15 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const toggleAccount = (account: AdAccount) => {
     const isSelected = selectedAccounts.some(acc => acc.id === account.id);
     let newSelected: AdAccount[];
+    const limit = getPlanLimit(userPlan);
 
     if (isSelected) {
       newSelected = selectedAccounts.filter(acc => acc.id !== account.id);
     } else {
+      if (selectedAccounts.length >= limit) {
+        setIsLimitDialogOpen(true);
+        return;
+      }
       newSelected = [...selectedAccounts, account];
     }
 
@@ -329,6 +385,29 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+      <AlertDialog open={isLimitDialogOpen} onOpenChange={setIsLimitDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Plan Limit Reached</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your "{userPlan}" plan is limited to <span className="font-bold text-foreground">{getPlanLimit(userPlan)}</span> ad account(s).
+              Please upgrade your plan to select more accounts and unlock advanced features.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => {
+                setIsLimitDialogOpen(false);
+                router.push('/pricing');
+              }}
+            >
+              Upgrade Plan
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ConfigContext.Provider>
   );
 }

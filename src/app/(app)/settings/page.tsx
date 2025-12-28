@@ -2,19 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { useSession, signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation'; // Added
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ConfigForm } from '@/components/config-form';
-import { Settings, User, Lock, Zap, Trash2, Building2, Facebook as FacebookIcon } from 'lucide-react';
+import { Settings, User, Lock, Zap, Trash2, Building2, CreditCard, Facebook as FacebookIcon } from 'lucide-react'; // Added CreditCard
 
 export default function SettingsPage() {
   const { t, language } = useLanguage();
   const { data: session } = useSession();
+  const router = useRouter(); // Added
   const [activeTab, setActiveTab] = useState('profile');
   const [connectedAccounts, setConnectedAccounts] = useState<any[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [userPlan, setUserPlan] = useState<string>('FREE'); // Added
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -26,8 +29,22 @@ export default function SettingsPage() {
         name: session.user.name || '',
         email: session.user.email || '',
       });
+
+      // Fetch Plan
+      fetch('/api/user/plan')
+        .then(res => res.json())
+        .then(data => setUserPlan(data.plan || 'FREE'))
+        .catch(err => console.error(err));
     }
   }, [session]);
+
+  const getPlanLimit = (plan: string) => {
+    switch (plan) {
+      case 'PRO': return 50;
+      case 'PLUS': return 20;
+      default: return 10;
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'integrations') {
@@ -54,7 +71,7 @@ export default function SettingsPage() {
     if (!confirm(`Are you sure you want to disconnect your ${provider} account?`)) {
       return;
     }
-    
+
     try {
       const response = await fetch('/api/auth/disconnect', {
         method: 'POST',
@@ -72,7 +89,7 @@ export default function SettingsPage() {
 
   const handleConnectProvider = async (provider: 'google' | 'facebook') => {
     // Use signIn to link another account
-    await signIn(provider, { 
+    await signIn(provider, {
       callbackUrl: '/settings?tab=integrations',
       redirect: true,
     });
@@ -94,7 +111,8 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'ad-accounts', label: 'Config', icon: Building2 }, // New Tab
+    { id: 'subscription', label: 'Subscription', icon: CreditCard }, // New
+    { id: 'ad-accounts', label: 'Config', icon: Building2 },
     { id: 'security', label: 'Security', icon: Lock },
     { id: 'integrations', label: 'Integrations', icon: Zap },
     { id: 'danger', label: 'Danger Zone', icon: Trash2 },
@@ -222,7 +240,7 @@ export default function SettingsPage() {
                   <div className="space-y-4">
                     {availableProviders.map((provider) => {
                       const connectedAccount = connectedAccounts.find(acc => acc.provider === provider.id);
-                      
+
                       return (
                         <div key={provider.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:shadow-sm transition-shadow">
                           <div className="flex items-center gap-3">
@@ -254,17 +272,17 @@ export default function SettingsPage() {
                               )}
                             </div>
                           </div>
-                          
+
                           {provider.connected ? (
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               className="text-red-600 border-red-300 hover:bg-red-50"
                               onClick={() => handleDisconnect(provider.id)}
                             >
                               Disconnect
                             </Button>
                           ) : (
-                            <Button 
+                            <Button
                               className="bg-blue-600 hover:bg-blue-700 text-white"
                               onClick={() => handleConnectProvider(provider.id as 'google' | 'facebook')}
                             >

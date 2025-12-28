@@ -21,6 +21,13 @@ model User {
   updatedAt     DateTime      @updatedAt
   accounts      Account[]
   metaAccount   MetaAccount?
+
+  // Subscription Fields
+  plan               String    @default("FREE") // FREE, PLUS, PRO
+  stripeCustomerId   String?   @unique
+  subscriptionStatus String?
+  subscriptionId     String?
+  currentPeriodEnd   DateTime?
 }
 
 model Account {

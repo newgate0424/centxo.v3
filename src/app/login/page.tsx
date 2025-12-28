@@ -2,17 +2,14 @@
 
 import { Suspense } from 'react';
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { showCustomToast } from "@/utils/custom-toast";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Sparkles } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const GoogleIcon = () => (
     <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -24,17 +21,16 @@ const GoogleIcon = () => (
 );
 
 const FacebookIcon = () => (
-    <svg className="h-5 w-5 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
+    <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24">
         <path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 2.848-5.978 5.817-5.978.33 0 3.165.178 3.165.178v3.39H16.27c-2.095 0-2.625 1.106-2.625 2.03v1.96h3.848l-.519 3.667h-3.329v7.98h-4.544z" />
     </svg>
 );
 
 function LoginPageContent() {
-    const router = useRouter();
     const searchParams = useSearchParams();
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [formData, setFormData] = useState({ email: "", password: "" });
+    const { t } = useLanguage();
 
     useEffect(() => {
         const errorParam = searchParams.get('error');
@@ -49,143 +45,94 @@ function LoginPageContent() {
         }
     }, [searchParams]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-
-        try {
-            const result = await signIn("credentials", {
-                redirect: false,
-                email: formData.email,
-                password: formData.password,
-            });
-
-            if (result?.error) {
-                showCustomToast(result.error);
-                return;
-            }
-
-            router.push("/dashboard");
-        } catch (error) {
-            console.error(error);
-            showCustomToast("An error occurred during sign in");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleOAuthSignIn = async (provider: "google" | "facebook") => {
-        setLoading(true);
+        setLoading(provider);
         await signIn(provider, { callbackUrl: "/dashboard" });
     };
 
     return (
-        <Card className="w-full max-w-[450px] shadow-2xl border-0 sm:border sm:rounded-3xl overflow-hidden bg-card">
-            <CardHeader className="space-y-1 text-center pb-8 pt-10">
-                <div className="flex justify-center mb-4">
-                    <Link href="/" className="flex items-center gap-2">
-                        <img src="/centxo-logo.png" alt="Centxo" className="h-12 w-12 rounded-xl" />
-                        <span className="text-2xl font-bold text-primary">Centxo</span>
-                    </Link>
-                </div>
-                <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
-                <CardDescription className="text-base">
-                    Sign in to your account to continue
-                </CardDescription>
-            </CardHeader>
+        <div className="w-full max-w-[420px]">
+            <Card className="shadow-2xl border-0 sm:border sm:rounded-3xl overflow-hidden bg-card/95 backdrop-blur-sm">
+                <CardHeader className="space-y-2 text-center pb-6 pt-8">
+                    <CardTitle className="text-2xl font-bold tracking-tight">{t('login.welcome')}</CardTitle>
+                    <CardDescription className="text-base">
+                        {t('login.subtitle')}
+                    </CardDescription>
+                </CardHeader>
 
-            <CardContent className="space-y-6 px-8 sm:px-10">
-                {error && (
-                    <Alert variant="destructive" className="mb-4">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            placeholder="you@example.com"
-                            value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            className="h-11 rounded-xl bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20"
-                            required
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="password">Password</Label>
-                            <Link href="#" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-                                Forgot password?
-                            </Link>
+                <CardContent className="space-y-4 px-6 sm:px-8 pb-8">
+                    {error && (
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+
+                    <div className="space-y-3">
+                        <Button
+                            disabled={loading !== null}
+                            onClick={() => handleOAuthSignIn("facebook")}
+                            className="w-full h-12 rounded-2xl text-base font-semibold bg-[#1877F2] hover:bg-[#166FE5] text-white transition-all justify-center gap-3 shadow-lg shadow-[#1877F2]/25 hover:shadow-[#1877F2]/40"
+                        >
+                            {loading === 'facebook' ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                                <>
+                                    <FacebookIcon />
+                                    {t('login.facebook')}
+                                </>
+                            )}
+                        </Button>
+
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t" />
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-card px-2 text-muted-foreground">{t('login.or')}</span>
+                            </div>
                         </div>
-                        <Input
-                            id="password"
-                            type="password"
-                            value={formData.password}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            className="h-11 rounded-xl bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20"
-                            required
-                        />
+
+                        <Button
+                            variant="outline"
+                            disabled={loading !== null}
+                            onClick={() => handleOAuthSignIn("google")}
+                            className="w-full h-12 rounded-2xl text-base font-medium border-2 hover:bg-muted/50 transition-all justify-center gap-3"
+                        >
+                            {loading === 'google' ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                                <>
+                                    <GoogleIcon />
+                                    {t('login.google')}
+                                </>
+                            )}
+                        </Button>
                     </div>
 
-                    <Button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full h-11 rounded-3xl text-base font-semibold shadow-primary/25 hover:shadow-primary/40 shadow-lg transition-all"
-                    >
-                        {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign In"}
-                    </Button>
-                </form>
+                    <p className="text-xs text-center text-muted-foreground pt-4">
+                        {t('login.terms')}{" "}
+                        <Link href="/terms" className="text-primary hover:underline">{t('login.termsLink')}</Link>
+                        {t('login.and')}
+                        <Link href="/privacy" className="text-primary hover:underline">{t('login.privacyLink')}</Link>
+                    </p>
+                </CardContent>
+            </Card>
 
-                <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                        <Separator className="w-full" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-card px-2 text-muted-foreground">or continue with</span>
-                    </div>
+            {/* Feature highlight */}
+            <div className="mt-8 text-center">
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <span>{t('login.footer')}</span>
                 </div>
-
-                <div className="space-y-3">
-                    <Button
-                        variant="outline"
-                        disabled={loading}
-                        onClick={() => handleOAuthSignIn("google")}
-                        className="w-full h-11 rounded-3xl font-medium border-muted-foreground/20 hover:bg-muted/30 transition-all justify-center gap-3"
-                    >
-                        <GoogleIcon />
-                        Continue with Google
-                    </Button>
-                    <Button
-                        variant="outline"
-                        disabled={loading}
-                        onClick={() => handleOAuthSignIn("facebook")}
-                        className="w-full h-11 rounded-3xl font-medium border-muted-foreground/20 hover:bg-muted/30 transition-all justify-center gap-3"
-                    >
-                        <FacebookIcon />
-                        Continue with Facebook
-                    </Button>
-                </div>
-            </CardContent>
-
-            <CardFooter className="flex justify-center pb-8 pt-2">
-                <p className="text-sm text-muted-foreground">
-                    Don&apos;t have an account?{" "}
-                    <Link href="/signup" className="font-medium text-primary hover:underline">
-                        Create one for free
-                    </Link>
-                </p>
-            </CardFooter>
-        </Card>
+            </div>
+        </div>
     );
 }
 
 export default function LoginPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
             <LoginPageContent />
         </Suspense>
     );

@@ -503,7 +503,7 @@ export default function LaunchPage() {
 
       // Redirect to campaigns page after successful creation
       setTimeout(() => {
-        router.push('/campaigns?tab=ads&refresh=true');
+        router.push('/ads-manager?tab=ads&refresh=true');
       }, 1500); // Give user time to see success message
 
       // Reset form
@@ -692,7 +692,7 @@ export default function LaunchPage() {
                   onClick={() => {
                     setIsProgressDialogOpen(false);
                     // Force refresh when returning to campaigns page
-                    router.push('/campaigns?tab=ads&refresh=true');
+                    router.push('/ads-manager?tab=ads&refresh=true');
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
