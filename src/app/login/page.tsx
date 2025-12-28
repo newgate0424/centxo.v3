@@ -82,6 +82,12 @@ function LoginPageContent() {
     return (
         <Card className="w-full max-w-[450px] shadow-2xl border-0 sm:border sm:rounded-3xl overflow-hidden bg-card">
             <CardHeader className="space-y-1 text-center pb-8 pt-10">
+                <div className="flex justify-center mb-4">
+                    <Link href="/" className="flex items-center gap-2">
+                        <img src="/centxo-logo.png" alt="Centxo" className="h-12 w-12 rounded-xl" />
+                        <span className="text-2xl font-bold text-primary">Centxo</span>
+                    </Link>
+                </div>
                 <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
                 <CardDescription className="text-base">
                     Sign in to your account to continue

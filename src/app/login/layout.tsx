@@ -16,10 +16,8 @@ export default function LoginLayout({
             <header className="absolute top-0 left-0 right-0 z-50 w-full">
                 <div className="container flex h-16 items-center justify-between px-4 sm:px-8">
                     <Link href="/" className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                            <span className="text-primary-foreground font-bold text-lg">A</span>
-                        </div>
-                        <span className="font-bold text-xl hidden sm:inline-block">AdPilot AI</span>
+                        <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-lg" />
+                        <span className="font-bold text-xl hidden sm:inline-block">Centxo</span>
                     </Link>
 
                     <ThemeToggle />

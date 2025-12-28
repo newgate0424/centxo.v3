@@ -22,11 +22,6 @@ const sarabun = Sarabun({
 export const metadata: Metadata = {
     title: 'Centxo - Advanced Ad Management',
     description: 'Scale your advertising campaigns with AI automation',
-    icons: {
-        icon: '/centxo-logo.png',
-        shortcut: '/centxo-logo.png',
-        apple: '/centxo-logo.png',
-    },
 };
 
 export default function RootLayout({
