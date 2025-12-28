@@ -1424,9 +1424,9 @@ export default function CampaignsPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-zinc-800 border-b border-gray-200 dark:border-zinc-800">
                       {loading ? (
-                        Array.from({ length: 5 }).map((_, i) => (
+                        Array.from({ length: 10 }).map((_, i) => (
                           <tr key={i} className="animate-pulse">
-                            <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-4"></div></td>
+                            <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px] mx-auto"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 w-8 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></td>
@@ -1459,10 +1459,10 @@ export default function CampaignsPage() {
                         </tr>
                       ) : (
                         filteredCampaigns.map((campaign, index) => (
-                          <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800">
+                          <tr key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleToggleCampaignSelection(campaign.id, !selectedCampaignIds.has(campaign.id))}>
                             <td
-                              className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800"
-                              onClick={() => handleToggleCampaignSelection(campaign.id, !selectedCampaignIds.has(campaign.id))}
+                              className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex justify-center">
                                 <Checkbox
@@ -1474,7 +1474,7 @@ export default function CampaignsPage() {
                               </div>
                             </td>
 
-                            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+                            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleCampaign(campaign.id, campaign.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${campaign.status === 'ACTIVE'
@@ -1706,7 +1706,7 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </td>
-                            <td className="px-2 py-2">
+                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   onClick={() => handleToggleCampaign(campaign.id, campaign.status)}
@@ -1786,9 +1786,9 @@ export default function CampaignsPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 border-b border-gray-200 dark:border-zinc-800">
                       {loading ? (
-                        Array.from({ length: 5 }).map((_, i) => (
+                        Array.from({ length: 10 }).map((_, i) => (
                           <tr key={i} className="animate-pulse">
-                            <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
+                            <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-5 w-5 bg-gray-200 rounded-[6px] mx-auto"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 rounded-full w-11 mx-auto"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-48"></div></td>
@@ -1830,10 +1830,10 @@ export default function CampaignsPage() {
                             (statusFilter === 'paused' && a.status === 'PAUSED');
                           return matchesSearch && matchesStatus;
                         }).map((adSet, index) => (
-                          <tr key={adSet.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                          <tr key={adSet.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => handleToggleAdSetSelection(adSet.id, !selectedAdSetIds.has(adSet.id))}>
                             <td
-                              className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800"
-                              onClick={() => handleToggleAdSetSelection(adSet.id, !selectedAdSetIds.has(adSet.id))}
+                              className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex justify-center">
                                 <Checkbox
@@ -1844,7 +1844,7 @@ export default function CampaignsPage() {
                                 />
                               </div>
                             </td>
-                            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+                            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleAdSet(adSet.id, adSet.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${adSet.status === 'ACTIVE'
@@ -2093,7 +2093,7 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </td>
-                            <td className="px-2 py-2">
+                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -2166,9 +2166,9 @@ export default function CampaignsPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 border-b border-gray-200 dark:border-zinc-800">
                       {loading ? (
-                        Array.from({ length: 5 }).map((_, i) => (
+                        Array.from({ length: 10 }).map((_, i) => (
                           <tr key={i} className="animate-pulse">
-                            <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-8"></div></td>
+                            <td className="px-3 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-5 w-5 bg-gray-200 rounded-[6px] mx-auto"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-6 bg-gray-200 rounded-full w-11 mx-auto"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
                             <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800"><div className="h-4 bg-gray-200 rounded w-32"></div></td>
@@ -2213,16 +2213,15 @@ export default function CampaignsPage() {
                             (statusFilter === 'paused' && a.status === 'PAUSED');
                           return matchesSearch && matchesStatus;
                         }).map((ad, index) => (
-                          <tr key={ad.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                            <td className="px-3 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+                          <tr key={ad.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => handleToggleAdSelection(ad.id, !selectedAdIds.has(ad.id))}>
+                            <td className="px-3 py-2 text-center border-r border-gray-200 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={selectedAdIds.has(ad.id)}
                                 onCheckedChange={(checked) => handleToggleAdSelection(ad.id, checked as boolean)}
-                                onClick={(e) => e.stopPropagation()}
                                 aria-label={`Select ${ad.name}`}
                               />
                             </td>
-                            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+                            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleAd(ad.id, ad.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${ad.status === 'ACTIVE'
@@ -2511,7 +2510,7 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </td>
-                            <td className="px-2 py-2">
+                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
