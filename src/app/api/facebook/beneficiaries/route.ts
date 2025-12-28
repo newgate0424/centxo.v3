@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
           );
           const pageTransparency = await pageTransparencyResponse.json();
           console.log('📄 Page Transparency Data:', JSON.stringify(pageTransparency, null, 2));
-          
+
           if (pageTransparency.legal_entity_name) {
             beneficiaries.push({
               id: pageTransparency.legal_entity_name,
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
         );
         const pagesData = await pagesResponse.json();
         console.log(`📄 Found ${pagesData.data?.length || 0} pages`);
-        
+
         if (pagesData.data) {
           for (const page of pagesData.data) {
             console.log(`\n📄 Page: ${page.name} (${page.id})`);
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
         );
         const adAccountData = await adAccountResponse.json();
         console.log('💼 Ad Account Data:', JSON.stringify(adAccountData, null, 2));
-        
+
         if (adAccountData.default_dsa_beneficiary) {
           beneficiaries.push({
             id: adAccountData.default_dsa_beneficiary,
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
           });
           console.log(`✅ default_dsa_beneficiary: ${adAccountData.default_dsa_beneficiary}`);
         }
-        
+
         if (adAccountData.dsa_beneficiary) {
           beneficiaries.push({
             id: adAccountData.dsa_beneficiary,
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
             );
             const businessData = await businessResponse.json();
             console.log('🏢 Business Data:', JSON.stringify(businessData, null, 2));
-            
+
             if (businessData.legal_entity_name) {
               beneficiaries.push({
                 id: businessData.legal_entity_name,
@@ -146,27 +146,44 @@ export async function GET(request: NextRequest) {
         );
         const campaignsData = await campaignsResponse.json();
         console.log(`📊 Found ${campaignsData.data?.length || 0} campaigns`);
-        
+
         if (campaignsData.data && campaignsData.data.length > 0) {
           for (const campaign of campaignsData.data) {
             console.log(`\n📊 Campaign: ${campaign.name}`);
-            
+
             const adSetsResponse = await fetch(
               `https://graph.facebook.com/v22.0/${campaign.id}/adsets?fields=id,name,regional_regulation_identities,regional_regulated_categories&limit=1&access_token=${accessToken}`
             );
             const adSetsData = await adSetsResponse.json();
-            
+
             if (adSetsData.data && adSetsData.data[0]) {
               const adSet = adSetsData.data[0];
               console.log(`  📋 AdSet:`, JSON.stringify(adSet, null, 2));
-              
+
               if (adSet.regional_regulation_identities?.universal_beneficiary) {
-                const beneficiaryValue = adSet.regional_regulation_identities.universal_beneficiary;
+                let beneficiaryValue = adSet.regional_regulation_identities.universal_beneficiary;
+                let displayName = `${beneficiaryValue} (From Existing AdSet)`;
+
+                // If value looks like an ID (all numbers), try to fetch the real name
+                if (/^\d+$/.test(beneficiaryValue)) {
+                  try {
+                    console.log(`🔍 Resolving Beneficiary ID: ${beneficiaryValue}...`);
+                    const nameRes = await fetch(`https://graph.facebook.com/v22.0/${beneficiaryValue}?fields=name&access_token=${accessToken}`);
+                    const nameData = await nameRes.json();
+                    if (nameData.name) {
+                      displayName = `${nameData.name} (Source: ${beneficiaryValue})`;
+                      console.log(`✅ Resolved Name: ${nameData.name}`);
+                    }
+                  } catch (e) {
+                    console.log('⚠️ Failed to resolve beneficiary name');
+                  }
+                }
+
                 beneficiaries.push({
                   id: beneficiaryValue,
-                  name: `${beneficiaryValue} (From Existing AdSet)`
+                  name: displayName
                 });
-                console.log(`  ✅ Found beneficiary from AdSet: ${beneficiaryValue}`);
+                console.log(`  ✅ Found beneficiary from AdSet: ${displayName}`);
                 break; // Found one, no need to continue
               }
             }
@@ -184,7 +201,7 @@ export async function GET(request: NextRequest) {
         );
         const meData = await meResponse.json();
         console.log('👤 User Businesses:', JSON.stringify(meData.businesses, null, 2));
-        
+
         if (meData.businesses?.data) {
           for (const business of meData.businesses.data) {
             if (business.legal_entity_name) {
@@ -212,7 +229,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`📋 Total unique beneficiaries found: ${uniqueBeneficiaries.length}`);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       beneficiaries: uniqueBeneficiaries,
       count: uniqueBeneficiaries.length
     });

@@ -18,6 +18,7 @@ const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, translationKey: 'nav.dashboard' },
     { name: "Launch Campaign", href: "/launch", icon: Rocket, translationKey: 'nav.launch' },
     { name: "Launch V2", href: "/launch-v2", icon: Rocket, translationKey: 'nav.launchV2' },
+    { name: "Launch V3", href: "/launch-v3", icon: Rocket, translationKey: 'nav.launchV3' },
     { name: "All Campaigns", href: "/campaigns", icon: Megaphone, translationKey: 'nav.campaigns' },
     { name: "Ad Accounts", href: "/accounts", icon: Building2, translationKey: 'nav.accounts' },
     { name: "Settings", href: "/settings", icon: Settings, translationKey: 'nav.settings' },

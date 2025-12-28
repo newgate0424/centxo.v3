@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import fs from 'fs/promises';
 import path from 'path';
 import { existsSync } from 'fs';
+import { videoStorage } from '@/lib/video-storage';
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -27,42 +28,23 @@ export async function DELETE(request: NextRequest) {
     }
 
     const userId = session.user.id;
-    
-    // Try both possible paths
-    const possiblePaths = [
-      path.join(process.cwd(), 'uploads', 'videos', userId, fileName),
-      path.join(process.cwd(), 'uploads', userId, fileName),
-    ];
-    
-    let fileToDelete: string | null = null;
-    for (const testPath of possiblePaths) {
-      if (existsSync(testPath)) {
-        fileToDelete = testPath;
-        break;
+
+    // Use centralized storage deletion (handles Local + R2)
+    const result = await videoStorage.delete(fileName, session.user.id);
+
+    if (!result.success) {
+      console.warn('Deletion warning:', result.error);
+      // Return 404 only if completely missing, otherwise 500? 
+      // Actually, if it fails to delete, we should probably tell the user why or just succeed if it's already gone.
+      if (result.error?.includes('not found')) {
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
       }
+      return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
-    if (!fileToDelete) {
-      return NextResponse.json(
-        { error: 'File not found' },
-        { status: 404 }
-      );
-    }
+    console.log(`✅ File deleted successfully: ${fileName}`);
 
-    // Security check: Ensure the file path is within user's folder
-    const normalizedPath = path.normalize(fileToDelete);
-    const uploadsDir = path.join(process.cwd(), 'uploads');
-    
-    if (!normalizedPath.startsWith(uploadsDir) || !normalizedPath.includes(userId)) {
-      return NextResponse.json(
-        { error: 'Invalid file path' },
-        { status: 403 }
-      );
-    }
 
-    // Delete the file
-    await fs.unlink(fileToDelete);
-    console.log(`✅ File deleted: ${fileToDelete}`);
 
     return NextResponse.json({
       success: true,
