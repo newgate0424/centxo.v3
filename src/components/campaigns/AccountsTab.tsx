@@ -25,6 +25,14 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAdAccount } from '@/contexts/AdAccountContext';
@@ -41,7 +49,6 @@ interface AdAccount {
     timeZone: string;
     nationality: string;
     currency: string;
-    limit: number | null;
     paymentMethod?: string;
 }
 
@@ -216,8 +223,9 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
         const justifyClass = align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : '';
 
         return (
-            <th
-                className={`px-4 py-2 text-${align} text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${className}`}
+
+            <TableHead
+                className={`py-2 text-${align} text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900 cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${className}`}
                 onClick={() => handleSort(columnKey)}
             >
                 <div className={`flex items-center gap-1 ${justifyClass}`}>
@@ -226,7 +234,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                     {sortConfig.key === columnKey && sortConfig.direction === 'desc' && <ArrowDown className="h-3 w-3" />}
                     {sortConfig.key !== columnKey && <ArrowUpDown className="h-3 w-3 opacity-30" />}
                 </div>
-            </th>
+            </TableHead>
         );
     };
 
@@ -263,7 +271,6 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                         timeZone: fbAccount?.timezone_name || '-',
                         nationality: fbAccount?.business_country_code || '-',
                         currency: fbAccount?.currency || '-',
-                        limit: fbAccount?.spend_cap || null,
                         paymentMethod: fbAccount?.funding_source || '-',
                     };
                 });
@@ -383,37 +390,33 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
     // Generate skeleton rows for loading state
     const SkeletonRow = () => (
         <tr className="border-b border-gray-200 dark:border-zinc-800">
-            <td className="px-3 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
-                <div className="h-5 w-5 bg-gray-200 dark:bg-zinc-700 rounded-[6px] mx-auto" />
-            </td>
-            <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+
+            <td className="px-4 py-2">
                 <div className="space-y-2">
                     <div className="h-4 w-32 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                     <div className="h-3 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                 </div>
             </td>
-            <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+            <td className="px-4 py-2">
                 <div className="h-4 w-16 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
             </td>
-            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+            <td className="px-4 py-2 text-center">
                 <div className="h-5 w-10 bg-gray-200 dark:bg-zinc-700 rounded-full animate-pulse mx-auto" />
             </td>
-            <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
-                <div className="h-4 w-20 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse ml-auto" />
-            </td>
-            <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+
+            <td className="px-4 py-2">
                 <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
             </td>
-            <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+            <td className="px-4 py-2">
                 <div className="h-4 w-28 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
             </td>
-            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+            <td className="px-4 py-2 text-center">
                 <div className="h-4 w-8 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse mx-auto" />
             </td>
-            <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+            <td className="px-4 py-2 text-center">
                 <div className="h-5 w-12 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse mx-auto" />
             </td>
-            <td className="px-4 py-2 text-right border-r border-gray-200 dark:border-zinc-800">
+            <td className="px-4 py-2 text-right">
                 <div className="h-4 w-16 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse ml-auto" />
             </td>
             <td className="px-4 py-2 text-center">
@@ -426,31 +429,29 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
         // Show skeleton table instead of centered loading spinner
         return (
             <div className="bg-white dark:bg-zinc-950 border border-t-0 border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-tr-xl">
-                    <table className="w-full min-w-max">
-                        <thead className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-tr-xl">
-                            <tr>
-                                <th className="px-3 py-2 text-center w-12 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">
-                                    <div className="h-5 w-5 bg-gray-200 dark:bg-zinc-700 rounded-[6px] mx-auto" />
-                                </th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.accountName')}</th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.status')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.activeAds', 'Active Ads')}</th>
-                                <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.spendingCap', 'Spending Cap')}</th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.paymentMethod', 'Payment Method')}</th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.timezone', 'Time Zone')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.nationality', 'Nationality')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.currency', 'Currency')}</th>
-                                <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.limit', 'Limit')}</th>
+                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl">
+                    <Table className="min-w-max">
+                        <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-t-xl">
+                            <TableRow>
+                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.accountName')}</th>
+                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.status')}</th>
+                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.activeAds', 'Active Ads')}</th>
+                                <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.spendingCap', 'Spending Cap')}</th>
+                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.paymentMethod', 'Payment Method')}</th>
+                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.timezone', 'Time Zone')}</th>
+                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.nationality', 'Nationality')}</th>
+                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.currency', 'Currency')}</th>
                                 <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.action', 'Action')}</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody className="divide-y divide-gray-200 dark:divide-zinc-800">
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => <SkeletonRow key={i} />)}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
+
             </div>
+
         );
     }
 
@@ -485,18 +486,10 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
     return (
         <>
             <div className="bg-white dark:bg-zinc-950 border border-t-0 border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-tr-xl">
-                    <table className="w-full min-w-max">
-                        <thead className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-tr-xl">
-                            <tr>
-                                <th className="px-3 py-2 text-center w-12 border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">
-                                    <Checkbox
-                                        checked={isAllSelected}
-                                        onCheckedChange={handleSelectAll}
-                                        aria-label="Select all"
-                                        className={isIndeterminate ? "data-[state=checked]:bg-blue-600" : ""}
-                                    />
-                                </th>
+                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl">
+                    <Table className="min-w-max">
+                        <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-t-xl">
+                            <TableRow>
                                 <SortableHeader columnKey="name" label={t('accounts.table.accountName')} align="left" className="max-w-[280px]" />
                                 <SortableHeader columnKey="status" label={t('accounts.table.status')} align="left" className="max-w-[280px]" />
                                 <SortableHeader columnKey="activeAds" label={t('accounts.table.activeAds', 'Active Ads')} align="center" className="max-w-[280px]" />
@@ -505,23 +498,16 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                 <SortableHeader columnKey="timeZone" label={t('accounts.table.timezone', 'Time Zone')} align="left" className="max-w-[280px]" />
                                 <SortableHeader columnKey="nationality" label={t('accounts.table.nationality', 'Nationality')} align="center" className="max-w-[280px]" />
                                 <SortableHeader columnKey="currency" label={t('accounts.table.currency', 'Currency')} align="center" className="max-w-[280px]" />
-                                <SortableHeader columnKey="limit" label={t('accounts.table.limit', 'Limit')} align="right" className="max-w-[280px]" />
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px]">
+                                <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px]">
                                     {t('accounts.table.action', 'Action')}
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-zinc-800 border-b border-gray-200 dark:border-zinc-800">
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody className="divide-y divide-gray-200 dark:divide-zinc-800 border-b border-gray-200 dark:border-zinc-800">
                             {sortData(accounts).map((account, index) => (
-                                <tr key={account.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleSelectOne(account.id, !selectedIds.has(account.id))}>
-                                    <td className="px-3 py-2 text-center border-r border-gray-200 dark:border-zinc-800" onClick={(e) => e.stopPropagation()}>
-                                        <Checkbox
-                                            checked={selectedIds.has(account.id)}
-                                            onCheckedChange={(checked) => handleSelectOne(account.id, checked as boolean)}
-                                            aria-label={`Select ${account.name}`}
-                                        />
-                                    </td>
-                                    <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+                                <TableRow key={account.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleSelectOne(account.id, !selectedIds.has(account.id))}>
+
+                                    <TableCell className="px-4 py-2">
                                         <div className="flex items-center gap-2 group">
                                             <div className="text-sm text-gray-900 dark:text-gray-100">{account.name}</div>
                                             <Link
@@ -534,8 +520,8 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                             </Link>
                                         </div>
                                         <div className="text-xs text-gray-500 dark:text-gray-500 font-mono mt-0.5">ID: {account.account_id}</div>
-                                    </td>
-                                    <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+                                    </TableCell>
+                                    <TableCell className="px-4 py-2">
                                         {isLoadingAccounts ? (
                                             <div className="h-5 w-16 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                                         ) : (() => {
@@ -549,8 +535,8 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                                 </div>
                                             );
                                         })()}
-                                    </td>
-                                    <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+                                    </TableCell>
+                                    <TableCell className="px-4 py-2 text-center">
                                         {isLoadingAccounts ? (
                                             <div className="h-5 w-12 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse mx-auto" />
                                         ) : (
@@ -558,9 +544,9 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                                 {account.activeAds}
                                             </span>
                                         )}
-                                    </td>
-                                    <td
-                                        className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800 cursor-pointer group hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                                    </TableCell>
+                                    <TableCell
+                                        className="px-4 py-2 cursor-pointer group hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             if (account.spendingCap) {
@@ -612,8 +598,8 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                                 <div className="i-lucide-plus-circle w-3 h-3" />
                                             </button>
                                         )}
-                                    </td>
-                                    <td className="px-4 py-2 border-r border-gray-200 dark:border-zinc-800">
+                                    </TableCell>
+                                    <TableCell className="px-4 py-2">
                                         {isLoadingAccounts ? (
                                             <div className="h-5 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                                         ) : account.paymentMethod && account.paymentMethod !== '-' ? (
@@ -637,22 +623,19 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                         ) : (
                                             <span className="text-xs text-gray-400">-</span>
                                         )}
-                                    </td>
-                                    <td className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
+                                    </TableCell>
+                                    <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400">
                                         {account.timeZone}
-                                    </td>
-                                    <td className="px-4 py-2 text-center text-sm text-gray-600 dark:text-gray-400 border-r border-gray-200 dark:border-zinc-800">
+                                    </TableCell>
+                                    <TableCell className="px-4 py-2 text-center text-sm text-gray-600 dark:text-gray-400">
                                         {account.nationality}
-                                    </td>
-                                    <td className="px-4 py-2 text-center border-r border-gray-200 dark:border-zinc-800">
+                                    </TableCell>
+                                    <TableCell className="px-4 py-2 text-center">
                                         <Badge variant="outline" className="font-mono text-xs dark:border-zinc-700 dark:text-gray-300">
                                             {account.currency}
                                         </Badge>
-                                    </td>
-                                    <td className="px-4 py-2 text-right text-sm font-medium text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-zinc-800">
-                                        {(account as any).spend_cap > 0 ? `${(account as any).spend_cap.toLocaleString()} ${account.currency}` : '-'}
-                                    </td>
-                                    <td className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                    </TableCell>
+                                    <TableCell className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -675,18 +658,18 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
-                                    </td>
-                                </tr>
+                                    </TableCell>
+                                </TableRow>
                             ))}
                             {accounts.length === 0 && !loading && (
-                                <tr>
-                                    <td colSpan={11} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-900/50">
+                                <TableRow>
+                                    <TableCell colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-900/50">
                                         {t('accounts.noAccounts', 'No accounts found')}
-                                    </td>
-                                </tr>
+                                    </TableCell>
+                                </TableRow>
                             )}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             </div>
 

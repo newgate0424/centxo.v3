@@ -609,6 +609,18 @@ export async function POST(request: NextRequest) {
       // If user provided thumbnail, use it. Otherwise, create a simple placeholder image.
       if (thumbnailFile) {
         console.log('🖼️ Using user-provided thumbnail...');
+
+        // [NEW] Upload Custom Thumbnail to R2 (for persistence/library)
+        try {
+          console.log('☁️ Uploading custom thumbnail to R2 storage...');
+          const thumbUploadRes = await videoStorage.upload(thumbnailFile, session.user.id);
+          if (thumbUploadRes.success) {
+            console.log('✅ Custom thumbnail saved to R2:', thumbUploadRes.url);
+          }
+        } catch (thumbStorageErr) {
+          console.warn('⚠️ Failed to save thumbnail to R2 (continuing):', thumbStorageErr);
+        }
+
         const thumbBytes = await thumbnailFile.arrayBuffer();
         const thumbFormData = new FormData();
         thumbFormData.append('file', new Blob([new Uint8Array(thumbBytes)], { type: 'image/jpeg' }), 'thumbnail.jpg');

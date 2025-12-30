@@ -40,7 +40,9 @@ export default function AutomationCampaignsV2Page() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const thumbnailGenCanvasRef = useRef<HTMLCanvasElement>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const customThumbnailInputRef = useRef<HTMLInputElement>(null);
 
     // Step 2: AI Configuration
     const [productContext, setProductContext] = useState('');
@@ -136,6 +138,23 @@ export default function AutomationCampaignsV2Page() {
                     // Continue with client-side thumbnail generation as fallback
                 }
             }
+        }
+    };
+
+    const handleCustomThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Create preview URL
+            const url = URL.createObjectURL(file);
+
+            // Set as current thumbnail
+            setThumbnailPreview(url);
+            setThumbnailBlob(file);
+
+            // Add to auto thumbnails list if not already there
+            setAutoThumbnails(prev => [url, ...prev]);
+
+            toast.success('อัปโหลดภาพปกสำเร็จ');
         }
     };
 
@@ -724,15 +743,32 @@ export default function AutomationCampaignsV2Page() {
                                             )}
                                         </div>
 
-                                        <Button
-                                            variant="outline"
-                                            onClick={captureThumbnail}
-                                            className="w-full"
-                                            disabled={!videoRef.current}
-                                        >
-                                            <Wand2 className="w-4 h-4 mr-2" />
-                                            จับภาพจากเฟรมปัจจุบัน
-                                        </Button>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <Button
+                                                variant="outline"
+                                                onClick={captureThumbnail}
+                                                className="w-full"
+                                                disabled={!videoRef.current}
+                                            >
+                                                <Wand2 className="w-4 h-4 mr-2" />
+                                                จับภาพจากเฟรม
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => customThumbnailInputRef.current?.click()}
+                                                className="w-full"
+                                            >
+                                                <Upload className="w-4 h-4 mr-2" />
+                                                อัปโหลดรูปเอง
+                                            </Button>
+                                        </div>
+                                        <input
+                                            ref={customThumbnailInputRef}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={handleCustomThumbnailUpload}
+                                        />
                                         <canvas ref={thumbnailGenCanvasRef} className="hidden" />
                                     </div>
                                 )}

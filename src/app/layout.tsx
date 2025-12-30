@@ -5,7 +5,7 @@ import AuthProvider from '@/app/providers/auth-provider';
 import { AdAccountProvider } from '@/contexts/AdAccountContext';
 import { ThemeProvider } from '@/components/theme-provider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
-import { Roboto, Sarabun } from 'next/font/google';
+import { Roboto, Sarabun, Inter } from 'next/font/google';
 import './globals.css';
 
 const roboto = Roboto({
@@ -17,6 +17,11 @@ const sarabun = Sarabun({
     weight: ['300', '400', '500', '600', '700'],
     subsets: ['latin', 'thai'],
     variable: '--font-sarabun'
+});
+const inter = Inter({
+    subsets: ['latin'],
+    variable: '--font-inter',
+    display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -31,7 +36,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className={`min-h-screen bg-background text-foreground antialiased ${roboto.variable} ${sarabun.variable} font-sans`}>
+            <body className={`min-h-screen bg-background text-foreground antialiased ${inter.variable} ${sarabun.variable} font-sans`}>
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="system"

@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch ad accounts from Facebook Graph API with detailed status fields
     const response = await fetch(
       `https://graph.facebook.com/v22.0/me/adaccounts?fields=id,name,account_id,account_status,disable_reason,currency,spend_cap,amount_spent,business_name,business_country_code,timezone_name,timezone_offset_hours_utc,funding_source_details&limit=500&access_token=${accessToken}`
     );

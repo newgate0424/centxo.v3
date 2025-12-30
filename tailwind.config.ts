@@ -17,9 +17,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['var(--font-sarabun)', 'var(--font-roboto)', 'sans-serif'],
-        body: ['var(--font-sarabun)', 'var(--font-roboto)', 'sans-serif'],
-        headline: ['var(--font-sarabun)', 'var(--font-roboto)', 'sans-serif'],
+        sans: ['var(--font-inter)', 'var(--font-sarabun)', 'sans-serif'],
+        body: ['var(--font-inter)', 'var(--font-sarabun)', 'sans-serif'],
+        headline: ['var(--font-inter)', 'var(--font-sarabun)', 'sans-serif'],
         code: ['var(--font-roboto)', 'monospace'],
       },
       colors: {
