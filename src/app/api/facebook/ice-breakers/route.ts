@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { pageId, accessToken, productCategory } = body;
+    const { pageId, accessToken, productCategory, iceBreakers: providedIceBreakers } = body;
 
     if (!pageId || !accessToken) {
       return NextResponse.json(
@@ -23,11 +23,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Default ice breakers based on product category
-    const iceBreakers = getIceBreakersForCategory(productCategory);
+    // Use provided ice breakers or defaults based on product category
+    const iceBreakers = providedIceBreakers || getIceBreakersForCategory(productCategory);
 
     console.log('Creating ice breakers for page:', pageId);
     console.log('Ice breakers:', iceBreakers);
+
+    // Check existing ice breakers first to avoid spamming the API (which triggers bans)
+    try {
+      const existingResponse = await fetch(
+        `https://graph.facebook.com/v22.0/${pageId}/messenger_profile?fields=ice_breakers&access_token=${accessToken}`
+      );
+      const existingData = await existingResponse.json();
+      const currentIceBreakers = existingData.data?.[0]?.ice_breakers || [];
+
+      // Simple comparison
+      const isSame = JSON.stringify(currentIceBreakers) === JSON.stringify(iceBreakers);
+
+      if (isSame) {
+        console.log('✓ Ice breakers already up to date. Skipping update.');
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          iceBreakers,
+        });
+      }
+    } catch (checkError) {
+      console.warn('Failed to check existing ice breakers, proceeding with update:', checkError);
+    }
 
     // Set Messenger Profile with Ice Breakers
     const response = await fetch(
@@ -49,9 +72,9 @@ export async function POST(request: NextRequest) {
     if (!response.ok || data.error) {
       console.error('Failed to create ice breakers:', data);
       return NextResponse.json(
-        { 
+        {
           error: data.error?.message || 'Failed to create ice breakers',
-          details: data 
+          details: data
         },
         { status: 400 }
       );
@@ -130,7 +153,7 @@ function getIceBreakersForCategory(category?: string) {
   };
 
   // Try to match category
-  const matchedCategory = Object.keys(categoryBreakers).find(cat => 
+  const matchedCategory = Object.keys(categoryBreakers).find(cat =>
     category?.toLowerCase().includes(cat.toLowerCase())
   );
 

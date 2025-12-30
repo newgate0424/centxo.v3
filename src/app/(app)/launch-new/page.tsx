@@ -96,6 +96,7 @@ export default function LaunchV3Wizard() {
     productDescription: '',
     targetAudienceDescription: '',
     // V3 Advanced
+    targetCountry: 'TH', // Default to Thailand
     adSource: 'upload' as 'upload' | 'existing',
     selectedPostId: '',
     selectedPostContext: null as any,
@@ -105,6 +106,8 @@ export default function LaunchV3Wizard() {
     manualCaption: '',
     replyType: 'ai' as 'ai' | 'manual',
     manualReply: '',
+    // Placements (NEW)
+    placements: ['facebook', 'instagram'] as string[],
   });
 
   const [pagePosts, setPagePosts] = useState<any[]>([]);
@@ -115,8 +118,21 @@ export default function LaunchV3Wizard() {
 
   // Effects
   useEffect(() => {
-    // Load file library
-    fetch('/api/videos/list').then(res => res.json()).then(data => setUploadedVideos(data.videos || []));
+    // Load file library with debug logging
+    console.log('📁 Fetching video library...');
+    fetch('/api/videos/list')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        console.log('📁 Video library response:', data);
+        console.log('📁 Videos count:', data.videos?.length || 0);
+        setUploadedVideos(data.videos || []);
+      })
+      .catch(err => {
+        console.error('📁 Failed to load video library:', err);
+      });
   }, []);
 
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
@@ -257,7 +273,10 @@ export default function LaunchV3Wizard() {
       uploadFd.append('adSetCount', formData.adSetCount.toString());
       uploadFd.append('adsCount', formData.adsCount.toString());
       uploadFd.append('campaignCount', formData.campaignCount.toString());
+      uploadFd.append('campaignCount', formData.campaignCount.toString());
       uploadFd.append('productContext', formData.productDescription);
+      uploadFd.append('targetCountry', formData.targetCountry);
+      uploadFd.append('placements', formData.placements.join(','));
 
       // Call API
       const res = await fetch('/api/campaigns/create', { method: 'POST', body: uploadFd });
@@ -600,6 +619,88 @@ export default function LaunchV3Wizard() {
                     </div>
 
                     <div className="space-y-2">
+                      <Label>{t('launch.v3.strategy.targetCountry', 'Target Country')}</Label>
+                      <Select
+                        value={formData.targetCountry}
+                        onValueChange={(v) => setFormData({ ...formData, targetCountry: v })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TH">Thailand 🇹🇭</SelectItem>
+                          <SelectItem value="US">United States 🇺🇸</SelectItem>
+                          <SelectItem value="GB">United Kingdom 🇬🇧</SelectItem>
+                          <SelectItem value="AU">Australia 🇦🇺</SelectItem>
+                          <SelectItem value="CA">Canada 🇨🇦</SelectItem>
+                          <SelectItem value="JP">Japan 🇯🇵</SelectItem>
+                          <SelectItem value="KR">South Korea 🇰🇷</SelectItem>
+                          <SelectItem value="VN">Vietnam 🇻🇳</SelectItem>
+                          <SelectItem value="ID">Indonesia 🇮🇩</SelectItem>
+                          <SelectItem value="MY">Malaysia 🇲🇾</SelectItem>
+                          <SelectItem value="SG">Singapore 🇸🇬</SelectItem>
+                          <SelectItem value="PH">Philippines 🇵🇭</SelectItem>
+                          <SelectItem value="LA">Laos 🇱🇦</SelectItem>
+                          <SelectItem value="MM">Myanmar 🇲🇲</SelectItem>
+                          <SelectItem value="KH">Cambodia 🇰🇭</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* PLACEMENTS SELECTION */}
+                    <div className="space-y-2">
+                      <Label>{t('launch.v3.strategy.placements', 'Ad Placements')}</Label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.placements.includes('facebook')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(p => ({ ...p, placements: [...p.placements, 'facebook'].filter((v, i, a) => a.indexOf(v) === i) }));
+                              } else {
+                                setFormData(p => ({ ...p, placements: p.placements.filter(x => x !== 'facebook') }));
+                              }
+                            }}
+                            className="w-4 h-4 accent-blue-600"
+                          />
+                          <span className="text-sm font-medium">📘 Facebook</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.placements.includes('instagram')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(p => ({ ...p, placements: [...p.placements, 'instagram'].filter((v, i, a) => a.indexOf(v) === i) }));
+                              } else {
+                                setFormData(p => ({ ...p, placements: p.placements.filter(x => x !== 'instagram') }));
+                              }
+                            }}
+                            className="w-4 h-4 accent-pink-600"
+                          />
+                          <span className="text-sm font-medium">📸 Instagram</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.placements.includes('messenger')}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(p => ({ ...p, placements: [...p.placements, 'messenger'].filter((v, i, a) => a.indexOf(v) === i) }));
+                              } else {
+                                setFormData(p => ({ ...p, placements: p.placements.filter(x => x !== 'messenger') }));
+                              }
+                            }}
+                            className="w-4 h-4 accent-purple-600"
+                          />
+                          <span className="text-sm font-medium">💬 Messenger</span>
+                        </label>
+                      </div>
+                      {formData.placements.length === 0 && (
+                        <p className="text-xs text-red-500">{t('launch.v3.strategy.placements.required', 'Please select at least one placement')}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
                       <Label>{t('launch.v3.strategy.productContext', 'Product Context')}</Label>
                       <Textarea
                         value={formData.productDescription}
@@ -917,10 +1018,10 @@ export default function LaunchV3Wizard() {
             )}
           </div>
         </Card>
-      </div>
+      </div >
 
       {/* View All Files Dialog */}
-      <Dialog open={isFileDialogOpen} onOpenChange={setIsFileDialogOpen}>
+      < Dialog open={isFileDialogOpen} onOpenChange={setIsFileDialogOpen} >
         <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{t('launch.v3.dialog.library.title', 'Media Library')}</DialogTitle>
@@ -984,10 +1085,11 @@ export default function LaunchV3Wizard() {
             </div>
           </ScrollArea>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!videoToDelete} onOpenChange={(open) => !open && setVideoToDelete(null)}>
+      < AlertDialog open={!!videoToDelete
+      } onOpenChange={(open) => !open && setVideoToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t('launch.v3.dialog.delete.title', 'Are you absolutely sure?')}</AlertDialogTitle>
@@ -1033,10 +1135,10 @@ export default function LaunchV3Wizard() {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog >
 
       {/* Progress Dialog */}
-      <Dialog open={isProgressDialogOpen} onOpenChange={setIsProgressDialogOpen}>
+      < Dialog open={isProgressDialogOpen} onOpenChange={setIsProgressDialogOpen} >
         <DialogContent>
           <DialogHeader><DialogTitle>{t('launch.v3.dialog.progress.title', 'Launching Campaign')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
@@ -1056,9 +1158,9 @@ export default function LaunchV3Wizard() {
             {error && <div className="text-red-600 bg-red-50 p-2 rounded">{error}</div>}
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
 
-    </div>
+    </div >
   );
 }

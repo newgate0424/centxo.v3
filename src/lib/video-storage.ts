@@ -6,6 +6,7 @@ export interface UploadResult {
   success: boolean;
   filePath?: string;
   url?: string;
+  thumbnailUrls?: string[]; // Array of thumbnail URLs
   error?: string;
 }
 
@@ -241,18 +242,93 @@ export class VideoStorage {
 
   /**
    * Upload video - automatically chooses between local and R2
+   * For videos, also generates thumbnails and uploads them to R2
    */
   async upload(file: File, folderName?: string): Promise<UploadResult> {
     // Try R2 first if configured, fallback to local
     if (process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME) {
       const r2Result = await this.uploadToR2(file, folderName);
       if (r2Result.success) {
+        // Generate thumbnails for videos
+        if (file.type.startsWith('video/') && r2Result.filePath && folderName) {
+          try {
+            console.log('🎬 Generating thumbnails for R2-uploaded video...');
+            const { generateAndUploadThumbnails } = await import('./thumbnail-generator');
+
+            // Extract video ID from R2 key (e.g., "videos/userId/video_123.mp4" -> "video_123")
+            const videoId = path.basename(r2Result.filePath, path.extname(r2Result.filePath));
+
+            // Save video to temp directory for thumbnail generation
+            const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+            if (!existsSync(tempDir)) {
+              await mkdir(tempDir, { recursive: true });
+            }
+
+            const tempVideoPath = path.join(tempDir, `${videoId}${path.extname(r2Result.filePath)}`);
+
+            // Convert File to Buffer and save temporarily
+            const bytes = await file.arrayBuffer();
+            const buffer = Buffer.from(bytes);
+            await writeFile(tempVideoPath, buffer);
+
+            console.log(`📁 Saved temp video for thumbnail generation: ${tempVideoPath}`);
+
+            // Generate and upload thumbnails
+            const thumbResult = await generateAndUploadThumbnails(
+              tempVideoPath,
+              folderName,
+              videoId,
+              18
+            );
+
+            // Clean up temp file
+            await unlink(tempVideoPath).catch(() => { });
+            console.log('🗑️ Cleaned up temp video file');
+
+            if (thumbResult.success && thumbResult.thumbnailUrls) {
+              r2Result.thumbnailUrls = thumbResult.thumbnailUrls;
+              console.log(`✅ Generated ${thumbResult.thumbnailUrls.length} thumbnails for R2 video`);
+            }
+          } catch (thumbError) {
+            console.error('Thumbnail generation failed:', thumbError);
+            // Don't fail the upload if thumbnail generation fails
+          }
+        }
         return r2Result;
       }
       console.warn('R2 upload failed, falling back to local storage:', r2Result.error);
     }
 
-    return this.uploadToLocal(file, folderName);
+    // Local upload
+    const localResult = await this.uploadToLocal(file, folderName);
+
+    // Generate thumbnails for local video uploads
+    if (localResult.success && file.type.startsWith('video/') && localResult.filePath && folderName) {
+      try {
+        console.log('🎬 Generating thumbnails for uploaded video...');
+        const { generateAndUploadThumbnails } = await import('./thumbnail-generator');
+
+        // Extract video ID from file path
+        const videoId = path.basename(localResult.filePath, path.extname(localResult.filePath));
+
+        const thumbResult = await generateAndUploadThumbnails(
+          localResult.filePath,
+          folderName,
+          videoId,
+          18
+        );
+
+        if (thumbResult.success && thumbResult.thumbnailUrls) {
+          localResult.thumbnailUrls = thumbResult.thumbnailUrls;
+          console.log(`✅ Generated ${thumbResult.thumbnailUrls.length} thumbnails`);
+        }
+      } catch (thumbError) {
+        console.error('Thumbnail generation failed:', thumbError);
+        // Don't fail the upload if thumbnail generation fails
+      }
+    }
+
+    return localResult;
   }
 }
 

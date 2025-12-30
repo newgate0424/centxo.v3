@@ -44,7 +44,51 @@ export async function DELETE(request: NextRequest) {
 
     console.log(`✅ File deleted successfully: ${fileName}`);
 
+    // Also delete thumbnails from R2
+    if (process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME) {
+      try {
+        const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
 
+        const accountId = process.env.R2_ACCOUNT_ID;
+        const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+        const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+        const bucketName = process.env.R2_BUCKET_NAME;
+
+        const s3Client = new S3Client({
+          region: 'auto',
+          endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+          credentials: { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey! },
+        });
+
+        // Get video ID from filename
+        const videoId = fileName.split('.')[0];
+        const thumbnailPrefix = `thumbnails/${userId}/${videoId}/`;
+
+        // List all thumbnails
+        const listCommand = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: thumbnailPrefix,
+        });
+
+        const listData = await s3Client.send(listCommand);
+
+        if (listData.Contents && listData.Contents.length > 0) {
+          // Delete all thumbnails
+          const deleteCommand = new DeleteObjectsCommand({
+            Bucket: bucketName,
+            Delete: {
+              Objects: listData.Contents.map(item => ({ Key: item.Key! })),
+            },
+          });
+
+          await s3Client.send(deleteCommand);
+          console.log(`✅ Deleted ${listData.Contents.length} thumbnails from R2`);
+        }
+      } catch (thumbError) {
+        console.error('Failed to delete thumbnails:', thumbError);
+        // Don't fail the whole operation if thumbnail deletion fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

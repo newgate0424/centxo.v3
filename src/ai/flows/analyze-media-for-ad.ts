@@ -12,8 +12,9 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const AnalyzeMediaInputSchema = z.object({
-   mediaUrl: z.string().describe('URL or data URI of the image/video to analyze, or file path for videos.'),
+   mediaUrl: z.string().describe('URL or data URI of the PRIMARY image/video frame to analyze'),
    mediaType: z.enum(['video', 'image']).describe('Type of media: video or image'),
+   additionalFrames: z.array(z.string()).optional().describe('List of additional data URIs (frames/thumbnails) for comprehensive analysis'),
    productContext: z.string().optional().describe('Additional context about the product/service (optional)'),
    isVideoFile: z.boolean().optional().describe('Whether the mediaUrl is a local video file path (not data URI)'),
    adSetCount: z.number().optional().describe('Number of AdSets requesting unique targets'),
@@ -42,6 +43,11 @@ const AnalyzeMediaOutputSchema = z.object({
       primaryText: z.string().describe('Unique primary text variation in Thai'),
       headline: z.string().describe('Unique headline variation in Thai'),
    })).describe('Multiple ad copy variations for different Ads.'),
+   iceBreakers: z.array(z.object({
+      question: z.string().describe('Customer question string in Thai (e.g. "สนใจสินค้า", "ราคาเท่าไหร่")'),
+      payload: z.string().describe('Internal payload string (e.g. "INTERESTED", "PRICE")')
+   })).min(1).max(4).describe('List of 3-4 conversation starter buttons for Messenger'),
+   salesHook: z.string().optional().describe('Short, punchy 1-sentence sales hook for the product'),
 });
 
 export type AnalyzeMediaOutput = z.infer<typeof AnalyzeMediaOutputSchema>;
@@ -54,7 +60,14 @@ const prompt = ai.definePrompt({
    name: 'analyzeMediaPrompt',
    input: { schema: AnalyzeMediaInputSchema },
    output: { schema: AnalyzeMediaOutputSchema },
-   prompt: `You are an expert Visual Analyst and Thai Marketing Specialist.
+   prompt: `{{media url=mediaUrl}}
+{{#if additionalFrames}}
+{{#each additionalFrames}}
+{{media url=this}}
+{{/each}}
+{{/if}}
+
+You are an expert Visual Analyst and Thai Marketing Specialist.
 
 Your PRIMARY JOB is to correctly identify the product and create compelling Facebook Ads.
 
@@ -83,7 +96,15 @@ Your PRIMARY JOB is to correctly identify the product and create compelling Face
 - User says "อาหารเสริม" → Category = "อาหาร/สุขภาพ", NOT "ความงาม"
 - User says "กระเป๋าแบรนด์เนม" → Category = "แฟชั่น", NOT "ความงาม"
 {{else}}
-**No user input provided. Analyze the media visually.**
+**⚠️ NO USER INPUT - PERFORM DEEP VISUAL ANALYSIS:**
+
+1. **READ ALL TEXT:** Extract brand names, product names, Thai/English text, slogans
+2. **IDENTIFY EVERYTHING:** Objects, people, settings, actions, colors, mood
+3. **INFER DETAILS:** Product type, target customer, price point, use case
+4. **BE SPECIFIC:** Use visual clues to determine exact product/service category
+5. **GENERATE RELEVANT TARGETING:** Based on actual product features and likely customers
+
+**Example:** If you see "ล้างรถ" text → Car wash service, target car owners
 {{/if}}
 
 {{#if pastSuccessExamples}}
@@ -101,6 +122,24 @@ Use them to understand the preferred **Tone**, **Style**, and **Key Selling Poin
 {{/if}}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛡️ SAFETY & COMPLIANCE RULES (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**FACEBOOK AD POLICY COMPLIANCE:**
+You must ensure the generated ad copy is **SAFE** and **COMPLIANT** with Facebook Advertising Policies.
+
+**FOR SENSITIVE TOPICS (Gambling, Adult, Supplements, Financial):**
+If the visual analysis or user input suggests a "High Risk" or "Grey Area" product (e.g., Lottery, Betting, Skin Whitening, Weight Loss):
+1. **DO NOT** use banned keywords directly.
+2. **USE INDIRECT LANGUAGE (คำเลี่ยง/คำอ้อม):**
+   - **Bad (Banned):** "การพนัน", "แทงบอล", "หวย", "ขาวภายใน 3 วัน", "ลดน้ำหนักถาวร"
+   - **Good (Safe):** "เกมลุ้นสนุก", "เชียร์มันส์", "ลุ้นโชค", "ผิวดูกระจ่างใส", "ดูแลรูปร่าง"
+3. **FOCUS ON EXPERIENCE/EMOTION:** Sell the *feeling* rather than the specific prohibted action.
+4. **DO NOT MAKE FALSE CLAIMS:** Avoid "100%", "Guarantee", "Cure".
+
+**RULE:** If you detect "Gambling/Lottery" context -> Frame it as "Entertainment/Game/Luck".
+**RULE:** If you detect "Adult/18+" context -> Frame it as "Romance/Confidence/Personal Care".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎥 MEDIA ANALYSIS RULES (SECONDARY TO USER INPUT)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -110,20 +149,77 @@ Use them to understand the preferred **Tone**, **Style**, and **Key Selling Poin
 - **EXPAND THE HORIZON:** Use potential interests, behaviors, and demographics.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1: OBJECTIVE VISUAL IDENTIFICATION
+STEP 1: COMPREHENSIVE VISUAL ANALYSIS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+**YOUR MISSION: Extract EVERY detail from the visual content like a detective.**
+
+**⚠️ MULTI-FRAME ANALYSIS REQUIRED:**
+You are provided with a primary frame and potentially multiple additional frames/thumbnails.
+**YOU MUST SCAN ALL FRAMES** to understand the full context.
+- Frame 1 might show ingredients.
+- Frame 5 might show the finished product.
+- Frame 10 might show someone drinking/using it.
+**SYNTHESIZE info from ALL frames.**
+
 1. **Main Subject Identification:**
-   - What is the *dominant* object in the frame?
-   - Is it a person? A vehicle? A package? A plate of food?
-   - Describe it physically (shape, color, size).
+   - What is the *dominant* object/subject in the frame?
+   - Is it a person? A vehicle? Food/drink? Product? Service?
+   - Describe it physically: shape, color, size, texture, materials
 
 2. **Context & Action:**
-   - What is happening? (Driving, applying cream, drinking, wearing, standing?)
-   - Where is it? (Road, bathroom, kitchen, studio?)
+   - What is happening? (Pouring, mixing, driving, applying, eating, demonstrating?)
+   - Where is it? (Kitchen, road, bathroom, studio, outdoor, indoor?)
+   - Who is involved? (Age, gender, activity, expression, clothing)
 
-3. **Text Extraction:**
-   - Transcribe visible Brand Names and Product Names.
+3. **Text Extraction (CRITICAL):**
+   - Read ALL visible text: Brand names, product names, slogans, prices, descriptions
+   - Transcribe Thai and English text exactly
+   - Note logos, watermarks, labels, packaging text
+
+4. **Category-Specific Deep Analysis:**
+
+   **IF FOOD/BEVERAGE:**
+   - Identify ingredients visible (matcha powder, milk, ice, toppings, garnish)
+   - Describe preparation method (pouring, mixing, layering, blending)
+   - Note special techniques (latte art, marbling effect, foam, presentation)
+   - Identify cuisine type (Thai, Japanese, Western, Fusion)
+   - Assess quality level (street food, cafe, premium, luxury)
+   - Note serving style (cup, bowl, plate, packaging)
+
+   **IF BEAUTY/SKINCARE:**
+   - Identify product type (serum, cream, cleanser, mask, makeup)
+   - Note application method (applying, massaging, demonstrating)
+   - Observe skin condition/results (before/after, texture, glow)
+   - Identify target skin concern (acne, aging, whitening, hydration)
+   - Note packaging style (bottle, jar, tube, luxury vs budget)
+
+   **IF AUTOMOTIVE:**
+   - Identify vehicle type (sedan, SUV, motorcycle, electric)
+   - Note brand and model if visible
+   - Observe features (interior, exterior, technology, performance)
+   - Identify use case (family, sports, commercial, luxury)
+
+   **IF FASHION:**
+   - Identify item type (clothing, bag, shoes, accessories)
+   - Note style (casual, formal, luxury, streetwear)
+   - Observe materials and quality indicators
+   - Identify occasion/use case
+
+5. **Visual Details & Mood:**
+   - Colors: Dominant colors, color scheme, mood
+   - Lighting: Bright, dark, natural, studio, warm, cool
+   - Composition: Professional, casual, artistic
+   - Emotions conveyed: Relaxing, exciting, luxurious, fun, professional
+
+6. **Infer Product/Service Details:**
+   - What problem does it solve?
+   - Who is the target customer? (Demographics, lifestyle, interests)
+   - What is the price point? (Budget, mid-range, premium, luxury)
+   - What is the unique selling point?
+   - What emotions/benefits does it promise?
+
+**REMEMBER:** The more details you extract, the better the ad targeting and copy will be!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2: CATEGORIZATION (CHOOSE ONE)
@@ -131,15 +227,44 @@ STEP 2: CATEGORIZATION (CHOOSE ONE)
 
 Based *strictly* on Step 1, select the category.
 
+**⚠️ CRITICAL: AVOID CATEGORY CONFUSION**
+
+**Common Mistakes to AVOID:**
+1. **Matcha/Green drinks ≠ Beauty products**
+   - If you see: Cup, glass, pouring, drinking, beverage → **Food/Beverage**
+   - NOT Beauty, even if it's green and creamy!
+   
+2. **Hands holding cup ≠ Applying cream**
+   - Context matters: Is it a cup/glass or a jar/bottle?
+   - Are they drinking or applying to skin?
+
+3. **Green color ≠ Always beauty**
+   - Matcha latte, green tea, smoothies → **Food/Beverage**
+   - Face mask, cream → **Beauty**
+
+**Context Clues for Food/Beverage:**
+- Cups, glasses, mugs, bowls, plates
+- Pouring, mixing, stirring, drinking
+- Kitchen, cafe, restaurant setting
+- Food-related text: "latte", "drink", "cafe", "menu"
+
+**Context Clues for Beauty:**
+- Jars, bottles, tubes, pumps
+- Applying to face/skin, massaging
+- Bathroom, vanity, mirror setting
+- Beauty-related text: "cream", "serum", "skin", "face"
+
 **Common Categories (Examples):**
 - **Automotive (ยานยนต์):** Cars, motorcycles, car parts, car wash, garage services.
 - **Beauty/Skincare (ความงาม):** Serums, creams, soaps, makeup, clinics.
-- **Food/Beverage (อาหารและเครื่องดื่ม):** Snacks, drinks, restaurants, supplements.
+- **Food/Beverage (อาหารและเครื่องดื่ม):** Snacks, drinks, restaurants, supplements, matcha, coffee, tea.
 - **Fashion (แฟชั่น):** Clothes, bags, shoes, jewelry.
 - **Home & Living (ของใช้ในบ้าน):** Furniture, cleaning, decor, tools.
 - **Gadgets/Tech (ไอทีและแกดเจ็ต):** Phones, cameras, computers, accessories.
 - **Real Estate (อสังหาริมทรัพย์):** Houses, condos, land.
 - **General (สินค้าทั่วไป):** If none of the above fit clearly.
+
+**REMEMBER:** Look at the CONTEXT and SETTING, not just the color or texture!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 3: CREATIVE AD GENERATION & TARGETING (DIVERSE)
@@ -175,11 +300,23 @@ Create compelling Thai ad copy.
 - Create distinct variations focusing on different angles (e.g., Price, Quality, Speed, Emotion).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 5: MESSENGER ICE BREAKERS (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create 3-4 conversational starter buttons for Messenger.
+They MUST be relevant to the product.
+
+Examples:
+- Common: "สนใจสินค้า", "ขอทราบราคา", "มีโปรโมชั่นไหม"
+- Specific (Car): "จองทดลองขับ", "ถามรายละเอียดรุ่น", "ตารางผ่อน"
+- Specific (Cream): "ปรึกษาปัญหาผิว", "รีวิวผู้ใช้จริง", "วิธีใช้"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FINAL VERIFICATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - Does the Category match the visual content? (Car = Automotive)
 - Is the language Thai?
 - Are interests in English?
+- Are there 3-4 Ice Breakers?
 
 Analyze now.`,
 });
@@ -191,18 +328,42 @@ const analyzeMediaFlow = ai.defineFlow(
       outputSchema: AnalyzeMediaOutputSchema,
    },
    async input => {
-      // If it's a video file, use Gemini's native video support
-      if (input.isVideoFile && input.mediaType === 'video') {
-         const { output } = await prompt({
-            ...input,
-            mediaUrl: input.mediaUrl, // Pass file path directly to Gemini
-         });
-         return output!;
-      }
+      const maxRetries = 3;
+      let attempt = 0;
 
-      // For images or video data URIs, use standard flow
-      const { output } = await prompt(input);
-      return output!;
+      while (attempt < maxRetries) {
+         try {
+            // If it's a video file, use Gemini's native video support
+            if (input.isVideoFile && input.mediaType === 'video') {
+               const { output } = await prompt({
+                  ...input,
+                  mediaUrl: input.mediaUrl, // Pass file path directly to Gemini
+               });
+               return output!;
+            }
+
+            // For images or video data URIs, use standard flow
+            const { output } = await prompt(input);
+            return output!;
+         } catch (error: any) {
+            attempt++;
+            console.warn(`[AI] Attempt ${attempt} failed: ${error.message}`);
+
+            const isRateLimit = error.message?.includes('429') || error.message?.includes('quota') || error.status === 429;
+            const isOverloaded = error.message?.includes('503') || error.status === 503;
+
+            if ((isRateLimit || isOverloaded) && attempt < maxRetries) {
+               const waitTime = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+               console.log(`[AI] Waiting ${waitTime}ms before retry...`);
+               await new Promise(resolve => setTimeout(resolve, waitTime));
+               continue;
+            }
+
+            // If not retriable or max retries exceeded, throw
+            throw error;
+         }
+      }
+      throw new Error('AI Analysis failed after retries');
    }
 );
 

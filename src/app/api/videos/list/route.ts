@@ -37,57 +37,48 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user's media folder exists
-    if (!userMediaPath) {
-      // No folder found, return empty array
-      return NextResponse.json({ videos: [] });
-    }
+    // Check if user's media folder exists
+    // if (!userMediaPath) {
+    //   // No folder found, return empty array
+    //   return NextResponse.json({ videos: [] });
+    // }
 
     // Read all files in user's folder
-    const files = await fs.readdir(userMediaPath);
-
-    // Filter video AND image files and get file info
-    const mediaFiles = await Promise.all(
-      files
-        .filter(file => /\.(mp4|webm|mov|avi|jpg|jpeg|png|gif|bmp)$/i.test(file))
-        .map(async (file) => {
-          const filePath = path.join(userMediaPath!, file);
-          const stats = await fs.stat(filePath);
-
-          // Generate API path for serving files
-          const apiPath = userMediaPath!.includes('uploads\\videos\\') || userMediaPath!.includes('uploads/videos/')
-            ? `/api/uploads/videos/${userId}/${file}`
-            : `/api/uploads/${userId}/${file}`;
-
-          return {
-            name: file,
-            path: apiPath,
-            size: stats.size,
-            uploadedAt: stats.birthtime.toISOString(),
-          };
-        })
-    );
+    let mediaFiles: any[] = [];
+    if (userMediaPath) {
+      const files = await fs.readdir(userMediaPath);
+      const localFiles = await Promise.all(
+        files.filter(file => /\.(mp4|webm|mov|avi|jpg|jpeg|png|gif|bmp)$/i.test(file))
+          .map(async (file) => {
+            const filePath = path.join(userMediaPath!, file);
+            const stats = await fs.stat(filePath);
+            const apiPath = userMediaPath!.includes('uploads\\videos\\') || userMediaPath!.includes('uploads/videos/')
+              ? `/api/uploads/videos/${userId}/${file}`
+              : `/api/uploads/${userId}/${file}`;
+            return { name: file, path: apiPath, size: stats.size, uploadedAt: stats.birthtime.toISOString() };
+          })
+      );
+      mediaFiles = [...localFiles];
+    }
+    // (Old dangling block removed)
 
     // 2. Fetch from R2
+    const debugLogs: string[] = [];
+    debugLogs.push(`Env Check: AccountID=${!!process.env.R2_ACCOUNT_ID}, Bucket=${!!process.env.R2_BUCKET_NAME}`);
+
     if (process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME) {
       try {
         const userId = session.user.id;
         const prefix = `videos/${userId}/`;
 
+        debugLogs.push(`R2 Config: Prefix=${prefix}, User=${userId}`);
+
         const accountId = process.env.R2_ACCOUNT_ID;
         const accessKeyId = process.env.R2_ACCESS_KEY_ID;
         const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
         const bucketName = process.env.R2_BUCKET_NAME;
-        const publicUrl = process.env.R2_PUBLIC_URL;
 
-        console.log('🔐 R2 Config:', {
-          hasAccountId: !!accountId,
-          hasAccessKey: !!accessKeyId,
-          hasSecretKey: !!secretAccessKey,
-          bucketName
-        });
-
-        const { S3Client, ListObjectsV2Command, GetObjectCommand } = await import('@aws-sdk/client-s3');
-        const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+        const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
 
         const s3Client = new S3Client({
           region: 'auto',
@@ -101,60 +92,73 @@ export async function GET(request: NextRequest) {
         });
 
         const data = await s3Client.send(command);
-        console.log('📦 R2 Objects found:', data.Contents?.length || 0);
+        debugLogs.push(`R2 Objects found: ${data.Contents?.length || 0}`);
 
         if (data.Contents) {
           for (const item of data.Contents) {
             if (item.Key && item.Size && item.LastModified) {
-              // Determine MIME type for browser preview
+
+              // Only include files that look like media
               const ext = item.Key.split('.').pop()?.toLowerCase();
-              let contentType = 'application/octet-stream';
-              if (ext === 'mp4') contentType = 'video/mp4';
-              else if (ext === 'mov') contentType = 'video/quicktime';
-              else if (ext === 'webm') contentType = 'video/webm';
-              else if (['jpg', 'jpeg'].includes(ext || '')) contentType = 'image/jpeg';
-              else if (ext === 'png') contentType = 'image/png';
+              if (!['mp4', 'mov', 'webm', 'jpg', 'jpeg', 'png'].includes(ext || '')) continue;
 
               try {
                 // Use proxy URL instead of presigned URL to avoid CORS issues
                 const fileName = item.Key.split('/').pop() || item.Key;
                 const proxyUrl = `/api/r2/${item.Key}`;
 
-                console.log('✅ Created proxy URL for:', fileName);
+                // Check for thumbnails
+                const videoId = fileName.split('.')[0]; // e.g., "video_123" from "video_123.mp4"
+                const thumbnailPrefix = `thumbnails/${userId}/${videoId}/`;
+
+                let thumbnailUrls: string[] = [];
+                try {
+                  const thumbCommand = new ListObjectsV2Command({
+                    Bucket: bucketName,
+                    Prefix: thumbnailPrefix,
+                  });
+                  const thumbData = await s3Client.send(thumbCommand);
+
+                  if (thumbData.Contents && thumbData.Contents.length > 0) {
+                    thumbnailUrls = thumbData.Contents
+                      .filter(thumb => thumb.Key)
+                      .map(thumb => `/api/r2/${thumb.Key}`)
+                      .sort(); // Sort to maintain order (thumb-0, thumb-1, etc.)
+                  }
+                } catch (thumbError) {
+                  console.error('Failed to fetch thumbnails for:', fileName, thumbError);
+                }
 
                 mediaFiles.push({
                   name: fileName,
-                  path: proxyUrl,
+                  path: proxyUrl, // This will route through /api/r2/[...path]
                   size: item.Size,
                   uploadedAt: item.LastModified.toISOString(),
+                  thumbnailUrls: thumbnailUrls.length > 0 ? thumbnailUrls : undefined,
                 });
               } catch (urlError) {
-                console.error('❌ Failed to create URL for:', item.Key, urlError);
+                console.error('❌ Failed to process R2 item:', item.Key, urlError);
               }
             }
           }
         }
-      } catch (r2Error) {
+      } catch (r2Error: any) {
         console.error('Failed to list R2 files:', r2Error);
+        debugLogs.push(`R2 Error: ${r2Error.message}`);
         // Don't crash entire list if R2 fails
       }
     } else {
-      console.log('⚠️ R2 not configured - skipping cloud storage');
+      debugLogs.push('R2 not configured');
     }
 
     // Sort by upload date (newest first)
     mediaFiles.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
 
-    console.log('📹 Returning media files:', mediaFiles.length, 'files');
-    if (mediaFiles.length > 0) {
-      console.log('First file:', { name: mediaFiles[0].name, pathLength: mediaFiles[0].path.length, pathStart: mediaFiles[0].path.substring(0, 150) });
-    }
-
-    return NextResponse.json({ videos: mediaFiles });
-  } catch (error) {
+    return NextResponse.json({ videos: mediaFiles, debug: debugLogs });
+  } catch (error: any) {
     console.error('Error listing videos:', error);
     return NextResponse.json(
-      { error: 'Failed to list videos' },
+      { error: 'Failed to list videos', details: error.message },
       { status: 500 }
     );
   }

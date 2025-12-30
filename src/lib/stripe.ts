@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-12-18.acacia', // Fixed lint by using standard recent version or removing if types conflict, trying valid one
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock', {
+    apiVersion: '2025-12-15.clover',
     typescript: true,
 });
 
@@ -16,14 +16,14 @@ export const PLANS = [
     {
         name: 'PLUS',
         price: 39,
-        priceId: process.env.STRIPE_PRICE_ID_PLUS!,
+        priceId: process.env.STRIPE_PRICE_ID_PLUS || '',
         limit: 20,
         features: ['20 Ad Accounts', 'Advanced Analytics', 'Priority Support', 'AI Optimization'],
     },
     {
         name: 'PRO',
         price: 99,
-        priceId: process.env.STRIPE_PRICE_ID_PRO!,
+        priceId: process.env.STRIPE_PRICE_ID_PRO || '',
         limit: 50,
         features: ['50 Ad Accounts', 'Enterprise Analytics', 'Dedicated Support', 'Early Access Features'],
     },

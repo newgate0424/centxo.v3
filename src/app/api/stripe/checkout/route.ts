@@ -5,6 +5,8 @@ import { authOptions } from '@/lib/auth';
 import { stripe, PLANS } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);

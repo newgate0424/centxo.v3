@@ -2,11 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
@@ -17,7 +18,22 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Page ID is required' }, { status: 400 });
         }
 
-        const accessToken = (session as any).accessToken;
+        // Get access token from database (same pattern as campaigns API)
+        const userAccount = await prisma.account.findFirst({
+            where: {
+                userId: session.user.id,
+                provider: 'facebook',
+            },
+        });
+
+        if (!userAccount?.access_token) {
+            return NextResponse.json(
+                { error: 'Facebook account not connected or access token missing' },
+                { status: 401 }
+            );
+        }
+
+        const accessToken = userAccount.access_token;
 
         // Fetch posts from the Page
         const url = `https://graph.facebook.com/v22.0/${pageId}/posts?fields=id,message,full_picture,created_time,permalink_url,status_type&limit=20&access_token=${accessToken}`;

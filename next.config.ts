@@ -10,6 +10,18 @@ const nextConfig: NextConfig = {
     },
   },
 
+  // Webpack configuration
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Exclude fluent-ffmpeg from server bundle (uses system binaries)
+      config.externals = config.externals || [];
+      config.externals.push({
+        'fluent-ffmpeg': 'commonjs fluent-ffmpeg',
+      });
+    }
+    return config;
+  },
+
   // Security: Enable type checking and linting
   // Fix errors instead of ignoring them
   typescript: {
@@ -88,6 +100,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https: blob:",
+              "media-src 'self' blob: data:",
               "connect-src 'self' https://graph.facebook.com https://*.google.com https://*.googleapis.com",
               "frame-src 'self' https://www.facebook.com",
               "object-src 'none'",
