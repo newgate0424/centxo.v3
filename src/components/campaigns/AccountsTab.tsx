@@ -56,9 +56,10 @@ export interface AccountsTabProps {
     selectedIds: Set<string>;
     onSelectionChange: (ids: Set<string>) => void;
     refreshTrigger?: number;
+    searchQuery?: string;
 }
 
-export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0 }: AccountsTabProps) {
+export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0, searchQuery = '' }: AccountsTabProps) {
     const { t, language } = useLanguage();
     const { data: session } = useSession();
     const { selectedAccounts } = useAdAccount();
@@ -389,59 +390,59 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
 
     // Generate skeleton rows for loading state
     const SkeletonRow = () => (
-        <tr className="border-b border-gray-200 dark:border-zinc-800">
+        <TableRow className="border-b border-gray-200 dark:border-zinc-800">
 
-            <td className="px-4 py-2">
+            <TableCell className="px-4 py-2">
                 <div className="space-y-2">
                     <div className="h-4 w-32 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                     <div className="h-3 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                 </div>
-            </td>
-            <td className="px-4 py-2">
+            </TableCell>
+            <TableCell className="px-4 py-2">
                 <div className="h-4 w-16 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
-            </td>
-            <td className="px-4 py-2 text-center">
+            </TableCell>
+            <TableCell className="px-4 py-2 text-center">
                 <div className="h-5 w-10 bg-gray-200 dark:bg-zinc-700 rounded-full animate-pulse mx-auto" />
-            </td>
+            </TableCell>
 
-            <td className="px-4 py-2">
+            <TableCell className="px-4 py-2">
                 <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
-            </td>
-            <td className="px-4 py-2">
+            </TableCell>
+            <TableCell className="px-4 py-2">
                 <div className="h-4 w-28 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
-            </td>
-            <td className="px-4 py-2 text-center">
+            </TableCell>
+            <TableCell className="px-4 py-2 text-center">
                 <div className="h-4 w-8 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse mx-auto" />
-            </td>
-            <td className="px-4 py-2 text-center">
+            </TableCell>
+            <TableCell className="px-4 py-2 text-center">
                 <div className="h-5 w-12 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse mx-auto" />
-            </td>
-            <td className="px-4 py-2 text-right">
+            </TableCell>
+            <TableCell className="px-4 py-2 text-right">
                 <div className="h-4 w-16 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse ml-auto" />
-            </td>
-            <td className="px-4 py-2 text-center">
+            </TableCell>
+            <TableCell className="px-4 py-2 text-center">
                 <div className="h-6 w-6 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse mx-auto" />
-            </td>
-        </tr>
+            </TableCell>
+        </TableRow>
     );
 
     if (loading && accounts.length === 0) {
         // Show skeleton table instead of centered loading spinner
         return (
             <div className="bg-white dark:bg-zinc-950 border border-t-0 border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl">
+                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl [&>div]:overflow-visible">
                     <Table className="min-w-max">
                         <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-t-xl">
                             <TableRow>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.accountName')}</th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.status')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.activeAds', 'Active Ads')}</th>
-                                <th className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.spendingCap', 'Spending Cap')}</th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.paymentMethod', 'Payment Method')}</th>
-                                <th className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.timezone', 'Time Zone')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.nationality', 'Nationality')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.currency', 'Currency')}</th>
-                                <th className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.action', 'Action')}</th>
+                                <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.accountName')}</TableHead>
+                                <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.status')}</TableHead>
+                                <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.activeAds', 'Active Ads')}</TableHead>
+                                <TableHead className="px-4 py-2 text-right text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.spendingCap', 'Spending Cap')}</TableHead>
+                                <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.paymentMethod', 'Payment Method')}</TableHead>
+                                <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.timezone', 'Time Zone')}</TableHead>
+                                <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.nationality', 'Nationality')}</TableHead>
+                                <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.currency', 'Currency')}</TableHead>
+                                <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.action', 'Action')}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody className="divide-y divide-gray-200 dark:divide-zinc-800">
@@ -486,7 +487,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
     return (
         <>
             <div className="bg-white dark:bg-zinc-950 border border-t-0 border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl">
+                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl [&>div]:overflow-visible">
                     <Table className="min-w-max">
                         <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-t-xl">
                             <TableRow>
@@ -504,7 +505,10 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                             </TableRow>
                         </TableHeader>
                         <TableBody className="divide-y divide-gray-200 dark:divide-zinc-800 border-b border-gray-200 dark:border-zinc-800">
-                            {sortData(accounts).map((account, index) => (
+                            {sortData(accounts.filter(a =>
+                                a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                a.account_id.includes(searchQuery)
+                            )).map((account, index) => (
                                 <TableRow key={account.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleSelectOne(account.id, !selectedIds.has(account.id))}>
 
                                     <TableCell className="px-4 py-2">

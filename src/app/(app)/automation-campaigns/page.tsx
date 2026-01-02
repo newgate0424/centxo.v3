@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Upload, Play, Pause, ChevronRight, ChevronLeft, RefreshCw, CheckCircle, Smartphone } from 'lucide-react';
-import { toast } from 'sonner';
+import { showSuccessToast, showErrorToast } from '@/utils/custom-toast';
 
 export default function AutomationCampaignsPage() {
     const { data: session } = useSession();
@@ -170,8 +170,8 @@ export default function AutomationCampaignsPage() {
     }, [mediaFile, mediaPreview]);
 
     const runAIAnalysis = async () => {
-        if (!mediaFile) return toast.error('Please upload media first');
-        if (uploading) return toast.error('Please wait for upload to complete');
+        if (!mediaFile) return showErrorToast('Please upload media first');
+        if (uploading) return showErrorToast('Please wait for upload to complete');
 
         setAnalyzing(true);
         const formData = new FormData();
@@ -202,19 +202,19 @@ export default function AutomationCampaignsPage() {
             if (data.success) {
                 setAiResult(data.data);
                 setStep(3); // Go to Review
-                toast.success('AI Analysis Complete!');
+                showSuccessToast('AI Analysis Complete!');
             } else {
-                toast.error(data.error || 'Analysis failed');
+                showErrorToast(data.error || 'Analysis failed');
             }
         } catch (error) {
-            toast.error('Analysis failed');
+            showErrorToast('Analysis failed');
         } finally {
             setAnalyzing(false);
         }
     };
 
     const launchCampaign = async () => {
-        if (!selectedAdAccount || !selectedPage) return toast.error('Check ad account and page');
+        if (!selectedAdAccount || !selectedPage) return showErrorToast('Check ad account and page');
 
         setLoading(true);
         const formData = new FormData();
@@ -250,13 +250,13 @@ export default function AutomationCampaignsPage() {
             const res = await fetch('/api/campaigns/create', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
-                toast.success('Campaign Launched Successfully!');
+                showSuccessToast('Campaign Launched Successfully!');
                 router.push('/dashboard');
             } else {
-                toast.error(data.error || 'Launch Failed');
+                showErrorToast(data.error || 'Launch Failed');
             }
         } catch (e) {
-            toast.error('Launch Error');
+            showErrorToast('Launch Error');
         } finally {
             setLoading(false);
         }

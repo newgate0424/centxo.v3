@@ -12,12 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Loader2, Upload, ChevronRight, ChevronLeft, RefreshCw,
     CheckCircle, Sparkles, Eye, Rocket, Save, Wand2,
     Facebook, Instagram, MessageCircle, Target, DollarSign, Video
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/utils/custom-toast';
 
 export default function AutomationCampaignsV2Page() {
     const { data: session } = useSession();
@@ -154,7 +155,7 @@ export default function AutomationCampaignsV2Page() {
             // Add to auto thumbnails list if not already there
             setAutoThumbnails(prev => [url, ...prev]);
 
-            toast.success('อัปโหลดภาพปกสำเร็จ');
+            showSuccessToast('Cover image uploaded successfully');
         }
     };
 
@@ -288,7 +289,7 @@ export default function AutomationCampaignsV2Page() {
     }, [mediaFile, mediaPreview, autoThumbnails.length]);
 
     const runAIAnalysis = async () => {
-        if (!mediaFile && !selectedLibraryVideo) return toast.error('กรุณาอัปโหลดสื่อ หรือเลือกจากไลบรารี');
+        if (!mediaFile && !selectedLibraryVideo) return showErrorToast('Please upload media or select from library');
 
         setAnalyzing(true);
         const formData = new FormData();
@@ -342,12 +343,12 @@ export default function AutomationCampaignsV2Page() {
                 setEditedTargeting(data.data.interestGroups || []);
                 setEditedIceBreakers(data.data.iceBreakers || []);
                 setStep(3);
-                toast.success('วิเคราะห์สำเร็จ! 🎉');
+                showSuccessToast('Analysis complete! 🎉');
             } else {
-                toast.error(data.error || 'การวิเคราะห์ล้มเหลว');
+                showErrorToast(data.error || 'Analysis failed');
             }
         } catch (error) {
-            toast.error('เกิดข้อผิดพลาดในการวิเคราะห์');
+            showErrorToast('Error during analysis');
         } finally {
             setAnalyzing(false);
         }
@@ -357,7 +358,7 @@ export default function AutomationCampaignsV2Page() {
         if (!aiResult) return;
 
         setLoading(true);
-        toast.info('กำลังสร้างใหม่...');
+        showInfoToast('Regenerating...');
 
         try {
             const formData = new FormData();
@@ -381,12 +382,12 @@ export default function AutomationCampaignsV2Page() {
                 } else if (section === 'icebreakers') {
                     setEditedIceBreakers(data.data.iceBreakers);
                 }
-                toast.success('สร้างใหม่สำเร็จ! ✨');
+                showSuccessToast('Regeneration complete! ✨');
             } else {
-                toast.error('ไม่สามารถสร้างใหม่ได้');
+                showErrorToast('Failed to regenerate');
             }
         } catch (error) {
-            toast.error('เกิดข้อผิดพลาด');
+            showErrorToast('An error occurred');
         } finally {
             setLoading(false);
         }
@@ -394,7 +395,7 @@ export default function AutomationCampaignsV2Page() {
 
     const launchCampaign = async () => {
         if (!selectedAdAccount || !selectedPage) {
-            return toast.error('กรุณาเลือกบัญชีโฆษณาและเพจ');
+            return showErrorToast('Please select an ad account and page');
         }
 
         setLoading(true);
@@ -440,23 +441,23 @@ export default function AutomationCampaignsV2Page() {
             const res = await fetch('/api/campaigns/create', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
-                toast.success(saveDraft ? 'บันทึกฉบับร่างสำเร็จ! 📝' : 'เผยแพร่แคมเปญสำเร็จ! 🚀');
+                showSuccessToast(saveDraft ? 'Draft saved successfully! 📝' : 'Campaign launched successfully! 🚀');
                 router.push('/dashboard');
             } else {
-                toast.error(data.error || 'การสร้างแคมเปญล้มเหลว');
+                showErrorToast(data.error || 'Campaign launch failed');
             }
         } catch (e) {
-            toast.error('เกิดข้อผิดพลาด');
+            showErrorToast('An error occurred');
         } finally {
             setLoading(false);
         }
     };
 
     const steps = [
-        { num: 1, title: 'อัปโหลด & ปก', icon: Upload },
-        { num: 2, title: 'วิเคราะห์ AI', icon: Sparkles },
-        { num: 3, title: 'รีวิว & แก้ไข', icon: Eye },
-        { num: 4, title: 'เผยแพร่', icon: Rocket }
+        { num: 1, title: 'Upload & Thumbnail', icon: Upload },
+        { num: 2, title: 'AI Analysis', icon: Sparkles },
+        { num: 3, title: 'Review & Edit', icon: Eye },
+        { num: 4, title: 'Launch', icon: Rocket }
     ];
 
     return (
@@ -498,215 +499,204 @@ export default function AutomationCampaignsV2Page() {
                         <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50">
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Upload className="w-6 h-6 text-blue-600" />
-                                ขั้นตอนที่ 1: อัปโหลดสื่อและเลือกภาพปก
+                                Step 1: Upload Media & Select Thumbnail
                             </CardTitle>
-                            <CardDescription>อัปโหลดวิดีโอหรือรูปภาพ และเลือกภาพปกที่ต้องการ</CardDescription>
+                            <CardDescription>Upload a video or image and select a thumbnail.</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 {/* Upload Area */}
                                 <div className="space-y-4">
-                                    {/* Tabs */}
-                                    <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
-                                        <button
-                                            onClick={() => setUploadSource('upload')}
-                                            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${uploadSource === 'upload'
-                                                ? 'bg-white text-blue-600 shadow-sm'
-                                                : 'text-gray-600 hover:text-gray-900'
-                                                }`}
-                                        >
-                                            <Upload className="w-4 h-4 inline mr-2" />
-                                            อัปโหลดใหม่
-                                        </button>
-                                        <button
-                                            onClick={() => setUploadSource('library')}
-                                            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${uploadSource === 'library'
-                                                ? 'bg-white text-purple-600 shadow-sm'
-                                                : 'text-gray-600 hover:text-gray-900'
-                                                }`}
-                                        >
-                                            <Video className="w-4 h-4 inline mr-2" />
-                                            ไลบรารี
-                                        </button>
-                                    </div>
+                                    <Tabs defaultValue="upload" value={uploadSource} onValueChange={(v) => setUploadSource(v as 'upload' | 'library')}>
+                                        <TabsList className="grid w-full grid-cols-2">
+                                            <TabsTrigger value="upload">
+                                                <Upload className="w-4 h-4 mr-2" />
+                                                Upload New
+                                            </TabsTrigger>
+                                            <TabsTrigger value="library">
+                                                <Video className="w-4 h-4 mr-2" />
+                                                Library
+                                            </TabsTrigger>
+                                        </TabsList>
 
-                                    {/* Upload Tab Content */}
-                                    {uploadSource === 'upload' ? (
-                                        <div
-                                            onClick={() => !mediaPreview && fileInputRef.current?.click()}
-                                            className="h-72 border-2 border-dashed border-gray-300 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col items-center justify-center relative overflow-hidden group hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer"
-                                        >
-                                            {mediaPreview ? (
-                                                <>
-                                                    {(mediaFile?.type.startsWith('video') || (!mediaFile && mediaPreview.includes('/api/'))) ? (
-                                                        <video
-                                                            ref={videoRef}
-                                                            src={mediaPreview}
-                                                            className="w-full h-full object-contain"
-                                                            controls
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                    ) : (
-                                                        <img src={mediaPreview} className="w-full h-full object-contain" alt="preview" />
-                                                    )}
-                                                    {/* Delete Button */}
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setMediaFile(null);
-                                                            setMediaPreview(null);
-                                                            setThumbnailPreview(null);
-                                                            setThumbnailBlob(null);
-                                                            setAutoThumbnails([]);
-                                                            // Reset file input to allow re-uploading same file
-                                                            if (fileInputRef.current) {
-                                                                fileInputRef.current.value = '';
-                                                            }
-                                                        }}
-                                                        className="absolute top-3 right-3 w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 z-10"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                            <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
-                                                        </svg>
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <div className="text-center text-gray-400 group-hover:text-blue-500 transition-colors">
-                                                    <Upload className="w-16 h-16 mx-auto mb-4 opacity-50 group-hover:opacity-100 transition-opacity" />
-                                                    <span className="text-lg font-medium">คลิกเพื่ออัปโหลด</span>
-                                                    <p className="text-sm mt-2">รองรับ วิดีโอ และรูปภาพ</p>
-                                                </div>
-                                            )}
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                accept="video/*,image/*"
-                                                className="hidden"
-                                                onChange={handleMediaUpload}
-                                            />
-                                        </div>
-                                    ) : (
-                                        /* Library Tab Content */
-                                        <div className="h-72 border-2 rounded-2xl bg-white p-4 overflow-y-auto">
-                                            {loadingLibrary ? (
-                                                <div className="h-full flex items-center justify-center">
-                                                    <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
-                                                </div>
-                                            ) : libraryVideos.length === 0 ? (
-                                                <div className="h-full flex flex-col items-center justify-center text-gray-400">
-                                                    <Video className="w-16 h-16 mb-4 opacity-50" />
-                                                    <p className="text-sm">ยังไม่มีวิดีโอในไลบรารี</p>
-                                                </div>
-                                            ) : (
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    {libraryVideos.map((video: any) => (
-                                                        <div
-                                                            key={video.id}
-                                                            onClick={() => {
-                                                                // Switch to upload tab
-                                                                setUploadSource('upload');
-                                                                // Set video preview
-                                                                setMediaPreview(video.url);
-                                                                setMediaFile(null); // Library video doesn't have File object
-                                                                setSelectedLibraryVideo(video);
-
-                                                                // Use pre-generated thumbnails if available (from R2)
-                                                                // Note: Old videos might have distorted thumbnails (fixed 16:9), but new uploads will be correct.
-                                                                if (video.thumbnailUrls && video.thumbnailUrls.length > 0) {
-                                                                    console.log(`✅ Using ${video.thumbnailUrls.length} pre-generated thumbnails from R2`);
-                                                                    setAutoThumbnails(video.thumbnailUrls);
-                                                                    setGeneratingThumbs(false);
-
-                                                                    // Set default thumbnail (middle one)
-                                                                    const defaultThumb = video.thumbnailUrls[Math.floor(video.thumbnailUrls.length / 2)];
-                                                                    setThumbnailPreview(defaultThumb);
-
-                                                                    // Fetch blob for the default thumbnail
-                                                                    fetch(defaultThumb)
-                                                                        .then(r => r.blob())
-                                                                        .then(setThumbnailBlob)
-                                                                        .catch(err => console.error('Failed to fetch thumbnail blob:', err));
-                                                                } else {
-                                                                    // No pre-generated thumbnails, will generate via useEffect
-                                                                    console.log('⚠️ No pre-generated thumbnails, will generate from video');
-                                                                    setGeneratingThumbs(true);
-                                                                    setAutoThumbnails([]);
-                                                                    setThumbnailPreview(null);
-                                                                    setThumbnailBlob(null);
+                                        <TabsContent value="upload" className="mt-4">
+                                            <div
+                                                onClick={() => !mediaPreview && fileInputRef.current?.click()}
+                                                className="h-72 border-2 border-dashed border-gray-300 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col items-center justify-center relative overflow-hidden group hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer"
+                                            >
+                                                {mediaPreview ? (
+                                                    <>
+                                                        {(mediaFile?.type.startsWith('video') || (!mediaFile && mediaPreview.includes('/api/'))) ? (
+                                                            <video
+                                                                ref={videoRef}
+                                                                src={mediaPreview}
+                                                                className="w-full h-full object-contain"
+                                                                controls
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            />
+                                                        ) : (
+                                                            <img src={mediaPreview} className="w-full h-full object-contain" alt="preview" />
+                                                        )}
+                                                        {/* Delete Button */}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setMediaFile(null);
+                                                                setMediaPreview(null);
+                                                                setThumbnailPreview(null);
+                                                                setThumbnailBlob(null);
+                                                                setAutoThumbnails([]);
+                                                                // Reset file input to allow re-uploading same file
+                                                                if (fileInputRef.current) {
+                                                                    fileInputRef.current.value = '';
                                                                 }
                                                             }}
-                                                            className={`group relative aspect-video rounded-lg overflow-hidden cursor-pointer border-2 transition-all hover:border-purple-400 hover:shadow-lg ${mediaPreview === video.url
-                                                                ? 'border-purple-500 ring-4 ring-purple-200'
-                                                                : 'border-gray-200'
-                                                                }`}
+                                                            className="absolute top-3 right-3 w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 z-10"
                                                         >
-                                                            {/* Video Preview with Play Icon */}
-                                                            <div className="relative w-full h-full bg-gray-900">
-                                                                <video
-                                                                    src={video.url}
-                                                                    className="w-full h-full object-cover"
-                                                                    muted
-                                                                />
-                                                                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                                                                    <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
-                                                                        <svg className="w-6 h-6 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                                                            <path d="M8 5v14l11-7z" />
-                                                                        </svg>
-                                                                    </div>
-                                                                </div>
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
+                                                            </svg>
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <div className="text-center text-gray-400 group-hover:text-blue-500 transition-colors">
+                                                        <Upload className="w-16 h-16 mx-auto mb-4 opacity-50 group-hover:opacity-100 transition-opacity" />
+                                                        <span className="text-lg font-medium">Click to upload</span>
+                                                        <p className="text-sm mt-2">Supports Videos and Images</p>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    accept="video/*,image/*"
+                                                    className="hidden"
+                                                    onChange={handleMediaUpload}
+                                                />
+                                            </div>
+                                        </TabsContent>
 
-                                                                {/* Delete Button - Only show on hover */}
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (confirm(`ต้องการลบวิดีโอ "${video.filename}" หรือไม่?`)) {
-                                                                            // Delete video
-                                                                            fetch(`/api/videos/delete`, {
-                                                                                method: 'DELETE',
-                                                                                headers: { 'Content-Type': 'application/json' },
-                                                                                body: JSON.stringify({ fileName: video.filename })
-                                                                            })
-                                                                                .then(res => res.json())
-                                                                                .then(data => {
-                                                                                    if (data.success) {
-                                                                                        // Remove from library list
-                                                                                        setLibraryVideos(prev => prev.filter(v => v.id !== video.id));
-                                                                                        console.log('✅ Video deleted successfully');
-                                                                                    } else {
-                                                                                        console.error('Delete failed:', data.error);
-                                                                                        alert(data.error || 'ลบวิดีโอล้มเหลว');
-                                                                                    }
+                                        <TabsContent value="library" className="mt-4">
+                                            <div className="h-72 border-2 rounded-2xl bg-white p-4 overflow-y-auto">
+                                                {loadingLibrary ? (
+                                                    <div className="h-full flex items-center justify-center">
+                                                        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+                                                    </div>
+                                                ) : libraryVideos.length === 0 ? (
+                                                    <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                                        <Video className="w-16 h-16 mb-4 opacity-50" />
+                                                        <p className="text-sm">No videos in library</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {libraryVideos.map((video: any) => (
+                                                            <div
+                                                                key={video.id}
+                                                                onClick={() => {
+                                                                    // Switch to upload tab
+                                                                    setUploadSource('upload');
+                                                                    // Set video preview
+                                                                    setMediaPreview(video.url);
+                                                                    setMediaFile(null); // Library video doesn't have File object
+                                                                    setSelectedLibraryVideo(video);
+
+                                                                    // Use pre-generated thumbnails if available (from R2)
+                                                                    // Note: Old videos might have distorted thumbnails (fixed 16:9), but new uploads will be correct.
+                                                                    if (video.thumbnailUrls && video.thumbnailUrls.length > 0) {
+                                                                        console.log(`✅ Using ${video.thumbnailUrls.length} pre-generated thumbnails from R2`);
+                                                                        setAutoThumbnails(video.thumbnailUrls);
+                                                                        setGeneratingThumbs(false);
+
+                                                                        // Set default thumbnail (middle one)
+                                                                        const defaultThumb = video.thumbnailUrls[Math.floor(video.thumbnailUrls.length / 2)];
+                                                                        setThumbnailPreview(defaultThumb);
+
+                                                                        // Fetch blob for the default thumbnail
+                                                                        fetch(defaultThumb)
+                                                                            .then(r => r.blob())
+                                                                            .then(setThumbnailBlob)
+                                                                            .catch(err => console.error('Failed to fetch thumbnail blob:', err));
+                                                                    } else {
+                                                                        // No pre-generated thumbnails, will generate via useEffect
+                                                                        console.log('⚠️ No pre-generated thumbnails, will generate from video');
+                                                                        setGeneratingThumbs(true);
+                                                                        setAutoThumbnails([]);
+                                                                        setThumbnailPreview(null);
+                                                                        setThumbnailBlob(null);
+                                                                    }
+                                                                }}
+                                                                className={`group relative aspect-video rounded-lg overflow-hidden cursor-pointer border-2 transition-all hover:border-purple-400 hover:shadow-lg ${mediaPreview === video.url
+                                                                    ? 'border-purple-500 ring-4 ring-purple-200'
+                                                                    : 'border-gray-200'
+                                                                    }`}
+                                                            >
+                                                                {/* Video Preview with Play Icon */}
+                                                                <div className="relative w-full h-full bg-gray-900">
+                                                                    <video
+                                                                        src={video.url}
+                                                                        className="w-full h-full object-cover"
+                                                                        muted
+                                                                    />
+                                                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                                                        <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
+                                                                            <svg className="w-6 h-6 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                                                <path d="M8 5v14l11-7z" />
+                                                                            </svg>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Delete Button - Only show on hover */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            if (confirm(`Are you sure you want to delete video "${video.filename}"?`)) {
+                                                                                // Delete video
+                                                                                fetch(`/api/videos/delete`, {
+                                                                                    method: 'DELETE',
+                                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                                    body: JSON.stringify({ fileName: video.filename })
                                                                                 })
-                                                                                .catch(err => {
-                                                                                    console.error('Delete failed:', err);
-                                                                                    alert('เกิดข้อผิดพลาดในการลบวิดีโอ');
-                                                                                });
-                                                                        }
-                                                                    }}
-                                                                    className="absolute top-2 right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 opacity-0 group-hover:opacity-100 z-10"
-                                                                >
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                        <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
-                                                                    </svg>
-                                                                </button>
-                                                            </div>
-                                                            {mediaPreview === video.url && (
-                                                                <div className="absolute inset-0 bg-purple-500/20 flex items-center justify-center">
-                                                                    <CheckCircle className="w-8 h-8 text-white drop-shadow-lg" />
+                                                                                    .then(res => res.json())
+                                                                                    .then(data => {
+                                                                                        if (data.success) {
+                                                                                            // Remove from library list
+                                                                                            setLibraryVideos(prev => prev.filter(v => v.id !== video.id));
+                                                                                            console.log('✅ Video deleted successfully');
+                                                                                        } else {
+                                                                                            console.error('Delete failed:', data.error);
+                                                                                            alert(data.error || 'Failed to delete video');
+                                                                                        }
+                                                                                    })
+                                                                                    .catch(err => {
+                                                                                        console.error('Delete failed:', err);
+                                                                                        alert('Error deleting video');
+                                                                                    });
+                                                                            }
+                                                                        }}
+                                                                        className="absolute top-2 right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 opacity-0 group-hover:opacity-100 z-10"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                            <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
+                                                                        </svg>
+                                                                    </button>
                                                                 </div>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                                {mediaPreview === video.url && (
+                                                                    <div className="absolute inset-0 bg-purple-500/20 flex items-center justify-center">
+                                                                        <CheckCircle className="w-8 h-8 text-white drop-shadow-lg" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </TabsContent>
+                                    </Tabs>
                                 </div>
 
                                 {/* Thumbnail Selector */}
                                 {(mediaFile?.type.startsWith('video') || (!mediaFile && mediaPreview && mediaPreview.includes('/api/'))) && (
                                     <div className="space-y-4">
-                                        <Label className="text-lg font-semibold">เลือกภาพปก (Thumbnail)</Label>
+                                        <Label className="text-lg font-semibold">Select Thumbnail</Label>
                                         <div className={`grid ${isVerticalVideo ? 'grid-cols-6 auto-rows-min' : 'grid-cols-3'} gap-4 p-4 bg-gray-50 border-2 rounded-2xl h-72 overflow-y-auto`}>
                                             {autoThumbnails.map((thumb, idx) => (
                                                 <div
@@ -734,10 +724,10 @@ export default function AutomationCampaignsV2Page() {
                                                     {generatingThumbs ? (
                                                         <>
                                                             <Loader2 className="w-8 h-8 animate-spin mb-2" />
-                                                            <span>กำลังสร้างภาพตัวอย่าง...</span>
+                                                            <span>Generating thumbnails...</span>
                                                         </>
                                                     ) : (
-                                                        <span>กำลังโหลดวิดีโอ...</span>
+                                                        <span>Loading video...</span>
                                                     )}
                                                 </div>
                                             )}
@@ -751,7 +741,7 @@ export default function AutomationCampaignsV2Page() {
                                                 disabled={!videoRef.current}
                                             >
                                                 <Wand2 className="w-4 h-4 mr-2" />
-                                                จับภาพจากเฟรม
+                                                Capture from Frame
                                             </Button>
                                             <Button
                                                 variant="outline"
@@ -759,7 +749,7 @@ export default function AutomationCampaignsV2Page() {
                                                 className="w-full"
                                             >
                                                 <Upload className="w-4 h-4 mr-2" />
-                                                อัปโหลดรูปเอง
+                                                Upload Custom Image
                                             </Button>
                                         </div>
                                         <input
@@ -783,7 +773,7 @@ export default function AutomationCampaignsV2Page() {
                                     size="lg"
                                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                                 >
-                                    ถัดไป: ตั้งค่า AI
+                                    Next: AI Configuration
                                     <ChevronRight className="w-5 h-5 ml-2" />
                                 </Button>
                             </div>
@@ -798,45 +788,45 @@ export default function AutomationCampaignsV2Page() {
                         <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Sparkles className="w-6 h-6 text-purple-600" />
-                                ขั้นตอนที่ 2: ตั้งค่าการวิเคราะห์ AI
+                                Step 2: AI Configuration
                             </CardTitle>
-                            <CardDescription>ให้ข้อมูลเพิ่มเติมเพื่อให้ AI วิเคราะห์ได้แม่นยำ</CardDescription>
+                            <CardDescription>Provide details for better AI analysis.</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
                             <div className="space-y-2">
                                 <Label htmlFor="context" className="text-base font-semibold">
-                                    บริบทสินค้า/บริการ (ไม่บังคับ)
+                                    Product/Service Context (Optional)
                                 </Label>
                                 <Textarea
                                     id="context"
-                                    placeholder="เช่น 'รถยนต์ไฟฟ้า Tesla Model 3 สำหรับคนรุ่นใหม่' หรือ 'ครีมบำรุงผิวสำหรับผู้หญิงวัย 40+'"
+                                    placeholder="e.g. 'Tesla Model 3 for modern lifestyle' or 'Anti-aging cream for women 40+'"
                                     value={productContext}
                                     onChange={e => setProductContext(e.target.value)}
                                     className="h-32 text-base"
                                 />
                                 <p className="text-sm text-gray-500">
-                                    💡 ยิ่งให้รายละเอียดมาก AI จะยิ่งสร้างเนื้อหาที่ตรงกับสินค้าของคุณมากขึ้น
+                                    💡 More details help AI generate better content.
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <Label className="text-base font-semibold">จำนวนกลุ่มเป้าหมาย</Label>
+                                    <Label className="text-base font-semibold">Number of Ad Sets</Label>
                                     <Select value={adSetCount.toString()} onValueChange={v => setAdSetCount(parseInt(v))}>
                                         <SelectTrigger className="text-base">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="1">1 กลุ่ม</SelectItem>
-                                            <SelectItem value="3">3 กลุ่ม (แนะนำ)</SelectItem>
-                                            <SelectItem value="5">5 กลุ่ม</SelectItem>
-                                            <SelectItem value="7">7 กลุ่ม</SelectItem>
+                                            <SelectItem value="1">1 Set</SelectItem>
+                                            <SelectItem value="3">3 Sets (Recommended)</SelectItem>
+                                            <SelectItem value="5">5 Sets</SelectItem>
+                                            <SelectItem value="7">7 Sets</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label className="text-base font-semibold">แพลตฟอร์ม</Label>
+                                    <Label className="text-base font-semibold">Platforms</Label>
                                     <div className="flex gap-4 pt-2">
                                         {[
                                             { id: 'facebook', label: 'Facebook', icon: Facebook },
@@ -870,7 +860,7 @@ export default function AutomationCampaignsV2Page() {
                             <div className="flex justify-between">
                                 <Button variant="outline" onClick={() => setStep(1)} size="lg">
                                     <ChevronLeft className="w-5 h-5 mr-2" />
-                                    ย้อนกลับ
+                                    Back
                                 </Button>
                                 <Button
                                     onClick={runAIAnalysis}
@@ -881,12 +871,12 @@ export default function AutomationCampaignsV2Page() {
                                     {analyzing ? (
                                         <>
                                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                            กำลังวิเคราะห์...
+                                            Analyzing...
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles className="w-5 h-5 mr-2" />
-                                            เริ่มวิเคราะห์ด้วย AI
+                                            Start AI Analysis
                                         </>
                                     )}
                                 </Button>
@@ -902,9 +892,9 @@ export default function AutomationCampaignsV2Page() {
                             <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
                                 <CardTitle className="flex items-center gap-2 text-2xl">
                                     <Eye className="w-6 h-6 text-green-600" />
-                                    ขั้นตอนที่ 3: รีวิวและแก้ไขผลลัพธ์
+                                    Step 3: Review & Edit Results
                                 </CardTitle>
-                                <CardDescription>ตรวจสอบและปรับแต่งเนื้อหาที่ AI สร้างให้ หรือกดสุ่มใหม่</CardDescription>
+                                <CardDescription>Review and fine-tune AI-generated content or regenerate.</CardDescription>
                             </CardHeader>
                             <CardContent className="pt-6 space-y-8 max-h-[600px] overflow-y-auto">
                                 {/* Ad Copy Variations */}
@@ -912,7 +902,7 @@ export default function AutomationCampaignsV2Page() {
                                     <div className="flex items-center justify-between">
                                         <Label className="text-lg font-semibold flex items-center gap-2">
                                             <Wand2 className="w-5 h-5 text-purple-600" />
-                                            แคปชั่นโฆษณา
+                                            Ad Captions
                                         </Label>
                                         <Button
                                             variant="outline"
@@ -921,7 +911,7 @@ export default function AutomationCampaignsV2Page() {
                                             disabled={loading}
                                         >
                                             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                                            สุ่มใหม่
+                                            Regenerate
                                         </Button>
                                     </div>
 
@@ -935,7 +925,7 @@ export default function AutomationCampaignsV2Page() {
                                                 size="sm"
                                                 className={selectedCopyIndex === idx ? 'bg-gradient-to-r from-blue-600 to-purple-600' : ''}
                                             >
-                                                แคปชั่น {idx + 1}
+                                                Caption {idx + 1}
                                             </Button>
                                         ))}
                                     </div>
@@ -943,7 +933,7 @@ export default function AutomationCampaignsV2Page() {
                                     {/* Selected Caption Editor */}
                                     <div className="space-y-4 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-100">
                                         <div className="space-y-2">
-                                            <Label className="font-semibold">หัวข้อ (Headline)</Label>
+                                            <Label className="font-semibold">Headline</Label>
                                             <Input
                                                 value={editedCaptions[selectedCopyIndex]?.headline || ''}
                                                 onChange={(e) => {
@@ -955,7 +945,7 @@ export default function AutomationCampaignsV2Page() {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="font-semibold">ข้อความหลัก (Primary Text)</Label>
+                                            <Label className="font-semibold">Primary Text</Label>
                                             <Textarea
                                                 value={editedCaptions[selectedCopyIndex]?.primaryText || ''}
                                                 onChange={(e) => {
@@ -976,7 +966,7 @@ export default function AutomationCampaignsV2Page() {
                                     <div className="flex items-center justify-between">
                                         <Label className="text-lg font-semibold flex items-center gap-2">
                                             <Target className="w-5 h-5 text-green-600" />
-                                            กลุ่มเป้าหมาย ({editedTargeting.length} กลุ่ม)
+                                            Target Audience ({editedTargeting.length} Groups)
                                         </Label>
                                         <Button
                                             variant="outline"
@@ -985,7 +975,7 @@ export default function AutomationCampaignsV2Page() {
                                             disabled={loading}
                                         >
                                             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                                            สุ่มใหม่
+                                            Regenerate
                                         </Button>
                                     </div>
 
@@ -993,7 +983,7 @@ export default function AutomationCampaignsV2Page() {
                                         {editedTargeting.map((group, idx) => (
                                             <div key={idx} className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-100">
                                                 <div className="font-semibold text-green-900 mb-2 flex items-center gap-2">
-                                                    <Badge variant="outline" className="bg-white">กลุ่ม {idx + 1}</Badge>
+                                                    <Badge variant="outline" className="bg-white">Group {idx + 1}</Badge>
                                                     {group.name}
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5">
@@ -1015,7 +1005,7 @@ export default function AutomationCampaignsV2Page() {
                                     <div className="flex items-center justify-between">
                                         <Label className="text-lg font-semibold flex items-center gap-2">
                                             <MessageCircle className="w-5 h-5 text-blue-600" />
-                                            ข้อความตอบกลับอัตโนมัติ (Ice Breakers)
+                                            Ice Breakers (Auto-reply)
                                         </Label>
                                         <Button
                                             variant="outline"
@@ -1024,7 +1014,7 @@ export default function AutomationCampaignsV2Page() {
                                             disabled={loading}
                                         >
                                             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                                            สุ่มใหม่
+                                            Regenerate
                                         </Button>
                                     </div>
 
@@ -1047,12 +1037,12 @@ export default function AutomationCampaignsV2Page() {
                                 {aiResult.productCategory && (
                                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                                         <div>
-                                            <span className="text-sm text-gray-600">หมวดหมู่สินค้า:</span>
+                                            <span className="text-sm text-gray-600">Product Category:</span>
                                             <Badge className="ml-2 bg-purple-600">{aiResult.productCategory}</Badge>
                                         </div>
                                         {aiResult.confidence && (
                                             <div>
-                                                <span className="text-sm text-gray-600">ความมั่นใจ:</span>
+                                                <span className="text-sm text-gray-600">Confidence:</span>
                                                 <Badge className="ml-2 bg-green-600">
                                                     {Math.round(aiResult.confidence * 100)}%
                                                 </Badge>
@@ -1065,14 +1055,14 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="flex justify-between pt-4">
                                     <Button variant="outline" onClick={() => setStep(2)} size="lg">
                                         <ChevronLeft className="w-5 h-5 mr-2" />
-                                        ย้อนกลับ
+                                        Back
                                     </Button>
                                     <Button
                                         onClick={() => setStep(4)}
                                         size="lg"
                                         className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                                     >
-                                        ถัดไป: ตั้งค่าการเผยแพร่
+                                        Next: Launch Settings
                                         <ChevronRight className="w-5 h-5 ml-2" />
                                     </Button>
                                 </div>
@@ -1087,9 +1077,9 @@ export default function AutomationCampaignsV2Page() {
                         <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50">
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Rocket className="w-6 h-6 text-orange-600" />
-                                ขั้นตอนที่ 4: เผยแพร่แคมเปญ
+                                Step 4: Launch Campaign
                             </CardTitle>
-                            <CardDescription>ตั้งค่าสุดท้ายและเผยแพร่แคมเปญของคุณ</CardDescription>
+                            <CardDescription>Finalize settings and launch your campaign.</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6 max-h-[600px] overflow-y-auto">
                             {/* Ad Account & Page Selection */}
@@ -1097,11 +1087,11 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <Facebook className="w-4 h-4 text-blue-600" />
-                                        บัญชีโฆษณา
+                                        Ad Account
                                     </Label>
                                     <Select value={selectedAdAccount} onValueChange={setSelectedAdAccount}>
                                         <SelectTrigger className="text-base">
-                                            <SelectValue placeholder="เลือกบัญชีโฆษณา" />
+                                            <SelectValue placeholder="Select Ad Account" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {adAccounts.map(acc => (
@@ -1116,11 +1106,11 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <Facebook className="w-4 h-4 text-blue-600" />
-                                        เพจ Facebook
+                                        Facebook Page
                                     </Label>
                                     <Select value={selectedPage} onValueChange={setSelectedPage}>
                                         <SelectTrigger className="text-base">
-                                            <SelectValue placeholder="เลือกเพจ" />
+                                            <SelectValue placeholder="Select Page" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {pages.map(page => (
@@ -1140,7 +1130,7 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <Target className="w-4 h-4 text-green-600" />
-                                        วัตถุประสงค์แคมเปญ
+                                        Campaign Objective
                                     </Label>
                                     <Select value={objective} onValueChange={setObjective}>
                                         <SelectTrigger className="text-base">
@@ -1148,13 +1138,13 @@ export default function AutomationCampaignsV2Page() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="OUTCOME_ENGAGEMENT">
-                                                💬 Engagement (ข้อความ)
+                                                💬 Engagement (Messages)
                                             </SelectItem>
                                             <SelectItem value="OUTCOME_TRAFFIC">
-                                                🔗 Traffic (คลิกลิงก์)
+                                                🔗 Traffic (Link Clicks)
                                             </SelectItem>
                                             <SelectItem value="OUTCOME_SALES">
-                                                💰 Sales (การขาย)
+                                                💰 Sales (Conversions)
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -1163,7 +1153,7 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <DollarSign className="w-4 h-4 text-green-600" />
-                                        งบประมาณรายวัน (บาท)
+                                        Daily Budget (THB)
                                     </Label>
                                     <Input
                                         type="number"
@@ -1174,7 +1164,7 @@ export default function AutomationCampaignsV2Page() {
                                         step="50"
                                     />
                                     <p className="text-xs text-gray-500">
-                                        ขั้นต่ำ 100 บาท/วัน
+                                        Min 100 THB/day
                                     </p>
                                 </div>
                             </div>
@@ -1185,27 +1175,27 @@ export default function AutomationCampaignsV2Page() {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
-                                        🌍 ประเทศเป้าหมาย
+                                        🌍 Target Country
                                     </Label>
                                     <Select value={targetCountry} onValueChange={setTargetCountry}>
                                         <SelectTrigger className="text-base">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="TH">🇹🇭 ไทย (Thailand)</SelectItem>
-                                            <SelectItem value="US">🇺🇸 สหรัฐอเมริกา (USA)</SelectItem>
-                                            <SelectItem value="GB">🇬🇧 สหราชอาณาจักร (UK)</SelectItem>
-                                            <SelectItem value="JP">🇯🇵 ญี่ปุ่น (Japan)</SelectItem>
-                                            <SelectItem value="SG">🇸🇬 สิงคโปร์ (Singapore)</SelectItem>
-                                            <SelectItem value="MY">🇲🇾 มาเลเซีย (Malaysia)</SelectItem>
-                                            <SelectItem value="VN">🇻🇳 เวียดนาม (Vietnam)</SelectItem>
+                                            <SelectItem value="TH">🇹🇭 Thailand</SelectItem>
+                                            <SelectItem value="US">🇺🇸 USA</SelectItem>
+                                            <SelectItem value="GB">🇬🇧 UK</SelectItem>
+                                            <SelectItem value="JP">🇯🇵 Japan</SelectItem>
+                                            <SelectItem value="SG">🇸🇬 Singapore</SelectItem>
+                                            <SelectItem value="MY">🇲🇾 Malaysia</SelectItem>
+                                            <SelectItem value="VN">🇻🇳 Vietnam</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
-                                        👤 อายุขั้นต่ำ
+                                        👤 Min Age
                                     </Label>
                                     <Select value={ageMin} onValueChange={setAgeMin}>
                                         <SelectTrigger className="text-base">
@@ -1214,7 +1204,7 @@ export default function AutomationCampaignsV2Page() {
                                         <SelectContent>
                                             {Array.from({ length: 48 }, (_, i) => i + 18).map(age => (
                                                 <SelectItem key={age} value={age.toString()}>
-                                                    {age} ปี
+                                                    {age} Years
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1223,7 +1213,7 @@ export default function AutomationCampaignsV2Page() {
 
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
-                                        👤 อายุสูงสุด
+                                        👤 Max Age
                                     </Label>
                                     <Select value={ageMax} onValueChange={setAgeMax}>
                                         <SelectTrigger className="text-base">
@@ -1232,7 +1222,7 @@ export default function AutomationCampaignsV2Page() {
                                         <SelectContent>
                                             {Array.from({ length: 48 }, (_, i) => i + 18).map(age => (
                                                 <SelectItem key={age} value={age.toString()}>
-                                                    {age} ปี
+                                                    {age} Years
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1244,7 +1234,7 @@ export default function AutomationCampaignsV2Page() {
 
                             {/* Placements */}
                             <div className="space-y-3">
-                                <Label className="text-base font-semibold">แพลตฟอร์มที่จะแสดงโฆษณา</Label>
+                                <Label className="text-base font-semibold">Ad Placements</Label>
                                 <div className="flex flex-wrap gap-4">
                                     {[
                                         { id: 'facebook', label: 'Facebook', icon: Facebook, color: 'blue' },
@@ -1298,10 +1288,10 @@ export default function AutomationCampaignsV2Page() {
                                     <div>
                                         <Label htmlFor="saveDraft" className="font-semibold cursor-pointer flex items-center gap-2">
                                             <Save className="w-4 h-4" />
-                                            บันทึกเป็นฉบับร่าง
+                                            Save as Draft
                                         </Label>
                                         <p className="text-sm text-gray-600 mt-1">
-                                            บันทึกโดยไม่เผยแพร่ทันที สามารถกลับมาแก้ไขและเผยแพร่ภายหลังได้
+                                            Save without launching immediately. You can edit and launch later.
                                         </p>
                                     </div>
                                 </div>
@@ -1309,16 +1299,16 @@ export default function AutomationCampaignsV2Page() {
 
                             {/* Summary */}
                             <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-                                <h4 className="font-semibold text-gray-900">สรุปแคมเปญ</h4>
+                                <h4 className="font-semibold text-gray-900">Campaign Summary</h4>
                                 <div className="grid grid-cols-2 gap-2 text-sm">
-                                    <div className="text-gray-600">แพลตฟอร์ม:</div>
+                                    <div className="text-gray-600">Platforms:</div>
                                     <div className="font-medium">{selectedPlatforms.join(', ')}</div>
-                                    <div className="text-gray-600">งบประมาณ:</div>
-                                    <div className="font-medium">{dailyBudget} บาท/วัน</div>
-                                    <div className="text-gray-600">กลุ่มเป้าหมาย:</div>
-                                    <div className="font-medium">{editedTargeting.length} กลุ่ม</div>
-                                    <div className="text-gray-600">แคปชั่น:</div>
-                                    <div className="font-medium">{editedCaptions.length} รูปแบบ</div>
+                                    <div className="text-gray-600">Budget:</div>
+                                    <div className="font-medium">{dailyBudget} THB/day</div>
+                                    <div className="text-gray-600">Targeting:</div>
+                                    <div className="font-medium">{editedTargeting.length} Groups</div>
+                                    <div className="text-gray-600">Captions:</div>
+                                    <div className="font-medium">{editedCaptions.length} Variations</div>
                                 </div>
                             </div>
 
@@ -1326,7 +1316,7 @@ export default function AutomationCampaignsV2Page() {
                             <div className="flex justify-between pt-4">
                                 <Button variant="outline" onClick={() => setStep(3)} size="lg">
                                     <ChevronLeft className="w-5 h-5 mr-2" />
-                                    ย้อนกลับ
+                                    Back
                                 </Button>
                                 <Button
                                     onClick={launchCampaign}
@@ -1340,17 +1330,17 @@ export default function AutomationCampaignsV2Page() {
                                     {loading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                            กำลังดำเนินการ...
+                                            Launching...
                                         </>
                                     ) : saveDraft ? (
                                         <>
                                             <Save className="w-5 h-5 mr-2" />
-                                            บันทึกฉบับร่าง
+                                            Save Draft
                                         </>
                                     ) : (
                                         <>
                                             <Rocket className="w-5 h-5 mr-2" />
-                                            🚀 เผยแพร่แคมเปญ
+                                            🚀 Launch Campaign
                                         </>
                                     )}
                                 </Button>
