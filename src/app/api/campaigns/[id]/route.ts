@@ -78,8 +78,8 @@ export async function GET(
     }
 
     // Format ads with metrics
-    const ads = campaign.adSets.flatMap((adSet) =>
-      adSet.ads.map((ad) => {
+    const ads = campaign.adSets.flatMap((adSet: any) =>
+      adSet.ads.map((ad: any) => {
         const todayInsight = ad.insights[0];
         return {
           id: ad.id,
@@ -105,7 +105,7 @@ export async function GET(
     );
 
     // Format insights
-    const insights = campaign.insights.map((insight) => ({
+    const insights = campaign.insights.map((insight: any) => ({
       date: insight.date,
       spend: insight.spend,
       messages: insight.messages,
@@ -126,10 +126,10 @@ export async function GET(
       insights,
       summary: {
         totalAds: ads.length,
-        activeAds: ads.filter((ad) => ad.status === 'ACTIVE').length,
-        winners: ads.filter((ad) => ad.isWinner).length,
-        totalSpend: insights.reduce((sum, i) => sum + i.spend, 0),
-        totalMessages: insights.reduce((sum, i) => sum + i.messages, 0),
+        activeAds: ads.filter((ad: any) => ad.status === 'ACTIVE').length,
+        winners: ads.filter((ad: any) => ad.isWinner).length,
+        totalSpend: insights.reduce((sum: number, i: any) => sum + i.spend, 0),
+        totalMessages: insights.reduce((sum: number, i: any) => sum + i.messages, 0),
       },
     });
   } catch (error) {

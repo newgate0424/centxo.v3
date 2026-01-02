@@ -27,14 +27,14 @@ export async function generateSmartTargeting(productContext: string): Promise<Ta
         // Search by name match
         const matches = await prisma.facebookInterest.findMany({
             where: {
-                OR: keywords.map(k => ({
+                OR: keywords.map((k: string) => ({
                     name: { contains: k } // Default mode may satisfy, assuming MySQL case insensitive
                 }))
             },
             take: 20
         });
 
-        selectedInterests = matches.map(m => ({ id: m.fbId, name: m.name }));
+        selectedInterests = matches.map((m: any) => ({ id: m.fbId, name: m.name }));
 
         // 2. If not enough, get random broad interests
         if (selectedInterests.length < 10) {
@@ -49,11 +49,11 @@ export async function generateSmartTargeting(productContext: string): Promise<Ta
                     orderBy: { audienceSizeUpperBound: 'desc' } // Prefer larger audiences
                 });
 
-                const randomMapped = randoms.map(m => ({ id: m.fbId, name: m.name }));
+                const randomMapped = randoms.map((m: any) => ({ id: m.fbId, name: m.name }));
 
                 // Merge unique
-                const existingIds = new Set(selectedInterests.map(i => i.id));
-                randomMapped.forEach(r => {
+                const existingIds = new Set(selectedInterests.map((i: any) => i.id));
+                randomMapped.forEach((r: any) => {
                     if (!existingIds.has(r.id)) {
                         selectedInterests.push(r);
                     }

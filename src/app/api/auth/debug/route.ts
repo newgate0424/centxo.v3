@@ -40,7 +40,7 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       currentSession: {
         email: session.user.email,
         name: session.user.name,
@@ -51,7 +51,7 @@ export async function GET() {
         name: user.name,
         email: user.email,
         createdAt: user.createdAt,
-        accounts: user.accounts.map(acc => ({
+        accounts: user.accounts.map((acc: any) => ({
           id: acc.id,
           provider: acc.provider,
           providerAccountId: acc.providerAccountId,
@@ -65,10 +65,10 @@ export async function GET() {
           pageId: user.metaAccount.pageId,
         } : null,
       },
-      allUsersWithSameEmail: allUsersWithEmail.map(u => ({
+      allUsersWithSameEmail: allUsersWithEmail.map((u: any) => ({
         id: u.id,
         email: u.email,
-        accounts: u.accounts.map(acc => ({
+        accounts: u.accounts.map((acc: any) => ({
           provider: acc.provider,
           userId: acc.userId,
         })),

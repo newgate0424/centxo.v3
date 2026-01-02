@@ -31,16 +31,16 @@ export async function GET() {
 
     // Separate ad accounts and pages
     const adAccounts = metaAccounts
-      .filter(acc => acc.adAccountId)
-      .map(acc => ({
+      .filter((acc: any) => acc.adAccountId)
+      .map((acc: any) => ({
         id: acc.id,
         account_id: acc.adAccountId!,
         name: acc.adAccountName || 'Unknown',
       }));
 
     const pages = metaAccounts
-      .filter(acc => acc.pageId)
-      .map(acc => ({
+      .filter((acc: any) => acc.pageId)
+      .map((acc: any) => ({
         id: acc.pageId!,
         name: acc.pageName || 'Unknown',
       }));

@@ -39,7 +39,7 @@ export async function GET() {
     }
 
     // Format accounts data with actual provider info
-    const accounts = user.accounts.map((account) => ({
+    const accounts = user.accounts.map((account: any) => ({
       id: account.id,
       provider: account.provider,
       email: user.email,
@@ -49,7 +49,7 @@ export async function GET() {
       connectedAt: account.id, // You can add createdAt field if available in schema
     }));
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       accounts,
       user: {
         id: user.id,

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Map to simplified format if needed, or return as is
-        const formatted = interests.map(i => ({
+        const formatted = interests.map((i: any) => ({
             id: i.fbId, // Return FB ID as the main ID for targeting
             name: i.name,
             audience: i.audienceSizeUpperBound ? `~${Number(i.audienceSizeUpperBound).toLocaleString()}` : 'N/A',

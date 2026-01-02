@@ -387,7 +387,7 @@ export async function POST(request: NextRequest) {
             });
 
             const interestSet = new Set<string>();
-            recentAdSets.forEach(adSet => {
+            recentAdSets.forEach((adSet: any) => {
               const targeting = adSet.targeting as any;
               if (targeting?.interests && Array.isArray(targeting.interests)) {
                 targeting.interests.forEach((i: any) => interestSet.add(i.name));
