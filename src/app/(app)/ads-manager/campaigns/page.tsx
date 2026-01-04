@@ -1789,9 +1789,9 @@ export default function CampaignsPage() {
 
                                 const status = getCampaignStatus(campaign, accountMap);
                                 return (
-                                  <div className={`flex items-center gap-2 px-2.5 py-0.5 rounded-full w-fit bg-opacity-10 ${status.color}`}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${status.color}`} />
-                                    <span className={`text-xs font-medium ${status.textColor}`}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${status.color}`} />
+                                    <span className={`text-sm font-medium ${status.textColor}`}>
                                       {status.label}
                                     </span>
                                   </div>
@@ -2173,9 +2173,9 @@ export default function CampaignsPage() {
                               {(() => {
                                 const status = getAdSetStatus(adSet, accountMap);
                                 return (
-                                  <div className={`flex items-center gap-2 px-2.5 py-0.5 rounded-full w-fit bg-opacity-10 ${status.color}`}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${status.color}`} />
-                                    <span className={`text-xs font-medium ${status.textColor}`}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${status.color}`} />
+                                    <span className={`text-sm font-medium ${status.textColor}`}>
                                       {status.label}
                                     </span>
                                   </div>
@@ -2615,9 +2615,9 @@ export default function CampaignsPage() {
                               {(() => {
                                 const status = getAdStatus(ad, accountMap && ad.adAccountId ? accountMap[ad.adAccountId] : undefined);
                                 return (
-                                  <div className={`flex items-center gap-2 px-2.5 py-0.5 rounded-full w-fit bg-opacity-10 ${status.color}`}>
-                                    <div className={`w-1.5 h-1.5 rounded-full ${status.color}`} />
-                                    <span className={`text-xs font-medium ${status.textColor}`}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${status.color}`} />
+                                    <span className={`text-sm font-medium ${status.textColor}`}>
                                       {status.label}
                                     </span>
                                   </div>

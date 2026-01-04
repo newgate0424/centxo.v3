@@ -188,7 +188,7 @@ export function DatePickerWithRange({
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                     <div className="flex">
-                        <div className="border-r p-2 space-y-0.5 w-[140px]">
+                        <div className="border-r p-2 space-y-0.5 w-[165px]">
                             {presets.map((preset) => (
                                 <button
                                     key={preset.label}

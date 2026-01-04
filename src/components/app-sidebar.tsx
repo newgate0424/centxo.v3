@@ -14,7 +14,23 @@ import {
     ChevronDown,
     Layers,
     Target,
+    FileSpreadsheet,
 } from 'lucide-react';
+import {
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -76,6 +92,18 @@ const navStructure: NavGroup[] = [
     {
         items: [
             {
+                name: "Export tools",
+                icon: FileSpreadsheet,
+                translationKey: 'nav.exportTools',
+                children: [
+                    { name: "Export Sheet", href: "/export-tools/export-sheet", icon: FileSpreadsheet, translationKey: 'exportTools.exportSheet', isChild: true },
+                ]
+            }
+        ]
+    },
+    {
+        items: [
+            {
                 name: "Settings",
                 icon: Settings,
                 translationKey: 'nav.settings',
@@ -112,16 +140,18 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
 
     return (
         <div className={cn(
-            "flex flex-col h-full",
+            "flex flex-col h-full overflow-x-hidden",
             "transition-all duration-300 ease-out",
             isCollapsed ? "w-[54px]" : "w-[230px]",
             isMobile ? "bg-background/95 backdrop-blur-xl border-r w-[230px]" : "bg-transparent"
         )}>
             {/* Logo Area */}
-            <div className={cn(
-                "flex items-center h-16 transition-all duration-300",
-                isCollapsed ? "justify-center px-0" : "px-6"
-            )}>
+            <div
+                suppressHydrationWarning
+                className={cn(
+                    "flex items-center h-12 transition-all duration-300",
+                    isCollapsed ? "justify-center px-0" : "px-6"
+                )}>
                 {/* Logo - Text hidden on collapse */}
                 <Link href="/dashboard" className={cn(
                     "flex items-center gap-3 transition-opacity duration-200",
@@ -133,14 +163,16 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
 
                 {/* Logo Icon Only for Collapsed */}
                 {isCollapsed && (
-                    <img src="/centxo-logo.png" alt="Centxo" className="w-10 h-10 rounded-xl" />
+                    <Link href="/dashboard" className="flex items-center justify-center w-full">
+                        <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-xl" />
+                    </Link>
                 )}
             </div>
 
             {/* Navigation */}
             <div className={cn(
-                "flex-1 overflow-y-auto py-4 space-y-6",
-                isCollapsed ? "px-0 pl-2.5" : "px-3"
+                "flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-6",
+                isCollapsed ? "px-0 pl-3.5" : "px-3"
             )}>
                 {navStructure.map((group, groupIndex) => (
                     <div key={groupIndex} className={cn(
@@ -249,10 +281,12 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
             </div>
 
             {/* Footer / User / Collapse Toggle */}
-            <div className={cn(
-                "mt-auto border-t border-border/30",
-                isCollapsed ? "p-2 pl-4.5" : "p-3"
-            )}>
+            <div
+                suppressHydrationWarning
+                className={cn(
+                    "mt-auto border-t border-border/30 mb-6",
+                    isCollapsed ? "pb-2 pl-3.5 pr-0" : "p-3"
+                )}>
                 {!isMobile && (
                     <button
                         onClick={toggleSidebar}
@@ -266,17 +300,37 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                     </button>
                 )}
 
-                <button
-                    onClick={() => signOut({ callbackUrl: "/login" })}
-                    className={cn(
-                        "flex items-center w-full py-2 text-sm font-medium text-destructive/80 hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all",
-                        isCollapsed ? "justify-center px-0" : "px-3 gap-3"
-                    )}
-                    title={isCollapsed ? t('header.logout', 'Log out') : undefined}
-                >
-                    <LogOut className="h-4 w-4" />
-                    {!isCollapsed && <span className="whitespace-nowrap">{t('header.logout', 'Log out')}</span>}
-                </button>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <button
+                            className={cn(
+                                "flex items-center w-full py-2 text-sm font-medium text-destructive/80 hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all",
+                                isCollapsed ? "justify-center px-0" : "px-3 gap-3"
+                            )}
+                            title={isCollapsed ? t('header.logout', 'Log out') : undefined}
+                        >
+                            <LogOut className="h-4 w-4" />
+                            {!isCollapsed && <span className="whitespace-nowrap">{t('header.logout', 'Log out')}</span>}
+                        </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure you want to log out?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                You will be redirected to the login page.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={() => signOut({ callbackUrl: "/login" })}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                Log out
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </div >
     )

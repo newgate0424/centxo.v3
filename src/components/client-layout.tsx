@@ -5,6 +5,8 @@ import AppSidebar from "@/components/app-sidebar"
 import AppHeader from "@/components/app-header"
 import { cn } from "@/lib/utils"
 
+// Force re-compile to clear stash cache
+
 interface ClientLayoutProps {
     children: React.ReactNode
     defaultCollapsed?: boolean
@@ -70,7 +72,10 @@ export default function ClientLayout({ children, defaultCollapsed = false }: Cli
             <div className="flex flex-col flex-1 overflow-hidden relative z-10">
                 <AppHeader onMobileMenuToggle={toggleMobileMenu} />
 
-                <main className="flex-1 overflow-hidden p-0 md:p-2 lg:p-4 pt-0 bg-background">
+                <main
+                    suppressHydrationWarning
+                    className="flex-1 overflow-hidden p-0 md:px-2 md:pb-2 lg:px-4 lg:pb-4 pt-0 bg-background"
+                >
                     <div className="flex-1 h-full overflow-hidden rounded-none md:rounded-2xl border-none md:border border-border bg-card shadow-sm md:mr-2 lg:mr-4">
                         {children}
                     </div>

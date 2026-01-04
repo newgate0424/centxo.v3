@@ -225,3 +225,39 @@ model FacebookInterest {
 
   @@index([name])
 }
+
+model ExportConfig {
+  id                    String   @id @default(cuid())
+  userId                String
+  name                  String
+  spreadsheetUrl        String   @db.Text
+  spreadsheetId         String
+  spreadsheetName       String?
+  sheetName             String
+  dataType              String   // ads, campaigns, adsets, accounts
+  columnMapping         String   @db.Text // JSON string
+  
+  // Auto Export
+  autoExportEnabled     Boolean  @default(false)
+  exportFrequency       String?  // daily, hourly
+  exportHour            Int?
+  exportMinute          Int?
+  exportInterval        Int?     // hours lookback (1, 6, 12, 24)
+  
+  appendMode            Boolean  @default(true)
+  includeDate           Boolean  @default(true)
+  
+  accountIds            String?  @db.Text // JSON string array of account IDs
+  
+  useAdAccountTimezone  Boolean  @default(false)
+  adAccountTimezone     String?  // e.g., "Asia/Bangkok"
+  
+  lastExportAt          DateTime?
+  lastExportStatus      String?  // SUCCESS, FAILED
+  lastExportError       String?  @db.Text
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+}
