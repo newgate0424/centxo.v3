@@ -36,12 +36,6 @@ export default function ClientLayout({ children, defaultCollapsed = false }: Cli
 
     return (
         <div className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/20">
-            {/* Ambient Background Gradient */}
-            <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-                <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px] opacity-50 dark:opacity-20 animate-pulse" style={{ animationDuration: '4s' }} />
-                <div className="absolute top-[20%] -right-[10%] w-[40%] h-[40%] rounded-full bg-accent/30 blur-[100px] opacity-60 dark:opacity-20" />
-            </div>
-
             {/* Mobile Overlay */}
             {isMobileMenuOpen && (
                 <div
@@ -76,8 +70,8 @@ export default function ClientLayout({ children, defaultCollapsed = false }: Cli
             <div className="flex flex-col flex-1 overflow-hidden relative z-10">
                 <AppHeader onMobileMenuToggle={toggleMobileMenu} />
 
-                <main className="flex-1 overflow-hidden p-0 md:p-2 lg:p-4 pt-0">
-                    <div className="flex-1 h-full overflow-hidden rounded-none md:rounded-2xl border-none md:border border-white/20 bg-white/30 dark:bg-black/10 backdrop-blur-sm shadow-sm md:mr-2 lg:mr-4">
+                <main className="flex-1 overflow-hidden p-0 md:p-2 lg:p-4 pt-0 bg-background">
+                    <div className="flex-1 h-full overflow-hidden rounded-none md:rounded-2xl border-none md:border border-border bg-card shadow-sm md:mr-2 lg:mr-4">
                         {children}
                     </div>
                 </main>

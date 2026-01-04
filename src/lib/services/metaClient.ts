@@ -62,7 +62,9 @@ class MetaAPIClient {
     method: 'GET' | 'POST' | 'DELETE' = 'GET',
     data?: any
   ): Promise<any> {
-    const url = `${GRAPH_API_BASE}${endpoint}`;
+    // Ensure endpoint starts with / for proper URL construction
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${GRAPH_API_BASE}${normalizedEndpoint}`;
     const options: RequestInit = {
       method,
       headers: {
@@ -99,6 +101,11 @@ class MetaAPIClient {
     }
 
     return json;
+  }
+
+  // Public method for generic GET requests
+  async get(endpoint: string, params?: any) {
+    return this.makeRequest(endpoint, 'GET', params);
   }
 
   // Get user's ad accounts

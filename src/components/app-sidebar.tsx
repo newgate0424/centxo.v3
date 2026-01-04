@@ -2,7 +2,19 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Menu, Megaphone, Rocket, Sparkles, ChevronRight, ChevronDown, Layers } from "lucide-react"
+import {
+    LayoutDashboard,
+    Settings,
+    LogOut,
+    Menu,
+    Megaphone,
+    Rocket,
+    Sparkles,
+    ChevronRight,
+    ChevronDown,
+    Layers,
+    Target,
+} from 'lucide-react';
 import { useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -37,7 +49,6 @@ type NavGroup = {
 
 const navStructure: NavGroup[] = [
     {
-        label: "Platform",
         items: [
             { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, translationKey: 'nav.dashboard' },
             {
@@ -56,8 +67,8 @@ const navStructure: NavGroup[] = [
                 icon: Megaphone,
                 translationKey: 'nav.adsManager',
                 children: [
-                    { name: "Campaigns", href: "/ads-manager/campaigns", icon: LayoutDashboard, translationKey: 'adsManager.campaigns', isChild: true },
                     { name: "Accounts", href: "/ads-manager/accounts", icon: Megaphone, translationKey: 'adsManager.accounts', isChild: true },
+                    { name: "Campaigns", href: "/ads-manager/campaigns", icon: LayoutDashboard, translationKey: 'adsManager.campaigns', isChild: true },
                 ]
             },
         ]
@@ -103,8 +114,8 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
         <div className={cn(
             "flex flex-col h-full",
             "transition-all duration-300 ease-out",
-            isCollapsed ? "w-16" : "w-64",
-            isMobile ? "bg-background/95 backdrop-blur-xl border-r w-64" : "bg-transparent"
+            isCollapsed ? "w-[54px]" : "w-[230px]",
+            isMobile ? "bg-background/95 backdrop-blur-xl border-r w-[230px]" : "bg-transparent"
         )}>
             {/* Logo Area */}
             <div className={cn(
@@ -127,9 +138,15 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
             </div>
 
             {/* Navigation */}
-            <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+            <div className={cn(
+                "flex-1 overflow-y-auto py-4 space-y-6",
+                isCollapsed ? "px-0 pl-2.5" : "px-3"
+            )}>
                 {navStructure.map((group, groupIndex) => (
-                    <div key={groupIndex} className="space-y-1">
+                    <div key={groupIndex} className={cn(
+                        "space-y-1",
+                        groupIndex > 0 && "pt-6 border-t border-border/30"
+                    )}>
                         {/* Group Label */}
                         {!isCollapsed && group.label && (
                             <h4 className="px-3 text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">
@@ -157,9 +174,12 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                                 )}
                                                 title={isCollapsed ? item.name : undefined}
                                             >
-                                                <div className="flex items-center gap-3">
+                                                <div className={cn(
+                                                    "flex items-center",
+                                                    isCollapsed ? "justify-center" : "gap-3"
+                                                )}>
                                                     <item.icon className={cn("h-4 w-4", isAnyChildActive ? "text-primary" : "text-muted-foreground")} />
-                                                    {!isCollapsed && <span>{t(item.translationKey, item.name)}</span>}
+                                                    {!isCollapsed && <span className="whitespace-nowrap">{t(item.translationKey, item.name)}</span>}
                                                 </div>
                                                 {!isCollapsed && (
                                                     <ChevronRight className={cn(
@@ -180,7 +200,7 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                                                 href={child.href}
                                                                 onClick={onMobileClose}
                                                                 className={cn(
-                                                                    "block py-1.5 px-3 text-sm rounded-md transition-colors",
+                                                                    "block py-1.5 px-3 text-sm rounded-md transition-colors whitespace-nowrap",
                                                                     isActive
                                                                         ? "text-primary font-medium bg-primary/5"
                                                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
@@ -209,22 +229,17 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                             isActive
                                                 ? "bg-primary text-primary-foreground shadow-sm"
                                                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                                            isCollapsed ? "justify-center px-0 w-10 mx-auto" : ""
+                                            isCollapsed && "justify-center px-0"
                                         )}
                                         title={isCollapsed ? item.name : undefined}
                                     >
-                                        <item.icon
-                                            className={cn(
-                                                "h-4 w-4 flex-shrink-0 transition-transform",
-                                                isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground",
-                                                !isCollapsed && "mr-3"
-                                            )}
-                                        />
-                                        {!isCollapsed && (
-                                            <span>
-                                                {t(item.translationKey ?? item.name, item.name)}
-                                            </span>
-                                        )}
+                                        <div className={cn(
+                                            "flex items-center",
+                                            isCollapsed ? "justify-center" : "gap-3"
+                                        )}>
+                                            <item.icon className="h-4 w-4" />
+                                            {!isCollapsed && <span className="whitespace-nowrap">{t(item.translationKey ?? item.name, item.name)}</span>}
+                                        </div>
                                     </Link>
                                 )
                             })}
@@ -234,13 +249,16 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
             </div>
 
             {/* Footer / User / Collapse Toggle */}
-            <div className="p-3 mt-auto border-t border-border/30">
+            <div className={cn(
+                "mt-auto border-t border-border/30",
+                isCollapsed ? "p-2 pl-4.5" : "p-3"
+            )}>
                 {!isMobile && (
                     <button
                         onClick={toggleSidebar}
                         className={cn(
                             "flex items-center justify-center w-full py-2 rounded-lg text-muted-foreground hover:bg-muted/50 transition-colors mb-1",
-                            isCollapsed ? "px-0 w-10 mx-auto" : "px-3"
+                            isCollapsed ? "px-0" : "px-3"
                         )}
                         title={isCollapsed ? "Expand" : "Collapse"}
                     >
@@ -252,14 +270,14 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                     onClick={() => signOut({ callbackUrl: "/login" })}
                     className={cn(
                         "flex items-center w-full py-2 text-sm font-medium text-destructive/80 hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all",
-                        isCollapsed ? "justify-center px-0 w-10 mx-auto" : "px-3"
+                        isCollapsed ? "justify-center px-0" : "px-3 gap-3"
                     )}
                     title={isCollapsed ? t('header.logout', 'Log out') : undefined}
                 >
-                    <LogOut className={cn("h-4 w-4", !isCollapsed && "mr-3")} />
-                    {!isCollapsed && t('header.logout', 'Log out')}
+                    <LogOut className="h-4 w-4" />
+                    {!isCollapsed && <span className="whitespace-nowrap">{t('header.logout', 'Log out')}</span>}
                 </button>
             </div>
-        </div>
+        </div >
     )
 }

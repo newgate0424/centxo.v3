@@ -1519,15 +1519,15 @@ export default function CampaignsPage() {
 
         {/* Tabs */}
         <div className="flex-shrink-0">
-          <div className="border-b border-gray-200 dark:border-zinc-800">
+          <div>
             <nav className="-mb-px flex gap-2">
 
               <button
                 onClick={() => handleTabChange('campaigns')}
                 className={`${activeTab === 'campaigns'
-                  ? 'border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-950 text-primary bg-white dark:bg-zinc-950 -mb-px'
-                  : 'border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
-                  } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center gap-2 rounded-t-lg`}
+                  ? 'border-gray-200 dark:border-zinc-800 border-b-transparent text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900 font-semibold'
+                  : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
+                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
                 <span>{t('campaigns.tabs.campaigns', 'Campaigns')}</span>
                 {selectedCampaignIds.size > 0 && (
@@ -1549,9 +1549,9 @@ export default function CampaignsPage() {
               <button
                 onClick={() => handleTabChange('adsets')}
                 className={`${activeTab === 'adsets'
-                  ? 'border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-950 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-950 -mb-px'
-                  : 'border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
-                  } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center justify-start rounded-t-lg`}
+                  ? 'border-gray-200 dark:border-zinc-800 border-b-transparent text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900 font-semibold'
+                  : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
+                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center justify-start rounded-t-xl -mb-px`}
               >
                 <span className="flex items-center gap-2">
                   {t('campaigns.tabs.adSets', 'Ad sets')}
@@ -1575,9 +1575,9 @@ export default function CampaignsPage() {
               <button
                 onClick={() => handleTabChange('ads')}
                 className={`${activeTab === 'ads'
-                  ? 'border-gray-200 dark:border-zinc-800 border-b-white dark:border-b-zinc-950 text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-950 -mb-px'
-                  : 'border-gray-200 dark:border-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-zinc-800/50'
-                  } w-[250px] py-3 px-3 border font-medium text-sm transition-colors flex items-center justify-start rounded-t-lg`}
+                  ? 'border-gray-200 dark:border-zinc-800 border-b-transparent text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900 font-semibold'
+                  : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
+                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center justify-start rounded-t-xl -mb-px`}
               >
                 <span className="flex items-center gap-2">
                   {t('campaigns.tabs.ads', 'Ads')}
@@ -1607,11 +1607,11 @@ export default function CampaignsPage() {
         {/* Campaigns List */}
         {
           activeTab === 'campaigns' && (
-            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 border-t-0 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
+            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-tr-xl [&>div]:overflow-visible">
+                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
                   <Table className="w-full min-w-max">
-                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-tr-xl">
+                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                       <TableRow>
                         <TableHead className="px-3 py-2 text-center w-12">
                           <div className="flex justify-center">
@@ -2002,9 +2002,9 @@ export default function CampaignsPage() {
         {/* Ad Sets Tab */}
         {
           activeTab === 'adsets' && (
-            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 border-t-0 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
+            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-tr-xl [&>div]:overflow-visible">
+                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
                   <Table className="w-full min-w-max">
                     <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                       <TableRow>
@@ -2387,9 +2387,9 @@ export default function CampaignsPage() {
         {/* Ads Tab */}
         {
           activeTab === 'ads' && (
-            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 border-t-0 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
+            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-tr-xl [&>div]:overflow-visible">
+                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
                   <Table className="w-full min-w-max">
                     <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                       <TableRow>

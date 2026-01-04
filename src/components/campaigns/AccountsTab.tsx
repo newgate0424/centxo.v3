@@ -429,10 +429,10 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
     if (loading && accounts.length === 0) {
         // Show skeleton table instead of centered loading spinner
         return (
-            <div className="bg-white dark:bg-zinc-950 border border-t-0 border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl [&>div]:overflow-visible">
+            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-xl">
+                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
                     <Table className="min-w-max">
-                        <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-t-xl">
+                        <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                             <TableRow>
                                 <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.accountName')}</TableHead>
                                 <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.status')}</TableHead>
@@ -486,10 +486,10 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
 
     return (
         <>
-            <div className="bg-white dark:bg-zinc-950 border border-t-0 border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tl-none rounded-tr-xl rounded-b-lg">
-                <div className="overflow-auto flex-1 border-t border-gray-200 dark:border-zinc-800 rounded-t-xl [&>div]:overflow-visible">
+            <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-xl">
+                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
                     <Table className="min-w-max">
-                        <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 rounded-t-xl">
+                        <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                             <TableRow>
                                 <SortableHeader columnKey="name" label={t('accounts.table.accountName')} align="left" className="max-w-[280px]" />
                                 <SortableHeader columnKey="status" label={t('accounts.table.status')} align="left" className="max-w-[280px]" />
