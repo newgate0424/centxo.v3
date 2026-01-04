@@ -5,11 +5,25 @@ import FacebookProvider from 'next-auth/providers/facebook';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { PrismaClient } from '@prisma/client';
 import { compare } from 'bcryptjs';
+import { createAuditLog } from '@/lib/audit';
 
 const prisma = new PrismaClient();
 
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma),
+
+    events: {
+        async signIn({ user, account, profile, isNewUser }) {
+            await createAuditLog({
+                userId: user.id,
+                action: 'USER_LOGIN',
+                details: {
+                    provider: account?.provider,
+                    isNewUser
+                }
+            });
+        },
+    },
 
     providers: [
         // Email & Password
@@ -43,6 +57,7 @@ export const authOptions: NextAuthOptions = {
                     email: user.email,
                     name: user.name,
                     image: user.image,
+                    role: user.role, // Important: Return role from database
                 };
             },
         }),
@@ -106,6 +121,8 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user, account }) {
             if (user) {
                 token.id = user.id;
+                // Type assertion since user comes from adapter or authorize
+                token.role = (user as any).role || 'USER';
             }
             // Store Facebook access token in JWT
             if (account?.provider === 'facebook' && account?.access_token) {
@@ -117,6 +134,7 @@ export const authOptions: NextAuthOptions = {
         async session({ session, token }) {
             if (session.user) {
                 session.user.id = token.id as string;
+                session.user.role = token.role as string;
             }
             // Pass access token to session
             if (token.accessToken) {

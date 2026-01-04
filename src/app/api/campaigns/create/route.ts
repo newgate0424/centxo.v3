@@ -725,8 +725,18 @@ export async function POST(request: NextRequest) {
     const adSetIds: string[] = [];
     const adIds: string[] = [];
 
+    // ANTI-BOT: Sleep Helper
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+    const getRandomDelay = () => Math.floor(Math.random() * 3000) + 2000; // 2-5 sec
+
     // Step 3: Campaign Loop
     for (let c = 0; c < validCampaignCount; c++) {
+      if (c > 0) {
+        const delay = getRandomDelay();
+        console.log(`⏳ Anti-Bot: Waiting ${delay}ms before next campaign...`);
+        await sleep(delay);
+      }
+
       console.log(`\n--- Processing Campaign ${c + 1}/${validCampaignCount} ---`);
 
       const campaignResponse = await fetch(
@@ -757,6 +767,11 @@ export async function POST(request: NextRequest) {
       const currentCampaignAdSetIds: string[] = [];
 
       for (let s = 0; s < adSetsPerCampaign; s++) {
+        // Anti-Bot Delay between Ad Sets
+        const delay = getRandomDelay();
+        console.log(`⏳ Anti-Bot: Waiting ${delay}ms before creating Ad Set ${s + 1}...`);
+        await sleep(delay);
+
         // Global AdSet Index
         const globalAdSetIndex = (c * adSetsPerCampaign) + s;
 
@@ -851,17 +866,25 @@ export async function POST(request: NextRequest) {
         currentCampaignAdSetIds.push(adSetId);
         console.log(`✓ AdSet ${s + 1} created`);
 
-        // Step 5: Ads Loop (Per Ad Set)
+        // Step 5: Ads Loop
         for (let a = 0; a < adsPerAdSet; a++) {
-          const globalAdIndex = (c * adsPerCampaign) + (s * adsPerAdSet) + a;
+          // Anti-Bot Delay between Ads
+          const adDelay = getRandomDelay();
+          console.log(`⏳ Anti-Bot: Waiting ${adDelay}ms before creating Ad ${a + 1}...`);
+          await sleep(adDelay);
 
-          const adCopyVariation = aiAnalysis.adCopyVariations?.[globalAdIndex % aiAnalysis.adCopyVariations.length] || {
+          // Rotate ad copy variations if available
+          const copyIndex = (c * adSetsPerCampaign * adsPerAdSet + s * adsPerAdSet + a) % (aiAnalysis.adCopyVariations?.length || 1);
+          const adCopyVariation = aiAnalysis.adCopyVariations?.[copyIndex] || {
             primaryText: aiAnalysis.primaryText,
             headline: aiAnalysis.headline,
           };
 
+          console.log(`Creating Ad ${a + 1}/${adsPerAdSet} for AdSet ${adSetId}...`);
+
+          const creativeName = `Ad Creative - ${new Date().getTime()}`; // Unique name
           const creativePayload: any = {
-            name: `Creative - Ad ${a + 1} - ${Date.now()}`,
+            name: creativeName,
             object_story_spec: { page_id: pageId },
             access_token: accessToken,
           };

@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
         id: acc.id,
         name: acc.name,
         account_id: acc.account_id,
-        status: acc.account_status,
+        account_status: acc.account_status,
         disable_reason: acc.disable_reason,
         currency: acc.currency,
         spend_cap: acc.spend_cap ? parseFloat(acc.spend_cap) / 100 : null,

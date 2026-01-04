@@ -31,7 +31,7 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 import { cn } from "@/lib/utils"
 import { signOut } from "next-auth/react"
@@ -73,9 +73,7 @@ const navStructure: NavGroup[] = [
                 translationKey: 'nav.campaigns',
                 children: [
                     { name: "Automation (V2)", href: "/automation-campaignsv2", icon: Sparkles, translationKey: 'nav.automationV2', isChild: true },
-                    { name: "Automation (Legacy)", href: "/automation-campaigns", icon: Sparkles, translationKey: 'nav.automation', isChild: true },
                     { name: "Launch Wizard", href: "/launch-new", icon: Rocket, translationKey: 'nav.launchNew', isChild: true },
-                    { name: "Classic Launch", href: "/launch", icon: Rocket, translationKey: 'nav.launchOriginal', isChild: true },
                 ]
             },
             {
@@ -85,35 +83,9 @@ const navStructure: NavGroup[] = [
                 children: [
                     { name: "Accounts", href: "/ads-manager/accounts", icon: Megaphone, translationKey: 'adsManager.accounts', isChild: true },
                     { name: "Campaigns", href: "/ads-manager/campaigns", icon: LayoutDashboard, translationKey: 'adsManager.campaigns', isChild: true },
+                    { name: "Super Target", href: "/ads-manager/super-target", icon: Target, translationKey: 'adsManager.superTarget', isChild: true },
                 ]
             },
-        ]
-    },
-    {
-        items: [
-            {
-                name: "Export tools",
-                icon: FileSpreadsheet,
-                translationKey: 'nav.exportTools',
-                children: [
-                    { name: "Export Sheet", href: "/export-tools/export-sheet", icon: FileSpreadsheet, translationKey: 'exportTools.exportSheet', isChild: true },
-                ]
-            }
-        ]
-    },
-    {
-        items: [
-            {
-                name: "Settings",
-                icon: Settings,
-                translationKey: 'nav.settings',
-                children: [
-                    { name: "General", href: "/settings/general", icon: Settings, translationKey: 'settings.general', isChild: true },
-                    { name: "Ad Accounts", href: "/settings/ad-accounts", icon: Megaphone, translationKey: 'settings.adAccounts', isChild: true },
-                    { name: "Billing", href: "/settings/billing", icon: Settings, translationKey: 'settings.billing', isChild: true },
-                    { name: "Integrations", href: "/settings/integrations", icon: Sparkles, translationKey: 'settings.integrations', isChild: true },
-                ]
-            }
         ]
     }
 ]
@@ -130,12 +102,32 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
         "Campaigns": true
     })
 
+    // Load state from local storage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem('sidebarOpenGroups')
+        if (saved) {
+            try {
+                setOpenGroups(JSON.parse(saved))
+            } catch (e) {
+                console.error("Failed to parse sidebar state", e)
+            }
+        }
+    }, [])
+
     const toggleGroup = (groupName: string) => {
         if (isCollapsed) return // Don't toggle in collapsed mode
-        setOpenGroups(prev => ({
-            ...prev,
-            [groupName]: !prev[groupName]
-        }))
+        setOpenGroups(prev => {
+            const newState = {
+                ...prev,
+                [groupName]: !prev[groupName]
+            }
+            try {
+                localStorage.setItem('sidebarOpenGroups', JSON.stringify(newState))
+            } catch (e) {
+                // Ignore write errors
+            }
+            return newState
+        })
     }
 
     return (

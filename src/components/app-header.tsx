@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -17,6 +18,7 @@ import { Menu, Settings, LogOut, Sparkles } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { useLanguage } from "@/contexts/LanguageContext"
+import { SettingsDialog } from "@/components/settings-dialog"
 
 interface AppHeaderProps {
     onMobileMenuToggle?: () => void
@@ -26,6 +28,7 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
     const { data: session } = useSession()
     const { t, language } = useLanguage()
     const user = session?.user
+    const [settingsOpen, setSettingsOpen] = useState(false)
 
     return (
         <header className="flex items-center justify-between h-16 px-4 md:px-8 z-20 relative">
@@ -85,11 +88,12 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
                             </Link>
                         </DropdownMenuItem>
 
-                        <DropdownMenuItem asChild className="rounded-lg cursor-pointer focus:bg-primary/10 focus:text-primary">
-                            <Link href="/settings" className="flex items-center w-full py-2">
-                                <Settings className="mr-2 h-4 w-4" />
-                                <span>{t('header.settings', 'Settings')}</span>
-                            </Link>
+                        <DropdownMenuItem
+                            onClick={() => setSettingsOpen(true)}
+                            className="rounded-lg cursor-pointer focus:bg-primary/10 focus:text-primary"
+                        >
+                            <Settings className="mr-2 h-4 w-4" />
+                            <span>{t('header.settings', 'Settings')}</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-border/50" />
                         <DropdownMenuItem
@@ -102,6 +106,8 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
+
+            <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         </header >
     )
 }

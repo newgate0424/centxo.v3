@@ -147,7 +147,7 @@ export function ConfigForm() {
                         </div>
 
                         {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,200px] gap-3 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
+                        <div className="grid grid-cols-[auto,1fr,200px,120px] gap-3 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
                             <Checkbox
                                 checked={allAccountsSelected}
                                 onCheckedChange={toggleAllAccounts}
@@ -155,6 +155,7 @@ export function ConfigForm() {
                             />
                             <span>Name</span>
                             <span>ID</span>
+                            <span>Status</span>
                         </div>
 
                         <ScrollArea className="h-[400px] border rounded-b-md">
@@ -169,11 +170,34 @@ export function ConfigForm() {
                                 <div className="divide-y">
                                     {filteredAccounts.map((account) => {
                                         const isSelected = selectedAccounts.some(acc => acc.id === account.id);
+
+                                        // Determine status
+                                        const getStatusInfo = (status?: number) => {
+                                            switch (status) {
+                                                case 1:
+                                                    return { label: 'Active', color: 'bg-green-500' };
+                                                case 2:
+                                                    return { label: 'Disabled', color: 'bg-red-500' };
+                                                case 3:
+                                                    return { label: 'Unsettled', color: 'bg-red-500' };
+                                                case 7:
+                                                    return { label: 'Pending Risk Review', color: 'bg-yellow-500' };
+                                                case 100:
+                                                    return { label: 'Pending Closure', color: 'bg-orange-500' };
+                                                case 101:
+                                                    return { label: 'Closed', color: 'bg-gray-400' };
+                                                default:
+                                                    return { label: 'Unknown', color: 'bg-gray-300' };
+                                            }
+                                        };
+
+                                        const statusInfo = getStatusInfo(account.account_status);
+
                                         return (
                                             <div
                                                 key={account.id}
                                                 onClick={() => toggleAccount(account)}
-                                                className="grid grid-cols-[auto,1fr,200px] gap-3 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                className="grid grid-cols-[auto,1fr,200px,120px] gap-3 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                             >
                                                 <Checkbox
                                                     checked={isSelected}
@@ -181,6 +205,13 @@ export function ConfigForm() {
                                                 />
                                                 <span className="font-medium text-sm truncate">{account.name}</span>
                                                 <span className="text-sm text-muted-foreground truncate">{account.account_id}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`w-2 h-2 rounded-full ${statusInfo.color || 'bg-gray-400'
+                                                        }`} />
+                                                    <span className="text-sm text-foreground">
+                                                        {statusInfo.label}
+                                                    </span>
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -269,7 +300,17 @@ export function ConfigForm() {
                                                 <span className="font-medium text-sm truncate">{page.name}</span>
                                                 <span className="text-sm text-muted-foreground truncate">{page.id}</span>
                                                 <div onClick={(e) => e.stopPropagation()}>
-                                                    {getStatusBadge()}
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={`w-2 h-2 rounded-full ${status === 'ACTIVE' ? 'bg-green-500' :
+                                                            status === 'RESTRICTED' ? 'bg-red-500' :
+                                                                status === 'UNPUBLISHED' ? 'bg-gray-400' : 'bg-gray-400'
+                                                            }`} />
+                                                        <span className="text-sm text-foreground">
+                                                            {status === 'ACTIVE' ? 'Active' :
+                                                                status === 'RESTRICTED' ? 'Restricted' :
+                                                                    status === 'UNPUBLISHED' ? 'Unpublished' : status}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );

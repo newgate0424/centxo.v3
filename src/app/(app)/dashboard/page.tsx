@@ -196,7 +196,7 @@ export default function DashboardPage() {
             setDate={setDateRange}
           />
 
-          <Link href="/launch">
+          <Link href="/launch-new">
             <Button className="w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow">
               <Zap className="mr-2 h-4 w-4" />
               New Campaign
@@ -355,7 +355,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground mt-1 mb-4">
                     Launch your first AI-powered ad campaign.
                   </p>
-                  <Link href="/launch">
+                  <Link href="/launch-new">
                     <Button size="sm">Create Campaign</Button>
                   </Link>
                 </div>

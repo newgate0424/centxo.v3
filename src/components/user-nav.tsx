@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Avatar,
   AvatarFallback,
@@ -18,10 +19,13 @@ import {
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SettingsDialog } from "./settings-dialog";
 
+// Force rebuild - Settings Dialog Integration
 export function UserNav() {
   const { data: session } = useSession();
   const router = useRouter();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleLogout = async () => {
     // Clear all localStorage data before logout
@@ -50,42 +54,44 @@ export function UserNav() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-10 w-10">
-            <AvatarImage src={session.user.image || ''} alt={session.user.name || 'User'} />
-            <AvatarFallback>{getInitials(session.user.name)}</AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{session.user.name || 'No name'}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {session.user.email || 'No email'}
-            </p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <Link href="/dashboard">
-            <DropdownMenuItem>
-              Dashboard
-            </DropdownMenuItem>
-          </Link>
-          <Link href="/settings">
-            <DropdownMenuItem>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={session.user.image || ''} alt={session.user.name || 'User'} />
+              <AvatarFallback>{getInitials(session.user.name)}</AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{session.user.name || 'No name'}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {session.user.email || 'No email'}
+              </p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <Link href="/dashboard">
+              <DropdownMenuItem>
+                Dashboard
+              </DropdownMenuItem>
+            </Link>
+            <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
               Settings
             </DropdownMenuItem>
-          </Link>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout}>
-          Log out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleLogout}>
+            Log out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   );
 }

@@ -36,6 +36,8 @@ import {
 // Original code used Tabs?
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Image from "next/image"
+import { translations } from "./export-feature-translations"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 export interface ExportConfig {
     id?: string
@@ -73,50 +75,70 @@ interface GoogleSheetsConfigContentProps {
 }
 
 // Available data columns based on data type
-const getAvailableColumns = (dataType: string) => {
+const getAvailableColumns = (dataType: string, lang: 'th' | 'en') => {
+    const t = translations[lang]
     const commonColumns = [
-        { key: 'index', label: '#' },
-        { key: 'name', label: 'ชื่อ' },
-        { key: 'id', label: 'ID' },
+        { key: 'index', label: t.col_index },
+        { key: 'name', label: t.col_name },
+        { key: 'id', label: t.col_id },
     ]
 
     if (dataType === 'accounts') {
         return [
             ...commonColumns,
-            { key: 'status', label: 'สถานะ' },
-            { key: 'activeAdsCount', label: 'จำนวนโฆษณา' },
-            { key: 'spendCap', label: 'Spending Cap' },
-            { key: 'paymentMethod', label: 'วิธีชำระเงิน' },
-            { key: 'timezone', label: 'Timezone' },
-            { key: 'country', label: 'ประเทศ' },
-            { key: 'currency', label: 'สกุลเงิน' },
+            { key: 'status', label: t.col_status },
+            { key: 'activeAdsCount', label: t.col_active_ads },
+            { key: 'spendCap', label: t.col_spend_cap },
+            { key: 'paymentMethod', label: t.col_payment_method },
+            { key: 'timezone', label: t.col_timezone },
+            { key: 'country', label: t.col_country },
+            { key: 'currency', label: t.col_currency },
         ]
     }
 
     return [
         ...commonColumns,
-        { key: 'status', label: 'สถานะ' },
-        { key: 'delivery', label: 'Delivery' },
-        { key: 'results', label: 'Results' },
-        { key: 'costPerResult', label: 'Cost Per Result' },
-        { key: 'budget', label: 'งบประมาณ' },
-        { key: 'impressions', label: 'Impressions' },
-        { key: 'reach', label: 'Reach' },
-        { key: 'postEngagements', label: 'Post Engagements' },
-        { key: 'clicks', label: 'Clicks (All)' },
-        { key: 'newMessagingContacts', label: 'ยอดทัก' },
-        { key: 'spend', label: 'ยอดใช้จ่าย' },
-        { key: 'costPerNewMessagingContact', label: 'Cost/ทัก' },
-        // Video Metrics
-        { key: 'videoAvgTimeWatched', label: 'Video Avg Play Time' },
-        { key: 'videoPlays', label: 'Video Plays' },
-        { key: 'videoP25Watched', label: 'Video Plays at 25%' },
-        { key: 'videoP50Watched', label: 'Video Plays at 50%' },
-        { key: 'videoP75Watched', label: 'Video Plays at 75%' },
-        { key: 'videoP95Watched', label: 'Video Plays at 95%' },
-        { key: 'videoP100Watched', label: 'Video Plays at 100%' },
-        { key: 'video3SecWatched', label: '3-Second Video Plays' },
-        { key: 'accountName', label: 'Account Name' },
+        { key: 'status', label: t.col_status },
+        { key: 'delivery', label: t.col_delivery },
+        { key: 'results', label: t.col_results },
+        { key: 'costPerResult', label: t.col_cpr },
+        { key: 'reach', label: t.col_reach },
+        { key: 'impressions', label: t.col_impressions },
+        { key: 'frequency', label: t.col_frequency },
+        { key: 'spend', label: t.col_spend },
+        { key: 'dailyBudget', label: t.col_budget },
+        { key: 'schedule', label: t.col_schedule },
+        { key: 'clicks', label: t.col_clicks },
+        { key: 'cpc', label: t.col_cpc },
+        { key: 'ctr', label: t.col_ctr },
+
+        { key: 'videoPlays', label: t.col_video_plays },
+        { key: 'videoP25Watched', label: t.col_video_p25 },
+        { key: 'videoP50Watched', label: t.col_video_p50 },
+        { key: 'videoP75Watched', label: t.col_video_p75 },
+        { key: 'videoP95Watched', label: t.col_video_p95 },
+        { key: 'videoP100Watched', label: t.col_video_p100 },
+        { key: 'videoAvgTimeWatched', label: 'VDO Average Play time' }, // Keep fallback or add to translations
+        { key: 'video3SecWatched', label: '3-Second Video Plays' }, // Keep fallback
+
+        { key: 'postEngagements', label: t.col_engagement },
+        { key: 'newMessagingContacts', label: t.col_messaging },
+        { key: 'costPerNewMessagingContact', label: t.col_cost_messaging },
+
+        { key: 'accountName', label: t.col_account_name },
+        { key: 'campaignName', label: t.col_campaign_name },
+        { key: 'adsetName', label: t.col_adset_name },
+
+        ...(dataType === 'ads' ? [
+            { key: 'pageName', label: t.col_page_name },
+            { key: 'previewLink', label: t.col_preview_link },
+            { key: 'imageUrl', label: t.col_image },
+            { key: 'objective', label: t.col_objective },
+            { key: 'targeting', label: t.col_targeting },
+            { key: 'created_time', label: t.col_created },
+            { key: 'start_time', label: t.col_start_date },
+            { key: 'stop_time', label: t.col_end_date },
+        ] : [])
     ]
 }
 
@@ -148,6 +170,10 @@ export default function GoogleSheetsConfigContent({
     initialConfig
 }: GoogleSheetsConfigContentProps) {
     const { data: session } = useSession()
+    const { language } = useLanguage()
+    const lang = language as 'th' | 'en' // Cast to our translation keys
+    const t = translations[lang]
+
     const [step, setStep] = useState(1) // 1: Basic, 2: Column Mapping, 3: Schedule
     const [isLoading, setIsLoading] = useState(false)
     const [savedConfigs, setSavedConfigs] = useState<ExportConfig[]>([])
@@ -177,27 +203,37 @@ export default function GoogleSheetsConfigContent({
     })
 
     const [singleDate, setSingleDate] = useState<Date | undefined>(new Date())
+    const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+    const [isSavedCalendarOpen, setIsSavedCalendarOpen] = useState<Record<string, boolean>>({})
     const [searchQuery, setSearchQuery] = useState<string>("")
     const [managedColumns, setManagedColumns] = useState<string[]>([])
 
-    const availableColumns = getAvailableColumns(dataType)
+    const availableColumns = getAvailableColumns(dataType, lang)
 
     // Initialize default column mapping
     useEffect(() => {
-        // Reset mapping if data type or config changes, but respect if modifying existing
-        if (Object.keys(config.columnMapping).length === 0) {
+        // Reset mapping if data type changes OR if mapping is empty
+        // We must check if dataType prop has changed relative to state to force update
+        const typeChanged = config.dataType !== dataType
+        const isEmpty = Object.keys(config.columnMapping).length === 0
+
+        // Only apply defaults if we are NOT in edit mode (initialConfig handles that)
+        // or if we are switching types (which implies we abandoned edit mode for that type)
+        if ((isEmpty || typeChanged) && !initialConfig) {
             const defaultMapping: Record<string, string> = {}
 
             if (dataType === 'ads') {
                 defaultMapping['id'] = 'B'
-                // defaultMapping['name'] = 'C' // Skipped as requested
+                defaultMapping['name'] = 'skip'
                 defaultMapping['accountName'] = 'D'
+                defaultMapping['status'] = 'skip'
                 defaultMapping['reach'] = 'F'
                 defaultMapping['impressions'] = 'G'
                 defaultMapping['postEngagements'] = 'H'
                 defaultMapping['clicks'] = 'I'
                 defaultMapping['newMessagingContacts'] = 'J'
                 defaultMapping['spend'] = 'K'
+                defaultMapping['costPerResult'] = 'skip'
                 defaultMapping['videoAvgTimeWatched'] = 'M'
                 defaultMapping['videoPlays'] = 'N'
                 defaultMapping['video3SecWatched'] = 'O'
@@ -206,8 +242,9 @@ export default function GoogleSheetsConfigContent({
                 defaultMapping['videoP75Watched'] = 'R'
                 defaultMapping['videoP95Watched'] = 'S'
                 defaultMapping['videoP100Watched'] = 'T'
-            } else if (dataType !== 'accounts') {
-                defaultMapping['name'] = 'D'
+            } else if (dataType === 'campaigns' || dataType === 'adsets') {
+                defaultMapping['id'] = 'B'
+                defaultMapping['name'] = 'C'
                 defaultMapping['reach'] = 'F'
                 defaultMapping['impressions'] = 'G'
                 defaultMapping['postEngagements'] = 'H'
@@ -220,7 +257,12 @@ export default function GoogleSheetsConfigContent({
                     defaultMapping[col.key] = sheetColumns[startIndex] || 'skip'
                 })
             }
-            setConfig(prev => ({ ...prev, columnMapping: defaultMapping }))
+
+            setConfig(prev => ({
+                ...prev,
+                dataType: dataType, // Sync state with prop
+                columnMapping: defaultMapping
+            }))
 
             // Initialize managed columns from mapping (continuous sequence)
             const usedCols = Object.values(defaultMapping).filter(c => c !== 'skip')
@@ -235,7 +277,7 @@ export default function GoogleSheetsConfigContent({
             setManagedColumns(sheetColumns.slice(0, maxIndex + 1))
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dataType, config.includeDate])
+    }, [dataType, config.includeDate, initialConfig])
 
     const fetchGoogleStatus = async () => {
         try {
@@ -376,7 +418,7 @@ export default function GoogleSheetsConfigContent({
                 fetchSavedConfigs()
             }
         } catch {
-            toast.error('เกิดข้อผิดพลาด')
+            toast.error(t.generic_error)
         }
     }
 
@@ -417,23 +459,39 @@ export default function GoogleSheetsConfigContent({
 
     const resetConfig = () => {
         // Default mapping based on user preference
-        const defaultMapping: Record<string, string> = {
-            id: 'B',
-            accountName: 'D',
-            reach: 'F',
-            impressions: 'G',
-            postEngagements: 'H',
-            clicks: 'I',
-            newMessagingContacts: 'J',
-            spend: 'K',
-            videoAvgTimeWatched: 'M',
-            videoPlays: 'N',
-            video3SecWatched: 'O',
-            videoP25Watched: 'P',
-            videoP50Watched: 'Q',
-            videoP75Watched: 'R',
-            videoP95Watched: 'S',
-            videoP100Watched: 'T'
+        const defaultMapping: Record<string, string> = {}
+
+        if (dataType === 'ads') {
+            defaultMapping['id'] = 'B'
+            defaultMapping['accountName'] = 'D'
+            defaultMapping['reach'] = 'F'
+            defaultMapping['impressions'] = 'G'
+            defaultMapping['postEngagements'] = 'H'
+            defaultMapping['clicks'] = 'I'
+            defaultMapping['newMessagingContacts'] = 'J'
+            defaultMapping['spend'] = 'K'
+            defaultMapping['videoAvgTimeWatched'] = 'M'
+            defaultMapping['videoPlays'] = 'N'
+            defaultMapping['video3SecWatched'] = 'O'
+            defaultMapping['videoP25Watched'] = 'P'
+            defaultMapping['videoP50Watched'] = 'Q'
+            defaultMapping['videoP75Watched'] = 'R'
+            defaultMapping['videoP95Watched'] = 'S'
+            defaultMapping['videoP100Watched'] = 'T'
+        } else if (dataType === 'campaigns' || dataType === 'adsets') {
+            defaultMapping['id'] = 'B'
+            defaultMapping['name'] = 'C'
+            defaultMapping['reach'] = 'F'
+            defaultMapping['impressions'] = 'G'
+            defaultMapping['postEngagements'] = 'H'
+            defaultMapping['clicks'] = 'I'
+            defaultMapping['newMessagingContacts'] = 'J'
+            defaultMapping['spend'] = 'K'
+        } else {
+            availableColumns.forEach((col, index) => {
+                const startIndex = config.includeDate ? index + 1 : index
+                defaultMapping[col.key] = sheetColumns[startIndex] || 'skip'
+            })
         }
 
         setConfig({
@@ -488,7 +546,7 @@ export default function GoogleSheetsConfigContent({
 
         const headerRow: string[] = new Array(maxColIndex + 1).fill('')
         if (config.includeDate) {
-            headerRow[0] = 'วันที่'
+            headerRow[0] = t.date_label
         }
         Object.entries(config.columnMapping).forEach(([key, col]) => {
             if (col !== 'skip') {
@@ -550,7 +608,7 @@ export default function GoogleSheetsConfigContent({
 
     const handleExportNow = async () => {
         if (!config.spreadsheetUrl) {
-            toast.error('กรุณากรอก URL ของ Google Sheets')
+            toast.error(t.enter_url_error)
             return
         }
 
@@ -592,7 +650,9 @@ export default function GoogleSheetsConfigContent({
 
                 const result = await res.json()
                 if (res.ok) {
-                    toast.success(`ส่งออกสำเร็จ! เพิ่มข้อมูล ${result.count} แถว`)
+                    toast.success(lang === 'th'
+                        ? `ส่งออกสำเร็จ! เพิ่มข้อมูล ${result.count} แถว`
+                        : `Export successful! Added ${result.count} rows`)
                     window.open(config.spreadsheetUrl, '_blank')
 
                     // Switch to saved tab
@@ -611,7 +671,7 @@ export default function GoogleSheetsConfigContent({
             } else {
                 if (data.length === 0) {
                     // For standalone page without data, we can't do clipboard export
-                    toast.error('ไม่มีข้อมูลให้ส่งออก (Clipboard Export requires data loaded)')
+                    toast.error(t.no_data_error)
                     return
                 }
                 const exportData = prepareExportData()
@@ -620,8 +680,12 @@ export default function GoogleSheetsConfigContent({
 
                 toast.success(
                     <div className="flex flex-col gap-1">
-                        <span className="font-medium">คัดลอก {data.length} รายการแล้ว!</span>
-                        <span className="text-sm">ไปที่ Google Sheets แล้วกด Ctrl+V เพื่อวาง</span>
+                        <span className="font-medium">
+                            {lang === 'th' ? `คัดลอก ${data.length} รายการแล้ว!` : `Copied ${data.length} items!`}
+                        </span>
+                        <span className="text-sm">
+                            {lang === 'th' ? 'ไปที่ Google Sheets แล้วกด Ctrl+V เพื่อวาง' : 'Go to Google Sheets and press Ctrl+V to paste'}
+                        </span>
                     </div>
                 )
                 window.open(config.spreadsheetUrl, '_blank')
@@ -638,7 +702,7 @@ export default function GoogleSheetsConfigContent({
                 if (onClose && !standalone) onClose()
             }
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาด'
+            const errorMessage = error instanceof Error ? error.message : t.generic_error
             toast.error(errorMessage)
         } finally {
             setIsLoading(false)
@@ -660,7 +724,7 @@ export default function GoogleSheetsConfigContent({
 
     const handleConnectSheet = async () => {
         if (!config.spreadsheetUrl) {
-            toast.error('กรุณากรอก URL ของ Google Sheets')
+            toast.error(t.enter_url_error)
             return
         }
 
@@ -697,6 +761,7 @@ export default function GoogleSheetsConfigContent({
 
     return (
         <div className={cn("space-y-6", standalone ? "p-6 max-w-4xl mx-auto bg-white rounded-lg shadow-sm" : "", className)}>
+
             {standalone && (
                 <div className="flex items-center gap-2 mb-6 pb-4 border-b">
                     <FileSpreadsheet className="h-6 w-6 text-green-600" />
@@ -711,10 +776,10 @@ export default function GoogleSheetsConfigContent({
                         <div>
                             <h3 className="text-lg font-semibold flex items-center gap-2">
                                 <Settings2 className="h-5 w-5" />
-                                การตั้งค่าที่บันทึกไว้
+                                {t.saved_configs_title}
                             </h3>
                             <p className="text-sm text-gray-500 mt-1">
-                                จัดการและแก้ไขการตั้งค่าการส่งออกของคุณ
+                                {lang === 'th' ? 'จัดการและแก้ไขการตั้งค่าการส่งออกของคุณ' : 'Manage and edit your export configurations'}
                             </p>
                         </div>
                         {selectedConfigId && (
@@ -723,7 +788,7 @@ export default function GoogleSheetsConfigContent({
                                 onClick={resetConfig}
                                 size="sm"
                             >
-                                สร้างใหม่
+                                {t.create_new_btn}
                             </Button>
                         )}
                     </div>
@@ -732,10 +797,10 @@ export default function GoogleSheetsConfigContent({
                         <div className="text-center py-12 border-2 border-dashed rounded-xl bg-gray-50">
                             <Settings2 className="h-12 w-12 text-gray-400 mx-auto mb-3" />
                             <h3 className="text-lg font-medium text-gray-600 mb-2">
-                                ยังไม่มีการตั้งค่าที่บันทึกไว้
+                                {t.no_saved_configs}
                             </h3>
                             <p className="text-sm text-gray-500 mb-4">
-                                เริ่มต้นโดยการสร้างการตั้งค่าการส่งออกใหม่ในแท็บ "เลือกบัญชีโฆษณา"
+                                {lang === 'th' ? 'เริ่มต้นโดยการสร้างการตั้งค่าการส่งออกใหม่ในแท็บ "เลือกบัญชีโฆษณา"' : 'Start by creating a new export configuration in the "Select Account" tab'}
                             </p>
                         </div>
                     ) : (
@@ -766,7 +831,7 @@ export default function GoogleSheetsConfigContent({
                                                 </div>
                                                 <div className="flex flex-wrap gap-2">
                                                     <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-100 text-blue-700 text-xs font-medium">
-                                                        👥 {accountIds.length} บัญชี
+                                                        👥 {accountIds.length} {t.account}
                                                     </span>
                                                     {saved.autoExportEnabled ? (
                                                         <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-100 text-purple-700 text-xs font-medium">
@@ -780,7 +845,7 @@ export default function GoogleSheetsConfigContent({
                                                 </div>
                                                 {saved.lastExportAt && (
                                                     <div className="text-xs text-gray-400 mt-2">
-                                                        ส่งออกล่าสุด: {new Date(saved.lastExportAt).toLocaleString('th-TH')}
+                                                        {t.last_export}: {new Date(saved.lastExportAt).toLocaleString(lang === 'th' ? 'th-TH' : 'en-US')}
                                                     </div>
                                                 )}
                                             </div>
@@ -796,7 +861,7 @@ export default function GoogleSheetsConfigContent({
                                                         }
                                                     }}
                                                 >
-                                                    {isExpanded ? '✓ เลือกอยู่' : 'เลือกใช้'}
+                                                    {isExpanded ? (lang === 'th' ? '✓ เลือกอยู่' : '✓ Selected') : (lang === 'th' ? 'เลือกใช้' : 'Select')}
                                                 </Button>
                                                 <Button
                                                     size="sm"
@@ -805,7 +870,7 @@ export default function GoogleSheetsConfigContent({
                                                         if (onEdit) onEdit(saved)
                                                     }}
                                                 >
-                                                    แก้ไข
+                                                    {t.edit}
                                                 </Button>
                                                 <Button
                                                     size="sm"
@@ -822,39 +887,42 @@ export default function GoogleSheetsConfigContent({
                                         {isExpanded && (
                                             <div className="px-4 pb-4 space-y-4 animate-in slide-in-from-top-2">
                                                 <div className="border-t pt-4">
-                                                    <Label>เลือกวันที่ของข้อมูล</Label>
+                                                    <Label>{lang === 'th' ? 'เลือกวันที่ของข้อมูล' : 'Select Date Range'}</Label>
                                                     <div className="grid gap-2 mt-2">
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button
-                                                                    id="date"
-                                                                    variant={"outline"}
-                                                                    className={cn(
-                                                                        "w-full justify-start text-left font-normal",
-                                                                        !singleDate && "text-muted-foreground"
-                                                                    )}
-                                                                >
-                                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                    {singleDate ? (
-                                                                        format(singleDate, "dd/MM/yyyy")
-                                                                    ) : (
-                                                                        <span>Pick a date</span>
-                                                                    )}
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-auto p-0" align="start">
+                                                        <Button
+                                                            id="date"
+                                                            variant={"outline"}
+                                                            className={cn(
+                                                                "w-full justify-start text-left font-normal",
+                                                                !singleDate && "text-muted-foreground"
+                                                            )}
+                                                            onClick={() => setIsSavedCalendarOpen(prev => ({ ...prev, [saved.id!]: !prev[saved.id!] }))}
+                                                        >
+                                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                                            {singleDate ? (
+                                                                format(singleDate, "dd/MM/yyyy")
+                                                            ) : (
+                                                                <span>Pick a date</span>
+                                                            )}
+                                                        </Button>
+                                                        {isSavedCalendarOpen[saved.id!] && (
+                                                            <div className="border rounded-md p-3 mt-2 bg-white w-fit mx-auto sm:mx-0">
                                                                 <Calendar
-                                                                    initialFocus
                                                                     mode="single"
                                                                     defaultMonth={singleDate}
                                                                     selected={singleDate}
-                                                                    onSelect={setSingleDate}
+                                                                    onSelect={(date) => {
+                                                                        if (date) {
+                                                                            setSingleDate(date);
+                                                                            setIsSavedCalendarOpen(prev => ({ ...prev, [saved.id!]: false }));
+                                                                        }
+                                                                    }}
                                                                     numberOfMonths={1}
                                                                 />
-                                                            </PopoverContent>
-                                                        </Popover>
+                                                            </div>
+                                                        )}
                                                         <p className="text-xs text-gray-500">
-                                                            * ข้อมูล Insights (Spend, Clicks, etc.) จะถูกดึงเฉพาะวันที่เลือกเท่านั้น
+                                                            * {lang === 'th' ? 'ข้อมูล Insights (Spend, Clicks, etc.) จะถูกดึงเฉพาะวันที่เลือกเท่านั้น' : 'Insights data (Spend, Clicks, etc.) is fetched for the selected date only.'}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -866,7 +934,7 @@ export default function GoogleSheetsConfigContent({
                                                     size="lg"
                                                 >
                                                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                                    ส่งออกทันที
+                                                    {t.export_btn}
                                                 </Button>
                                             </div>
                                         )}
@@ -889,18 +957,18 @@ export default function GoogleSheetsConfigContent({
                         <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${step >= 3 ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-500'}`}>3</div>
                     </div>
                     <div className="text-center text-sm text-gray-500 mb-4">
-                        {step === 1 && "เลือกบัญชีโฆษณา"}
-                        {step === 2 && "เชื่อมต่อ Google Sheet"}
-                        {step === 3 && "ตั้งเวลาส่งออก"}
+                        {step === 1 && t.step1_title}
+                        {step === 2 && t.step2_title}
+                        {step === 3 && t.step3_title}
                     </div>
 
                     {/* Step 1: Select Ad Accounts */}
                     {step === 1 && (
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label>เลือกบัญชีโฆษณาที่ต้องการส่งออก</Label>
+                                <Label>{t.step1_title}</Label>
                                 <Input
-                                    placeholder="ค้นหาบัญชี..."
+                                    placeholder={t.search_placeholder}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="mb-2"
@@ -944,7 +1012,7 @@ export default function GoogleSheetsConfigContent({
                                         })}
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    * สามารถเลือกได้หลายบัญชี {searchQuery && `(พบ ${availableAccounts.filter(acc => acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || acc.id.toLowerCase().includes(searchQuery.toLowerCase())).length} บัญชี)`}
+                                    * {lang === 'th' ? 'สามารถเลือกได้หลายบัญชี' : 'Multiple accounts can be selected'} {searchQuery && `(${availableAccounts.filter(acc => acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || acc.id.toLowerCase().includes(searchQuery.toLowerCase())).length} matches)`}
                                 </p>
                             </div>
 
@@ -954,7 +1022,7 @@ export default function GoogleSheetsConfigContent({
                                     disabled={config.accountIds.length === 0}
                                     className="w-full sm:w-auto"
                                 >
-                                    ถัดไป
+                                    {t.next_btn}
                                 </Button>
                             </div>
                         </div>
@@ -964,32 +1032,32 @@ export default function GoogleSheetsConfigContent({
                     {step === 2 && (
                         <div className="space-y-6">
                             <div className="space-y-2">
-                                <Label>Google Sheets URL</Label>
+                                <Label>{t.sheet_url}</Label>
                                 <div className="flex gap-2">
                                     <Input
-                                        placeholder="https://docs.google.com/spreadsheets/d/..."
+                                        placeholder={t.sheet_url_placeholder}
                                         value={config.spreadsheetUrl}
                                         onChange={e => setConfig({ ...config, spreadsheetUrl: e.target.value })}
                                     />
                                     <Button onClick={handleConnectSheet} disabled={isFetchingSheets}>
-                                        {isFetchingSheets ? <Loader2 className="h-4 w-4 animate-spin" /> : 'เชื่อมต่อ'}
+                                        {isFetchingSheets ? <Loader2 className="h-4 w-4 animate-spin" /> : t.connect_btn}
                                     </Button>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                    วางลิงก์ Google Sheet ที่คุณต้องการส่งออกข้อมูลไป
+                                    {lang === 'th' ? 'วางลิงก์ Google Sheet ที่คุณต้องการส่งออกข้อมูลไป' : 'Paste the Google Sheet URL where you want to export data'}
                                 </p>
                             </div>
 
                             {availableSheets.length > 0 && (
                                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                                     <div className="space-y-2">
-                                        <Label>เลือก Sheet (Tab)</Label>
+                                        <Label>{t.sheet_tab_name}</Label>
                                         <Select
                                             value={config.sheetName}
                                             onValueChange={val => setConfig({ ...config, sheetName: val })}
                                         >
                                             <SelectTrigger>
-                                                <SelectValue />
+                                                <SelectValue placeholder={t.sheet_tab_placeholder} />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {availableSheets.map(sheet => (
@@ -1003,7 +1071,7 @@ export default function GoogleSheetsConfigContent({
 
                                     <div className="pt-4 border-t">
                                         <div className="flex items-center justify-between mb-2">
-                                            <Label>Mapping Columns</Label>
+                                            <Label>{t.mapping_title}</Label>
                                             <div className="flex gap-2">
                                                 <Button
                                                     variant="outline"
@@ -1024,7 +1092,7 @@ export default function GoogleSheetsConfigContent({
                                                         }
                                                     }}
                                                 >
-                                                    - ลบคอลัมน์ท้าย
+                                                    {t.remove_last_btn}
                                                 </Button>
                                                 <Button
                                                     variant="outline"
@@ -1046,7 +1114,7 @@ export default function GoogleSheetsConfigContent({
                                                         }
                                                     }}
                                                 >
-                                                    + เพิ่มคอลัมน์
+                                                    {t.add_column_btn}
                                                 </Button>
                                             </div>
                                         </div>
@@ -1087,11 +1155,11 @@ export default function GoogleSheetsConfigContent({
                                                                 }}
                                                             >
                                                                 <SelectTrigger className={`h-9 ${mappedField === 'empty' ? 'text-gray-400' : ''}`}>
-                                                                    <SelectValue placeholder="เลือกข้อมูล... (Skip)" />
+                                                                    <SelectValue placeholder={t.select_data_placeholder} />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
                                                                     <SelectItem value="empty" className="text-gray-500 font-medium">
-                                                                        (Skip / ว่าง)
+                                                                        {t.default_skip}
                                                                     </SelectItem>
                                                                     {availableColumns.map(col => (
                                                                         <SelectItem key={col.key} value={col.key}>
@@ -1124,7 +1192,7 @@ export default function GoogleSheetsConfigContent({
                                             })}
                                             {managedColumns.length === 0 && (
                                                 <div className="text-center py-8 text-gray-400 text-sm">
-                                                    กด + เพิ่มคอลัมน์ เพื่อเริ่มจับคู่ข้อมูล
+                                                    {t.click_to_add_column}
                                                 </div>
                                             )}
                                         </div>
@@ -1138,7 +1206,7 @@ export default function GoogleSheetsConfigContent({
                                         checked={config.includeDate}
                                         onCheckedChange={checked => setConfig({ ...config, includeDate: checked })}
                                     />
-                                    <Label>เพิ่มคอลัมน์วันที่อัตโนมัติ (Column A)</Label>
+                                    <Label>{t.auto_date_column}</Label>
                                 </div>
 
                                 <div className="space-y-2">
@@ -1147,12 +1215,12 @@ export default function GoogleSheetsConfigContent({
                                             checked={config.appendMode}
                                             onCheckedChange={checked => setConfig({ ...config, appendMode: checked })}
                                         />
-                                        <Label>ต่อท้ายข้อมูลเดิม (Append Mode)</Label>
+                                        <Label>{t.append_mode_label}</Label>
                                     </div>
                                     <p className="text-xs text-gray-500 ml-11">
                                         {config.appendMode
-                                            ? "✅ เขียนข้อมูลต่อจากแถวสุดท้ายของ Sheet"
-                                            : "⚠️ จะลบข้อมูลเดิมทั้งหมดและเขียนใหม่"}
+                                            ? t.append_desc_true
+                                            : t.append_desc_false}
                                     </p>
                                 </div>
                             </div>
@@ -1188,11 +1256,11 @@ export default function GoogleSheetsConfigContent({
                                         )}
                                     </div>
                                     <div>
-                                        <h4 className="font-medium text-blue-900">ตั้งค่าการส่งออก</h4>
+                                        <h4 className="font-medium text-blue-900">{t.step3_header}</h4>
                                         <p className="text-xs text-blue-700">
                                             {googleStatus?.isConnected
-                                                ? `เชื่อมต่อกับ: ${googleStatus.email}`
-                                                : 'กรุณาล็อกอิน Google เพื่อใช้งาน'}
+                                                ? `${t.connected_as}: ${googleStatus.email}`
+                                                : t.please_login}
                                         </p>
                                     </div>
                                 </div>
@@ -1203,72 +1271,75 @@ export default function GoogleSheetsConfigContent({
                                     <div className="space-y-2 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
                                         <Label htmlFor="config-name" className="flex items-center gap-2 text-blue-900 font-medium">
                                             <span className="text-lg">📝</span>
-                                            ชื่อการตั้งค่า
+                                            {t.config_name}
                                         </Label>
                                         <Input
                                             id="config-name"
-                                            placeholder="เช่น รายงานโฆษณารายวัน, สรุปยอดขาย, ข้อมูล Campaign..."
+                                            placeholder={t.config_name_placeholder}
                                             value={config.name}
                                             onChange={e => setConfig({ ...config, name: e.target.value })}
                                             className="w-full bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                                         />
                                         <p className="text-xs text-blue-700">
-                                            💡 ถ้าไม่ระบุ ระบบจะสร้างชื่ออัตโนมัติจากชื่อ Sheet
+                                            {t.auto_generate_name_hint}
                                         </p>
                                     </div>
 
                                     <Tabs defaultValue="manual" className="w-full">
                                         <TabsList className="grid w-full grid-cols-2">
-                                            <TabsTrigger value="manual">ส่งออกเอง (Manual)</TabsTrigger>
-                                            <TabsTrigger value="auto">ตั้งเวลาอัตโนมัติ (Auto)</TabsTrigger>
+                                            <TabsTrigger value="manual">{t.tab_manual}</TabsTrigger>
+                                            <TabsTrigger value="auto">{t.tab_auto}</TabsTrigger>
                                         </TabsList>
 
                                         <TabsContent value="manual" className="space-y-4 pt-4">
                                             <div className="space-y-2">
-                                                <Label>เลือกวันที่ของข้อมูล</Label>
+                                                <Label>{t.select_date}</Label>
                                                 <div className="grid gap-2">
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                id="date"
-                                                                variant={"outline"}
-                                                                className={cn(
-                                                                    "w-full justify-start text-left font-normal",
-                                                                    !singleDate && "text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                {singleDate ? (
-                                                                    format(singleDate, "dd/MM/yyyy")
-                                                                ) : (
-                                                                    <span>Pick a date</span>
-                                                                )}
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0" align="start">
+                                                    <Button
+                                                        id="date"
+                                                        variant={"outline"}
+                                                        className={cn(
+                                                            "w-full justify-start text-left font-normal",
+                                                            !singleDate && "text-muted-foreground"
+                                                        )}
+                                                        onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                                                    >
+                                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                                        {singleDate ? (
+                                                            format(singleDate, "dd/MM/yyyy")
+                                                        ) : (
+                                                            <span>{t.select_date}</span>
+                                                        )}
+                                                    </Button>
+                                                    {isCalendarOpen && (
+                                                        <div className="border rounded-md p-3 mt-2 bg-white w-fit">
                                                             <Calendar
-                                                                initialFocus
                                                                 mode="single"
                                                                 defaultMonth={singleDate}
                                                                 selected={singleDate}
-                                                                onSelect={setSingleDate}
+                                                                onSelect={(date) => {
+                                                                    if (date) {
+                                                                        setSingleDate(date);
+                                                                        setIsCalendarOpen(false);
+                                                                    }
+                                                                }}
                                                                 numberOfMonths={1}
                                                             />
-                                                        </PopoverContent>
-                                                    </Popover>
+                                                        </div>
+                                                    )}
                                                     <p className="text-xs text-gray-500">
-                                                        * ข้อมูล Insights (Spend, Clicks, etc.) จะถูกดึงเฉพาะวันที่เลือกเท่านั้น
+                                                        * {t.insights_date_hint}
                                                     </p>
                                                 </div>
 
                                                 <div className="flex gap-2 mt-4">
                                                     <Button onClick={handleSaveConfig} disabled={isLoading} variant="outline" className="flex-1">
                                                         {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                                        บันทึก
+                                                        {t.save_config_only}
                                                     </Button>
                                                     <Button onClick={handleExportNow} disabled={isLoading} className="flex-1">
                                                         {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                                        ส่งออกทันที
+                                                        {t.export_btn}
                                                     </Button>
                                                 </div>
                                             </div>
@@ -1281,14 +1352,14 @@ export default function GoogleSheetsConfigContent({
                                                         checked={config.autoExportEnabled}
                                                         onCheckedChange={checked => setConfig({ ...config, autoExportEnabled: checked })}
                                                     />
-                                                    <Label>เปิดใช้งานการส่งออกอัตโนมัติ</Label>
+                                                    <Label>{t.enable_auto_export}</Label>
                                                 </div>
 
                                                 {config.autoExportEnabled && (
                                                     <div className="space-y-4 border p-4 rounded bg-gray-50 animate-in fade-in">
                                                         <div className="grid grid-cols-2 gap-4">
                                                             <div className="space-y-2">
-                                                                <Label>เวลาที่ส่งออก</Label>
+                                                                <Label>{t.export_time}</Label>
                                                                 <div className="flex gap-2 items-center">
                                                                     <Select
                                                                         value={String(config.exportHour)}
@@ -1303,11 +1374,11 @@ export default function GoogleSheetsConfigContent({
                                                                             ))}
                                                                         </SelectContent>
                                                                     </Select>
-                                                                    <span className="text-gray-500 text-sm">น. (ทุกวัน)</span>
+                                                                    <span className="text-gray-500 text-sm">{t.time_suffix}</span>
                                                                 </div>
                                                             </div>
                                                             <div className="space-y-2">
-                                                                <Label>ช่วงเวลาย้อนหลัง</Label>
+                                                                <Label>{t.lookback_period}</Label>
                                                                 <Select
                                                                     value={String(config.exportInterval || 6)}
                                                                     onValueChange={val => setConfig({ ...config, exportInterval: parseInt(val) })}
@@ -1316,10 +1387,10 @@ export default function GoogleSheetsConfigContent({
                                                                         <SelectValue />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
-                                                                        <SelectItem value="1">1 ชั่วโมงล่าสุด</SelectItem>
-                                                                        <SelectItem value="6">6 ชั่วโมงล่าสุด</SelectItem>
-                                                                        <SelectItem value="12">12 ชั่วโมงล่าสุด</SelectItem>
-                                                                        <SelectItem value="24">24 ชั่วโมงล่าสุด (เมื่อวาน)</SelectItem>
+                                                                        <SelectItem value="1">1 {t.hour_suffix}</SelectItem>
+                                                                        <SelectItem value="6">6 {t.hour_suffix}</SelectItem>
+                                                                        <SelectItem value="12">12 {t.hour_suffix}</SelectItem>
+                                                                        <SelectItem value="24">24 {t.hour_suffix}</SelectItem>
                                                                     </SelectContent>
                                                                 </Select>
                                                             </div>
@@ -1330,14 +1401,14 @@ export default function GoogleSheetsConfigContent({
                                                                 checked={config.useAdAccountTimezone}
                                                                 onCheckedChange={checked => setConfig({ ...config, useAdAccountTimezone: checked })}
                                                             />
-                                                            <Label>ใช้ Timezone ของบัญชีโฆษณา</Label>
+                                                            <Label>{t.use_ad_account_timezone}</Label>
                                                         </div>
                                                     </div>
                                                 )}
 
                                                 <Button onClick={handleSaveConfig} disabled={isLoading} className="w-full">
                                                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                                    บันทึกการตั้งค่า
+                                                    {t.save_btn}
                                                 </Button>
                                             </div>
                                         </TabsContent>
@@ -1346,21 +1417,21 @@ export default function GoogleSheetsConfigContent({
                             ) : (
                                 <div className="space-y-4">
                                     <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-md text-sm">
-                                        คุณยังไม่ได้เชื่อมต่อ Google Account ไม่สามารถใช้ฟีเจอร์ส่งออกอัตโนมัติ หรือส่งตรงเข้า Sheets ได้
+                                        {t.google_not_connected_warn}
                                     </div>
 
                                     {data.length > 0 ? (
                                         <Button onClick={handleExportNow} disabled={isLoading} className="w-full h-12 text-lg bg-green-600 hover:bg-green-700 shadow-md">
-                                            คัดลอกข้อมูลลง Clipboard (Copy)
+                                            {t.copy_to_clickboard}
                                         </Button>
                                     ) : (
                                         <div className="text-center text-sm text-gray-400 p-2">
-                                            ไม่มีข้อมูลแสดงผลสำหรับการคัดลอก (ไปที่หน้าตารางเพื่อคัดลอก)
+                                            {t.no_data_to_copy}
                                         </div>
                                     )}
 
                                     <Button onClick={handleSaveConfig} variant="outline" disabled={isLoading} className="w-full h-10">
-                                        บันทึกการตั้งค่าไว้เฉยๆ
+                                        {t.save_config_only}
                                     </Button>
                                 </div>
                             )}

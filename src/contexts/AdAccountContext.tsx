@@ -221,12 +221,23 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         accounts.some((acc: AdAccount) => acc.id === selected.id)
       );
 
-      // If no valid selections or selectedAccounts is empty, auto-select all
-      if (validSelectedAccounts.length === 0 && accounts.length > 0) {
-        console.log('Auto-selecting all ad accounts');
+      // Check if user has ever saved a selection (even an empty one)
+      // If localStorage returns null, it means no selection has ever been made (first visit)
+      const hasSavedSelection = typeof window !== 'undefined' && localStorage.getItem('selectedAdAccounts') !== null;
+
+      // If no valid selections AND (user hasn't saved anything OR user previously selected accounts that are now invalid/gone)
+      // We want to auto-select ALL only if it's the first visit (no saved selection)
+      // OR if we want to fallback to all when selected accounts are lost?
+      // User request: "If I deselect all, it currently auto-selects all. I want it to stay empty."
+      // So we must NOT auto-select if hasSavedSelection is true (even if list is empty).
+
+      if (validSelectedAccounts.length === 0 && accounts.length > 0 && !hasSavedSelection) {
+        console.log('Auto-selecting all ad accounts (First Visit)');
         setSelectedAccounts(accounts);
       } else if (validSelectedAccounts.length !== selectedAccounts.length) {
-        // Some selections were invalid, update to only valid ones
+        // Some selections were invalid (removed from FB?), update to only valid ones
+        // If validSelectedAccounts is empty here, it means all selected accounts are gone.
+        // We update to empty list, which is correct behavior (don't force all).
         console.log('Updating to valid ad accounts only');
         setSelectedAccounts(validSelectedAccounts);
       }

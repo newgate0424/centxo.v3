@@ -17,7 +17,7 @@ import {
 
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/launch", label: "Launch Campaign", icon: Rocket },
+  { href: "/launch-new", label: "Launch Campaign", icon: Rocket },
   { href: "/campaigns", label: "All Campaigns", icon: Megaphone },
   { href: "/accounts", label: "Ad Accounts", icon: Building2 },
   { href: "/settings", label: "Settings", icon: Settings },

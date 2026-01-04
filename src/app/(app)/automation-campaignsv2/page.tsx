@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useAdAccount } from '@/contexts/AdAccountContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,9 +60,9 @@ export default function AutomationCampaignsV2Page() {
     const [editedIceBreakers, setEditedIceBreakers] = useState<any[]>([]);
 
     // Step 4: Campaign Settings
-    const [adAccounts, setAdAccounts] = useState<any[]>([]);
+    const { selectedAccounts: adAccounts, selectedPages: pages } = useAdAccount();
     const [selectedAdAccount, setSelectedAdAccount] = useState('');
-    const [pages, setPages] = useState<any[]>([]);
+    // const [pages, setPages] = useState<any[]>([]); // Removed local state
     const [selectedPage, setSelectedPage] = useState('');
     const [objective, setObjective] = useState('OUTCOME_ENGAGEMENT');
     const [dailyBudget, setDailyBudget] = useState('500');
@@ -71,25 +72,12 @@ export default function AutomationCampaignsV2Page() {
     const [beneficiaryName, setBeneficiaryName] = useState('');
     const [saveDraft, setSaveDraft] = useState(false);
 
-    // Fetch Accounts on Load
+    // Fetch Accounts on Load - REMOVED (Using Context)
+    /* 
     useEffect(() => {
-        if (session) {
-            fetch('/api/facebook/ad-accounts')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.accounts) {
-                        console.log('Ad Accounts Data:', data.accounts);
-                        setAdAccounts(data.accounts);
-                    }
-                });
-
-            fetch('/api/facebook/pages')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.pages) setPages(data.pages);
-                });
-        }
-    }, [session]);
+       // Removed manual fetch
+    }, [session]); 
+    */
 
     const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -1096,7 +1084,7 @@ export default function AutomationCampaignsV2Page() {
                                         <SelectContent>
                                             {adAccounts.map(acc => (
                                                 <SelectItem key={acc.id} value={acc.id}>
-                                                    {acc.name} ({acc.status === 1 ? '✓ Active' : '⚠ Inactive'})
+                                                    {acc.name} ({acc.account_status === 1 ? '✓ Active' : '⚠ Inactive'})
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

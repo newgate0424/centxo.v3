@@ -47,6 +47,7 @@ interface AdAccount {
     spendingCap: number | null;
     spentAmount: number | null;
     timeZone: string;
+    timeZoneOffset?: number;
     nationality: string;
     currency: string;
     paymentMethod?: string;
@@ -264,12 +265,13 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                         id: acc.id,
                         name: acc.name,
                         account_id: acc.account_id,
-                        status: fbAccount?.status ?? 'UNKNOWN',
+                        status: fbAccount?.account_status ?? 'UNKNOWN',
                         disable_reason: fbAccount?.disable_reason,
                         activeAds: 0,
                         spendingCap: fbAccount?.spend_cap || null,
                         spentAmount: fbAccount?.amount_spent || null,
                         timeZone: fbAccount?.timezone_name || '-',
+                        timeZoneOffset: fbAccount?.timezone_offset,
                         nationality: fbAccount?.business_country_code || '-',
                         currency: fbAccount?.currency || '-',
                         paymentMethod: fbAccount?.funding_source || '-',
@@ -291,11 +293,36 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
     };
 
     // Fetch real data from Facebook on mount
+    // Track if we have done the initial fetch
+    const [hasInitialFetch, setHasInitialFetch] = useState(false);
+
+    // Fetch real data from Facebook
+    // Modified to STRICTLY follow user request: "Only refresh when button clicked" (after initial load)
     useEffect(() => {
-        if (session?.user && selectedAccounts.length > 0) {
+        if (!session?.user) return;
+
+        // Condition 1: Initial Load (only if we haven't fetched yet and have accounts to fetch)
+        const isInitialLoad = !hasInitialFetch && selectedAccounts.length > 0;
+
+        // Condition 2: Manual Refresh (refreshTrigger increased)
+        // We use a ref to track prev trigger if needed, or just rely on the effect running when it changes.
+        // Since refreshTrigger starts at 0, we can assume any change is a request.
+        // But we need to distinguish mount (0) vs update. 
+        // Actually, logic is simpler: 
+        // If refreshTrigger changes, FORCE fetch.
+        // If selectedAccounts changes, DO NOT fetch (unless it's the very first load).
+
+        if (isInitialLoad) {
+            fetchAccounts().finally(() => setHasInitialFetch(true));
+        }
+    }, [selectedAccounts, session]); // Dependencies for Initial Load checking
+
+    // Separate effect for Manual Refresh to ensure it always runs on click
+    useEffect(() => {
+        if (refreshTrigger > 0 && session?.user && selectedAccounts.length > 0) {
             fetchAccounts();
         }
-    }, [session, selectedAccounts, refreshTrigger]);
+    }, [refreshTrigger]);
 
     // Spending limit handlers
     const openSpendingLimitDialog = (account: AdAccount) => {
@@ -496,7 +523,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                 <SortableHeader columnKey="activeAds" label={t('accounts.table.activeAds', 'Active Ads')} align="center" className="max-w-[280px]" />
                                 <SortableHeader columnKey="spendingCap" label={t('accounts.table.spendingCap', 'Spending Cap')} align="right" className="max-w-[280px] pr-12" />
                                 <SortableHeader columnKey="paymentMethod" label={t('accounts.table.paymentMethod', 'Payment Method')} align="left" className="max-w-[280px]" />
-                                <SortableHeader columnKey="timeZone" label={t('accounts.table.timezone', 'Time Zone')} align="left" className="max-w-[280px]" />
+                                <SortableHeader columnKey="timeZone" label={t('accounts.table.timezone', 'Time Zone')} align="right" className="max-w-[280px]" />
                                 <SortableHeader columnKey="nationality" label={t('accounts.table.nationality', 'Nationality')} align="center" className="max-w-[280px]" />
                                 <SortableHeader columnKey="currency" label={t('accounts.table.currency', 'Currency')} align="center" className="max-w-[280px]" />
                                 <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[280px]">
@@ -628,8 +655,8 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                             <span className="text-xs text-gray-400">-</span>
                                         )}
                                     </TableCell>
-                                    <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400">
-                                        {account.timeZone}
+                                    <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
+                                        {account.timeZone} {account.timeZoneOffset !== undefined ? `| ${account.timeZoneOffset >= 0 ? '+' : ''}${account.timeZoneOffset}` : ''}
                                     </TableCell>
                                     <TableCell className="px-4 py-2 text-center text-sm text-gray-600 dark:text-gray-400">
                                         {account.nationality}

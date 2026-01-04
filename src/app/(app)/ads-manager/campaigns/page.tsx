@@ -41,6 +41,8 @@ import { showCustomToast, showErrorToast, showWarningToast } from "@/utils/custo
 
 
 import { toast } from "sonner";
+import { ExportDialog } from "@/components/ExportDialog";
+import { cn } from "@/lib/utils";
 
 
 interface Campaign {
@@ -134,6 +136,9 @@ interface Ad {
 export default function CampaignsPage() {
   const { data: session } = useSession();
   const { selectedAccounts, adAccounts } = useAdAccount();
+
+
+
   const { t, language } = useLanguage();
 
   // 1. Data State
@@ -163,26 +168,19 @@ export default function CampaignsPage() {
   // Let's initialize with ALL loaded accounts? Or Empty?
   // "If not select... cannot go". Implies empty start.
 
-  // Load selected accounts from localStorage after mount (avoid hydration mismatch)
-  // Load selected accounts from localStorage after mount (avoid hydration mismatch)
-  // If no saved state, default to ALL selected accounts (better UX than empty)
+  // Sync View with Global Selection
+  // Whenever global selectedAccounts changes, update the local view to match it exactly.
+  // This ensures that if a user selects an account in Settings, it immediately appears here.
   useEffect(() => {
-    if (!isMounted) return;
-    const saved = localStorage.getItem('campaigns_selected_accounts');
-    if (saved) {
-      try {
-        const accountIds = new Set<string>(JSON.parse(saved));
-        setViewSelectedAccountIds(accountIds);
-      } catch (e) {
-        // Invalid data, ignore
-      }
-    } else if (selectedAccounts.length > 0) {
-      // Default to ALL if nothing saved
+    if (selectedAccounts.length > 0) {
       setViewSelectedAccountIds(new Set(selectedAccounts.map(a => a.id)));
+    } else {
+      setViewSelectedAccountIds(new Set());
     }
-  }, [selectedAccounts, isMounted]); // Run once when mounted or accounts load
+  }, [selectedAccounts]);
 
-  // Save selected accounts to localStorage whenever it changes
+  /* Removed old complex localStorage intersection logic to prioritize "Settings as Source of Truth" */
+
   // Save selected accounts to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== 'undefined' && isMounted) {
@@ -283,6 +281,7 @@ export default function CampaignsPage() {
   const [selectedCampaignIds, setSelectedCampaignIds] = useState<Set<string>>(new Set());
   const [selectedAdSetIds, setSelectedAdSetIds] = useState<Set<string>>(new Set());
   const [selectedAdIds, setSelectedAdIds] = useState<Set<string>>(new Set());
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // 4. Filtered Data Logic (must be after state definitions)
   // 4. Filtered Data Logic (must be after state definitions)
@@ -1495,27 +1494,32 @@ export default function CampaignsPage() {
             }}
             variant="outline"
             size="sm"
-            className="gap-2"
+            className="gap-2 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800"
             disabled={loading}
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            {t('campaigns.refresh', 'Refresh')}
+            <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} />
+            {t('common.refresh', 'Refresh')}
           </Button>
 
           {/* Export Button */}
           <Button
+            onClick={() => setExportDialogOpen(true)}
             variant="outline"
             size="sm"
-            className="gap-2"
-            onClick={() => {
-              // TODO: Implement export functionality
-              console.log('Export data');
-            }}
+            className="gap-2 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-900 transition-colors"
           >
-            <Download className="h-4 w-4" />
-            {t('campaigns.export', 'Export')}
+            <Download className="h-4 w-4 mr-1" />
+            {t('common.export', 'Export')}
           </Button>
         </div>
+
+        {/* Export Dialog */}
+        <ExportDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          dataType={activeTab === 'campaigns' ? 'campaigns' : activeTab === 'adsets' ? 'adsets' : 'ads'}
+          data={activeTab === 'campaigns' ? filteredCampaigns : activeTab === 'adsets' ? filteredAdSets : filteredAds}
+        />
 
         {/* Tabs */}
         <div className="flex-shrink-0">
