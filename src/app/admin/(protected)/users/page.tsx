@@ -15,6 +15,19 @@ import { format } from 'date-fns';
 
 const prisma = new PrismaClient();
 
+type UserWithCount = {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+    role: string;
+    plan: string;
+    createdAt: Date;
+    _count: {
+        accounts: number;
+    };
+};
+
 export default async function AdminUsersPage() {
     const users = await prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
@@ -29,8 +42,8 @@ export default async function AdminUsersPage() {
             _count: {
                 select: { accounts: true }
             }
-        }
-    });
+        } as any
+    }) as unknown as UserWithCount[];
 
     return (
         <div className="space-y-6">
