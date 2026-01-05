@@ -1,19 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function SettingsGeneralPage() {
     const { t } = useLanguage();
     const { data: session } = useSession();
+    const { toast } = useToast();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
     });
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (session?.user) {
@@ -23,6 +37,37 @@ export default function SettingsGeneralPage() {
             });
         }
     }, [session]);
+
+    const handleDeleteAccount = async () => {
+        setIsDeleting(true);
+        try {
+            const response = await fetch('/api/user/delete', {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete account');
+            }
+
+            toast({
+                title: "Account Deleted",
+                description: "Your account has been permanently deleted.",
+            });
+
+            // Sign out and redirect to home
+            await signOut({ callbackUrl: '/' });
+        } catch (error) {
+            console.error('Error deleting account:', error);
+            toast({
+                title: "Error",
+                description: "Failed to delete account. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteDialog(false);
+        }
+    };
 
     return (
         <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto space-y-8">
@@ -110,12 +155,45 @@ export default function SettingsGeneralPage() {
                         <p className="text-sm text-red-700 mb-4">
                             Once you delete your account, there is no going back. Please be certain. This will delete all your campaigns, analytics, and personal data.
                         </p>
-                        <Button variant="destructive" className="bg-red-600 hover:bg-red-700 text-white">
+                        <Button
+                            variant="destructive"
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            onClick={() => setShowDeleteDialog(true)}
+                        >
                             Delete My Account
                         </Button>
                     </div>
                 </div>
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete your account
+                            and remove all your data from our servers including:
+                            <ul className="list-disc list-inside mt-2 space-y-1">
+                                <li>All campaigns and ad sets</li>
+                                <li>Analytics and insights data</li>
+                                <li>Personal information</li>
+                                <li>Connected accounts</li>
+                            </ul>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteAccount}
+                            disabled={isDeleting}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            {isDeleting ? 'Deleting...' : 'Yes, delete my account'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
