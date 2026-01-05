@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const configs = await prisma.exportConfig.findMany({
+        const configs = await (prisma as any).exportConfig.findMany({
             where: { userId: session.user.id },
             orderBy: { createdAt: 'desc' }
         })
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid Google Sheets URL' }, { status: 400 })
         }
 
-        const config = await prisma.exportConfig.create({
+        const config = await (prisma as any).exportConfig.create({
             data: {
                 userId: session.user.id,
                 name,
@@ -99,7 +99,7 @@ export async function PUT(request: NextRequest) {
         const { id, ...updateData } = body
 
         // Verify ownership
-        const existing = await prisma.exportConfig.findFirst({
+        const existing = await (prisma as any).exportConfig.findFirst({
             where: { id, userId: session.user.id }
         })
 
@@ -122,7 +122,7 @@ export async function PUT(request: NextRequest) {
             updateData.accountIds = JSON.stringify(updateData.accountIds)
         }
 
-        const config = await prisma.exportConfig.update({
+        const config = await (prisma as any).exportConfig.update({
             where: { id },
             data: updateData
         })
@@ -150,7 +150,7 @@ export async function DELETE(request: NextRequest) {
         }
 
         // Verify ownership
-        const existing = await prisma.exportConfig.findFirst({
+        const existing = await (prisma as any).exportConfig.findFirst({
             where: { id, userId: session.user.id }
         })
 
@@ -158,7 +158,7 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: 'Config not found' }, { status: 404 })
         }
 
-        await prisma.exportConfig.delete({ where: { id } })
+        await (prisma as any).exportConfig.delete({ where: { id } })
 
         return NextResponse.json({ success: true })
     } catch (error) {

@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Config ID required' }, { status: 400 })
         }
 
-        const config = await prisma.exportConfig.findUnique({
+        const config = await (prisma as any).exportConfig.findUnique({
             where: { id: configId }
         })
 
@@ -349,7 +349,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update status
-        await prisma.exportConfig.update({
+        await (prisma as any).exportConfig.update({
             where: { id: config.id },
             data: {
                 lastExportAt: now,
