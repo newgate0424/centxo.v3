@@ -18,7 +18,14 @@ const prisma = new PrismaClient();
 export default async function AdminUsersPage() {
     const users = await prisma.user.findMany({
         orderBy: { createdAt: 'desc' },
-        include: {
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            role: true,
+            plan: true,
+            createdAt: true,
             _count: {
                 select: { accounts: true }
             }
