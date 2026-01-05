@@ -32,13 +32,13 @@ async function main() {
         update: {
             role: 'SUPER_ADMIN',
             password: hashedPassword, // Update password if env changes
-        },
+        } as any,
         create: {
             email: adminEmail,
             name: 'Super Admin',
             role: 'SUPER_ADMIN',
             password: hashedPassword,
-        },
+        } as any,
     });
 
     console.log(`✅ Super Admin configured: ${admin.email}`);
