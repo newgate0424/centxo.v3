@@ -1,16 +1,20 @@
-/**
- * GET /api/ads
- * Fetch ads from Meta API for selected ad accounts
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 import { withCache, withCacheSWR, generateCacheKey, CacheTTL, deleteCache } from '@/lib/cache/redis';
+import { TokenInfo, getValidTokenForAdAccount, getValidTokenForPage } from '@/lib/facebook/token-helper';
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+
+    // Rate limiting (User ID priority)
+    const rateLimitResponse = rateLimit(request, RateLimitPresets.standard, session?.user?.id);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -29,10 +33,34 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    // Get Facebook access token
-    const accessToken = (session as any).accessToken;
+    // Fetch user with team members to get all tokens
+    const { prisma } = await import('@/lib/prisma');
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        teamMembers: true,
+      },
+    });
 
-    if (!accessToken) {
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Collect all tokens
+    const tokens: TokenInfo[] = [];
+    const mainAccessToken = (session as any).accessToken;
+    if (mainAccessToken) {
+      tokens.push({ token: mainAccessToken, name: 'Main' });
+    }
+    if ((user as any).teamMembers) {
+      (user as any).teamMembers.forEach((m: any) => {
+        if (m.accessToken) {
+          tokens.push({ token: m.accessToken, name: m.facebookName || 'Member' });
+        }
+      });
+    }
+
+    if (tokens.length === 0) {
       return NextResponse.json(
         { error: 'Facebook not connected', ads: [] },
         { status: 400 }
@@ -40,8 +68,9 @@ export async function GET(request: NextRequest) {
     }
 
     const forceRefresh = searchParams.get('refresh') === 'true';
+    const CACHE_VERSION = 'v1';
     const dateRangeKey = dateFrom && dateTo ? `${dateFrom}_${dateTo}` : 'all';
-    const cacheKey = generateCacheKey('meta:ads', session.user.id!, `${adAccountIds.sort().join(',')}:${dateRangeKey}`);
+    const cacheKey = generateCacheKey(`meta:ads:${CACHE_VERSION}`, session.user.id!, `${adAccountIds.sort().join(',')}:${dateRangeKey}`);
 
     if (forceRefresh) {
       await deleteCache(cacheKey);
@@ -55,7 +84,7 @@ export async function GET(request: NextRequest) {
       CacheTTL.ADS_LIST,
       STALE_TTL,
       async () => {
-        return await fetchAdsFromMeta(adAccountIds, accessToken, dateFrom, dateTo);
+        return await fetchAdsFromMeta(adAccountIds, tokens, dateFrom, dateTo);
       }
     );
 
@@ -73,7 +102,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string, dateFrom?: string | null, dateTo?: string | null) {
+async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null) {
   const allAds: any[] = [];
 
   // Build insights time range parameter
@@ -87,29 +116,36 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string, dat
   }
 
   // Chunk requests to avoid rate limiting
-  // Increased from 3 to 10 for better performance while respecting limits
   const CHUNK_SIZE = 10;
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
 
     await Promise.all(chunk.map(async (accountId) => {
-      try {
-        // Run requests in parallel
-        const [accountResponse, adsResponse] = await Promise.all([
-          fetch(
-            `https://graph.facebook.com/v22.0/${accountId}?fields=currency&access_token=${accessToken}`
-          ),
-          fetch(
-            `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${accessToken}`
-          )
-        ]);
+      // Use helper to find correct token (uses Redis cache)
+      const token = await getValidTokenForAdAccount(accountId, tokens);
 
-        let accountCurrency = 'USD';
-        if (accountResponse.ok) {
-          const accountData = await accountResponse.json();
-          accountCurrency = accountData.currency || 'USD';
+      if (!token) {
+        // console.warn(`No valid token for account ${accountId}`);
+        return;
+      }
+
+      try {
+        const accountResponse = await fetch(
+          `https://graph.facebook.com/v22.0/${accountId}?fields=currency&access_token=${token}`
+        );
+
+        if (!accountResponse.ok) {
+          // If token helper returned a working token, this might be a specific error
+          // but we can skip
         }
+
+        const accountData = await accountResponse.json();
+        const accountCurrency = accountData.currency || 'USD';
+
+        const adsResponse = await fetch(
+          `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${token}`
+        );
 
         if (adsResponse.ok) {
           const data = await adsResponse.json();
@@ -123,12 +159,12 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string, dat
 
           allAds.push(...adsWithAccount);
         }
+
       } catch (err) {
         console.error(`Error fetching ads for account ${accountId}:`, err);
       }
     }));
 
-    // Add small delay between chunks to respect rate limits
     if (i + CHUNK_SIZE < adAccountIds.length) {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
@@ -163,18 +199,22 @@ async function fetchAdsFromMeta(adAccountIds: string[], accessToken: string, dat
         for (let i = 0; i < pageIdsArray.length; i += PAGE_BATCH_SIZE) {
           const batch = pageIdsArray.slice(i, i + PAGE_BATCH_SIZE);
 
-
           await Promise.all(batch.map(async (pageId) => {
-            try {
-              const pageResponse = await fetch(
-                `https://graph.facebook.com/v22.0/${pageId}?fields=name&access_token=${accessToken}`
-              );
-              if (pageResponse.ok) {
-                const pageData = await pageResponse.json();
-                names[pageId] = pageData.name;
+            // Use helper for Page token (uses Redis cache)
+            const token = await getValidTokenForPage(pageId, tokens);
+
+            if (token) {
+              try {
+                const pageResponse = await fetch(
+                  `https://graph.facebook.com/v22.0/${pageId}?fields=name&access_token=${token}`
+                );
+                if (pageResponse.ok) {
+                  const pageData = await pageResponse.json();
+                  names[pageId] = pageData.name;
+                }
+              } catch (err) {
+                // Ignore
               }
-            } catch (err) {
-              console.error(`Error fetching page ${pageId}:`, err);
             }
           }));
 

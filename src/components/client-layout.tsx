@@ -76,8 +76,10 @@ export default function ClientLayout({ children, defaultCollapsed = false }: Cli
                     suppressHydrationWarning
                     className="flex-1 overflow-hidden p-0 md:px-2 md:pb-2 lg:px-4 lg:pb-4 pt-0 bg-background"
                 >
-                    <div className="flex-1 h-full overflow-hidden rounded-none md:rounded-2xl border-none md:border border-border bg-card shadow-sm md:mr-2 lg:mr-4">
-                        {children}
+                    <div className="flex flex-col flex-1 h-full overflow-hidden rounded-none md:rounded-2xl border-none md:border border-border bg-card shadow-sm md:mr-2 lg:mr-4">
+                        <div className="flex-1 overflow-y-auto scrollbar-minimal">
+                            {children}
+                        </div>
                     </div>
                 </main>
             </div>

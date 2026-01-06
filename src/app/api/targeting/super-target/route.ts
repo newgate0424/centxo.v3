@@ -24,17 +24,27 @@ export async function GET(request: NextRequest) {
 
         const { searchParams } = new URL(request.url);
         const topic = searchParams.get('topic');
+        const lang = searchParams.get('lang') || 'en'; // Default to English
+
+        // Helper function to get the right name field based on language
+        const getNameField = (interest: any) => {
+            if (lang === 'th') {
+                return interest.nameTH || interest.name;
+            }
+            return interest.nameEN || interest.name;
+        };
 
         if (topic) {
-            const interests = await prisma.facebookInterest.findMany({
+            const interests = await (prisma as any).facebookInterest.findMany({
                 where: { topic },
                 orderBy: { audienceSizeUpperBound: 'desc' },
                 take: 100 // Limit to top 100 per topic
             });
 
             return NextResponse.json({
-                interests: interests.map(i => ({
+                interests: interests.map((i: any) => ({
                     ...i,
+                    name: getNameField(i),
                     audienceSizeLowerBound: i.audienceSizeLowerBound?.toString(),
                     audienceSizeUpperBound: i.audienceSizeUpperBound?.toString(),
                 }))
@@ -42,7 +52,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Fetch Top 20 Interests by Audience Size
-        const topInterests = await prisma.facebookInterest.findMany({
+        const topInterests = await (prisma as any).facebookInterest.findMany({
             orderBy: {
                 audienceSizeUpperBound: 'desc',
             },
@@ -50,7 +60,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Group by Topic count
-        const interestsByTopic = await prisma.facebookInterest.groupBy({
+        const interestsByTopic = await (prisma as any).facebookInterest.groupBy({
             by: ['topic'],
             _count: {
                 id: true,
@@ -63,12 +73,13 @@ export async function GET(request: NextRequest) {
         });
 
         return NextResponse.json({
-            top20: topInterests.map(i => ({
+            top20: topInterests.map((i: any) => ({
                 ...i,
+                name: getNameField(i),
                 audienceSizeLowerBound: i.audienceSizeLowerBound?.toString(),
                 audienceSizeUpperBound: i.audienceSizeUpperBound?.toString(),
             })),
-            topics: interestsByTopic.map(t => ({
+            topics: interestsByTopic.map((t: any) => ({
                 name: t.topic || 'Uncategorized',
                 count: t._count.id
             }))

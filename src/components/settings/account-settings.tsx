@@ -30,7 +30,6 @@ export function AccountSettings() {
         displayName: '',
         email: '',
         role: '',
-        facebookName: '',
     });
     const [profileImage, setProfileImage] = useState<string>('');
     const [isUploading, setIsUploading] = useState(false);
@@ -44,7 +43,6 @@ export function AccountSettings() {
                 displayName: session.user.name || '',
                 email: session.user.email || '',
                 role: 'Host (Owner)',
-                facebookName: session.user.name || '',
             });
             setProfileImage(session.user.image || '');
         }
@@ -224,7 +222,7 @@ export function AccountSettings() {
                     {t('settings.accountSettings', 'Account Settings')}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    Manage your account information and preferences
+                    {t('settings.accountSubtitle', 'Manage your account information and preferences')}
                 </p>
             </div>
 
@@ -267,7 +265,7 @@ export function AccountSettings() {
                                 disabled={isUploading}
                             >
                                 <Camera className="h-4 w-4" />
-                                Change Photo
+                                {t('settings.profile.changePhoto', 'Change Photo')}
                             </Button>
                             <Button
                                 variant="outline"
@@ -277,11 +275,11 @@ export function AccountSettings() {
                                 disabled={isUploading || !profileImage}
                             >
                                 <Trash2 className="h-4 w-4" />
-                                Remove Photo
+                                {t('settings.profile.removePhoto', 'Remove Photo')}
                             </Button>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                            Supports JPEG, PNG, GIF, WebP (Max 5MB)
+                            {t('settings.profile.supports', 'Supports JPEG, PNG, GIF, WebP (Max 5MB)')}
                         </p>
                     </div>
                 </div>
@@ -292,7 +290,7 @@ export function AccountSettings() {
                 {/* Display Name */}
                 <div className="space-y-2">
                     <Label htmlFor="displayName" className="text-sm font-medium">
-                        Display Name
+                        {t('settings.profile.displayName', 'Display Name')}
                     </Label>
                     <Input
                         id="displayName"
@@ -301,14 +299,14 @@ export function AccountSettings() {
                         className="max-w-md"
                     />
                     <p className="text-xs text-muted-foreground">
-                        This name will be displayed in the system and emails sent to you
+                        {t('settings.profile.displayNameNote', 'This name will be displayed in the system and emails sent to you')}
                     </p>
                 </div>
 
                 {/* Email */}
                 <div className="space-y-2">
                     <Label htmlFor="email" className="text-sm font-medium">
-                        Email
+                        {t('settings.profile.email', 'Email')}
                     </Label>
                     <Input
                         id="email"
@@ -318,14 +316,14 @@ export function AccountSettings() {
                         className="max-w-md bg-muted"
                     />
                     <p className="text-xs text-muted-foreground">
-                        Email cannot be changed
+                        {t('settings.profile.emailNote', 'Email cannot be changed')}
                     </p>
                 </div>
 
                 {/* Role */}
                 <div className="space-y-2">
                     <Label htmlFor="role" className="text-sm font-medium">
-                        Role
+                        {t('settings.profile.role', 'Role')}
                     </Label>
                     <Input
                         id="role"
@@ -335,21 +333,7 @@ export function AccountSettings() {
                     />
                 </div>
 
-                {/* Facebook Name */}
-                <div className="space-y-2">
-                    <Label htmlFor="facebookName" className="text-sm font-medium">
-                        Facebook Name
-                    </Label>
-                    <Input
-                        id="facebookName"
-                        value={formData.facebookName}
-                        disabled
-                        className="max-w-md bg-muted"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                        Name from connected Facebook account
-                    </p>
-                </div>
+
             </div>
 
             {/* Save Button */}
@@ -365,7 +349,7 @@ export function AccountSettings() {
                             Saving...
                         </>
                     ) : (
-                        'Save Changes'
+                        t('settings.saveChanges', 'Save Changes')
                     )}
                 </Button>
             </div>

@@ -24,7 +24,7 @@ export function NotificationsSettings() {
                     {t('settings.notifications', 'Notifications')}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    Configure how you receive notifications
+                    {t('settings.notificationsSubtitle', 'Configure how you receive notifications')}
                 </p>
             </div>
 
@@ -33,10 +33,10 @@ export function NotificationsSettings() {
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                         <Label htmlFor="email-notifications" className="text-base font-medium">
-                            Email Notifications
+                            {t('settings.notifications.email', 'Email Notifications')}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Receive notifications via email
+                            {t('settings.notifications.emailDesc', 'Receive notifications via email')}
                         </p>
                     </div>
                     <Switch
@@ -53,10 +53,10 @@ export function NotificationsSettings() {
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                         <Label htmlFor="campaign-updates" className="text-base font-medium">
-                            Campaign Updates
+                            {t('settings.notifications.campaign', 'Campaign Updates')}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Get notified about campaign performance changes
+                            {t('settings.notifications.campaignDesc', 'Get notified about campaign performance changes')}
                         </p>
                     </div>
                     <Switch
@@ -73,10 +73,10 @@ export function NotificationsSettings() {
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                         <Label htmlFor="weekly-reports" className="text-base font-medium">
-                            Weekly Reports
+                            {t('settings.notifications.weekly', 'Weekly Reports')}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Receive weekly performance summaries
+                            {t('settings.notifications.weeklyDesc', 'Receive weekly performance summaries')}
                         </p>
                     </div>
                     <Switch
@@ -93,10 +93,10 @@ export function NotificationsSettings() {
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                         <Label htmlFor="system-alerts" className="text-base font-medium">
-                            System Alerts
+                            {t('settings.notifications.system', 'System Alerts')}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Important system and security notifications
+                            {t('settings.notifications.systemDesc', 'Important system and security notifications')}
                         </p>
                     </div>
                     <Switch
@@ -113,10 +113,10 @@ export function NotificationsSettings() {
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                         <Label htmlFor="marketing-emails" className="text-base font-medium">
-                            Marketing Emails
+                            {t('settings.notifications.marketing', 'Marketing Emails')}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Receive tips, news, and product updates
+                            {t('settings.notifications.marketingDesc', 'Receive tips, news, and product updates')}
                         </p>
                     </div>
                     <Switch

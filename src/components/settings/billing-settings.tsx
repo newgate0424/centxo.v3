@@ -25,22 +25,36 @@ export function BillingSettings() {
 
     const plans = [
         {
-            name: 'FREE',
+            name: t('settings.billing.plans.free.name', 'FREE'),
             price: '$0',
-            period: '/month',
-            features: ['10 Ad Accounts', 'Basic Analytics', 'Standard Support'],
+            period: t('settings.billing.period', '/month'),
+            features: [
+                t('settings.billing.plans.features.adAccounts10', '10 Ad Accounts'),
+                t('settings.billing.plans.features.analyticsBasic', 'Basic Analytics'),
+                t('settings.billing.plans.features.supportStandard', 'Standard Support')
+            ],
         },
         {
-            name: 'PLUS',
+            name: t('settings.billing.plans.plus.name', 'PLUS'),
             price: '$39',
-            period: '/month',
-            features: ['20 Ad Accounts', 'Advanced Analytics', 'Priority Support', 'AI Optimization'],
+            period: t('settings.billing.period', '/month'),
+            features: [
+                t('settings.billing.plans.features.adAccounts20', '20 Ad Accounts'),
+                t('settings.billing.plans.features.analyticsAdvanced', 'Advanced Analytics'),
+                t('settings.billing.plans.features.supportPriority', 'Priority Support'),
+                t('settings.billing.plans.features.aiOptimization', 'AI Optimization')
+            ],
         },
         {
-            name: 'PRO',
+            name: t('settings.billing.plans.pro.name', 'PRO'),
             price: '$99',
-            period: '/month',
-            features: ['50 Ad Accounts', 'Enterprise Analytics', 'Dedicated Support', 'Early Access Features'],
+            period: t('settings.billing.period', '/month'),
+            features: [
+                t('settings.billing.plans.features.adAccounts50', '50 Ad Accounts'),
+                t('settings.billing.plans.features.analyticsEnterprise', 'Enterprise Analytics'),
+                t('settings.billing.plans.features.supportDedicated', 'Dedicated Support'),
+                t('settings.billing.plans.features.earlyAccess', 'Early Access Features')
+            ],
         },
     ];
 
@@ -81,7 +95,7 @@ export function BillingSettings() {
                                 variant={isCurrent ? "outline" : "default"}
                                 className={`w-full ${isCurrent ? "border-blue-500 text-blue-600 cursor-default hover:bg-transparent" : "bg-blue-600 hover:bg-blue-700 text-white"}`}
                             >
-                                {isCurrent ? "Current Plan" : "Upgrade"}
+                                {isCurrent ? t('settings.billing.currentPlan', 'Current Plan') : t('settings.billing.upgrade', 'Upgrade')}
                             </Button>
                         </div>
                     )

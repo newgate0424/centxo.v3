@@ -65,10 +65,10 @@ export function DeleteAccountSettings() {
             {/* Header */}
             <div>
                 <h2 className="text-2xl font-bold text-destructive mb-1">
-                    {t('settings.deleteAccount', 'Delete Account')}
+                    {t('settings.delete.title', 'Delete Account')}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    Permanently delete your account and all associated data
+                    {t('settings.delete.subtitle', 'Permanently delete your account and all associated data')}
                 </p>
             </div>
 
@@ -78,20 +78,20 @@ export function DeleteAccountSettings() {
                     <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                     <div className="space-y-3">
                         <h3 className="font-semibold text-destructive">
-                            Warning: This action cannot be undone
+                            {t('settings.delete.warning.title', 'Warning: This action cannot be undone')}
                         </h3>
                         <p className="text-sm text-foreground">
-                            Deleting your account will permanently remove:
+                            {t('settings.delete.warning.desc', 'Deleting your account will permanently remove:')}
                         </p>
                         <ul className="list-disc list-inside text-sm text-foreground space-y-1 ml-2">
-                            <li>All campaigns and ad sets</li>
-                            <li>Analytics and insights data</li>
-                            <li>Personal information and preferences</li>
-                            <li>Connected accounts and integrations</li>
-                            <li>Billing history and subscription</li>
+                            <li>{t('settings.delete.warning.list1', 'All campaigns and ad sets')}</li>
+                            <li>{t('settings.delete.warning.list2', 'Analytics and insights data')}</li>
+                            <li>{t('settings.delete.warning.list3', 'Personal information and preferences')}</li>
+                            <li>{t('settings.delete.warning.list4', 'Connected accounts and integrations')}</li>
+                            <li>{t('settings.delete.warning.list5', 'Billing history and subscription')}</li>
                         </ul>
                         <p className="text-sm text-foreground font-medium mt-4">
-                            This action is irreversible. Please be certain before proceeding.
+                            {t('settings.delete.warning.nav', 'This action is irreversible. Please be certain before proceeding.')}
                         </p>
                     </div>
                 </div>
@@ -104,7 +104,7 @@ export function DeleteAccountSettings() {
                     onClick={() => setShowDeleteDialog(true)}
                     className="bg-destructive hover:bg-destructive/90"
                 >
-                    Delete My Account
+                    {t('settings.deleteAccount', 'Delete My Account')}
                 </Button>
             </div>
 
@@ -113,16 +113,15 @@ export function DeleteAccountSettings() {
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle className="text-destructive">
-                            Are you absolutely sure?
+                            {t('settings.delete.confirm.dialog.title', 'Are you absolutely sure?')}
                         </AlertDialogTitle>
                         <AlertDialogDescription className="space-y-4">
                             <p>
-                                This action cannot be undone. This will permanently delete your account
-                                and remove all your data from our servers.
+                                {t('settings.delete.confirm.dialog.desc', 'This action cannot be undone. This will permanently delete your account and remove all your data from our servers.')}
                             </p>
                             <div className="space-y-2">
                                 <Label htmlFor="confirm-delete" className="text-foreground">
-                                    Type <span className="font-mono font-bold">DELETE</span> to confirm:
+                                    {t('settings.delete.confirm.type', 'Type DELETE to confirm:')}
                                 </Label>
                                 <Input
                                     id="confirm-delete"
@@ -135,13 +134,13 @@ export function DeleteAccountSettings() {
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={isDeleting}>{t('launch.cancel', 'Cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDeleteAccount}
                             disabled={!canDelete || isDeleting}
                             className="bg-destructive hover:bg-destructive/90"
                         >
-                            {isDeleting ? 'Deleting...' : 'Yes, delete my account'}
+                            {isDeleting ? 'Deleting...' : t('settings.delete.confirm.button', 'Yes, delete my account')}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

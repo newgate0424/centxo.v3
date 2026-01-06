@@ -2,10 +2,12 @@
 
 import { Suspense } from 'react';
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle, Sparkles } from "lucide-react";
@@ -20,16 +22,13 @@ const GoogleIcon = () => (
     </svg>
 );
 
-const FacebookIcon = () => (
-    <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24">
-        <path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 2.848-5.978 5.817-5.978.33 0 3.165.178 3.165.178v3.39H16.27c-2.095 0-2.625 1.106-2.625 2.03v1.96h3.848l-.519 3.667h-3.329v7.98h-4.544z" />
-    </svg>
-);
-
 function LoginPageContent() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const { t } = useLanguage();
 
     useEffect(() => {
@@ -39,15 +38,35 @@ function LoginPageContent() {
                 'Callback': 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง',
                 'OAuthCallback': 'เกิดข้อผิดพลาดในการเข้าสู่ระบบด้วย OAuth',
                 'OAuthAccountNotLinked': 'อีเมลนี้ถูกใช้กับ provider อื่นแล้ว',
+                'CredentialsSignin': 'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
                 'Default': 'เกิดข้อผิดพลาด: ' + errorParam,
             };
             setError(errorMessages[errorParam] || errorMessages['Default']);
         }
     }, [searchParams]);
 
-    const handleOAuthSignIn = async (provider: "google" | "facebook") => {
-        setLoading(provider);
-        await signIn(provider, { callbackUrl: "/dashboard" });
+    const handleEmailSignIn = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading('credentials');
+        setError(null);
+
+        const result = await signIn('credentials', {
+            email,
+            password,
+            redirect: false,
+        });
+
+        if (result?.error) {
+            setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+            setLoading(null);
+        } else if (result?.ok) {
+            router.push('/dashboard');
+        }
+    };
+
+    const handleGoogleSignIn = async () => {
+        setLoading('google');
+        await signIn('google', { callbackUrl: "/dashboard" });
     };
 
     return (
@@ -68,47 +87,75 @@ function LoginPageContent() {
                         </Alert>
                     )}
 
-                    <div className="space-y-3">
-                        <Button
-                            disabled={loading !== null}
-                            onClick={() => handleOAuthSignIn("facebook")}
-                            className="w-full h-12 rounded-2xl text-base font-semibold bg-[#1877F2] hover:bg-[#166FE5] text-white transition-all justify-center gap-3 shadow-lg shadow-[#1877F2]/25 hover:shadow-[#1877F2]/40"
-                        >
-                            {loading === 'facebook' ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                                <>
-                                    <FacebookIcon />
-                                    {t('login.facebook')}
-                                </>
-                            )}
-                        </Button>
+                    {/* Email/Password Form */}
+                    <form onSubmit={handleEmailSignIn} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="your@email.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                disabled={loading !== null}
+                                className="h-11"
+                            />
+                        </div>
 
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-card px-2 text-muted-foreground">{t('login.or')}</span>
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="password">Password</Label>
+                            <Input
+                                id="password"
+                                type="password"
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                disabled={loading !== null}
+                                className="h-11"
+                            />
                         </div>
 
                         <Button
-                            variant="outline"
+                            type="submit"
                             disabled={loading !== null}
-                            onClick={() => handleOAuthSignIn("google")}
-                            className="w-full h-12 rounded-2xl text-base font-medium border-2 hover:bg-muted/50 transition-all justify-center gap-3"
+                            className="w-full h-12 rounded-2xl text-base font-semibold bg-primary hover:bg-primary/90 text-white transition-all justify-center gap-3"
                         >
-                            {loading === 'google' ? (
+                            {loading === 'credentials' ? (
                                 <Loader2 className="h-5 w-5 animate-spin" />
                             ) : (
-                                <>
-                                    <GoogleIcon />
-                                    {t('login.google')}
-                                </>
+                                'Sign In'
                             )}
                         </Button>
+                    </form>
+
+                    {/* Divider */}
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-card px-2 text-muted-foreground">{t('login.or')}</span>
+                        </div>
                     </div>
+
+                    {/* Google OAuth */}
+                    <Button
+                        variant="outline"
+                        disabled={loading !== null}
+                        onClick={handleGoogleSignIn}
+                        className="w-full h-12 rounded-2xl text-base font-medium border-2 hover:bg-muted/50 transition-all justify-center gap-3"
+                    >
+                        {loading === 'google' ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                            <>
+                                <GoogleIcon />
+                                {t('login.google')}
+                            </>
+                        )}
+                    </Button>
 
                     <p className="text-xs text-center text-muted-foreground pt-4">
                         {t('login.terms')}{" "}

@@ -10,4 +10,6 @@ export { NotificationsSettings } from './notifications-settings';
 export { SecuritySettings } from './security-settings';
 export { AppearanceSettings } from './appearance-settings';
 export { DeleteAccountSettings } from './delete-account-settings';
+export { TeamSettings } from './team-settings';
+
 

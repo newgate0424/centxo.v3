@@ -14,6 +14,7 @@ import {
   Palette,
   Trash2,
   Megaphone,
+  Users,
 } from 'lucide-react';
 
 // Import settings content components
@@ -25,6 +26,7 @@ import { SecuritySettings } from '@/components/settings/security-settings';
 import { LanguageSettings } from '@/components/settings/language-settings';
 import { AppearanceSettings } from '@/components/settings/appearance-settings';
 import { DeleteAccountSettings } from '@/components/settings/delete-account-settings';
+import { TeamSettings } from '@/components/settings/team-settings';
 
 type SettingsSection = 'account' | 'connections' | 'ad-accounts' | 'notifications' | 'security' | 'language' | 'appearance' | 'delete-account';
 

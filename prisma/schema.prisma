@@ -11,17 +11,19 @@ datasource db {
 }
 
 model User {
-  id            String        @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String?
-  email         String?       @unique
+  email         String?      @unique
   emailVerified DateTime?
   image         String?
   password      String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  role          String        @default("USER") // USER, ADMIN, SUPER_ADMIN
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  role          String       @default("USER") // USER, ADMIN, SUPER_ADMIN
   accounts      Account[]
   metaAccount   MetaAccount?
+  teamMembers   TeamMember[]
+  isTeamHost    Boolean      @default(true)
 
   // Subscription Fields
   plan               String    @default("FREE") // FREE, PLUS, PRO
@@ -51,84 +53,84 @@ model Account {
 }
 
 model MetaAccount {
-  id                   String     @id @default(cuid())
-  userId               String     @unique
-  user                 User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  metaUserId           String     @unique
-  accessToken          String     @db.Text
-  accessTokenExpires   DateTime
-  adAccountId          String?
-  adAccountName        String?
-  pageId               String?
-  pageName             String?
-  pageAccessToken      String?    @db.Text
-  campaigns            Campaign[]
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  userId             String     @unique
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metaUserId         String     @unique
+  accessToken        String     @db.Text
+  accessTokenExpires DateTime
+  adAccountId        String?
+  adAccountName      String?
+  pageId             String?
+  pageName           String?
+  pageAccessToken    String?    @db.Text
+  campaigns          Campaign[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 }
 
 model Campaign {
-  id              String            @id @default(cuid())
-  metaCampaignId  String            @unique
-  name            String
-  objective       String            @default("MESSAGES") // MESSAGES, OUTCOME_TRAFFIC, etc.
-  status          String            // ACTIVE, PAUSED, ARCHIVED
-  dailyBudget     Float             @default(20.0) // USD
-  metaAccountId   String
-  metaAccount     MetaAccount       @relation(fields: [metaAccountId], references: [id])
-  videoPath       String            @db.Text // Local path or S3 URL
-  videoAssetId    String?           // Meta video asset ID
-  adSets          AdSet[]
-  insights        CampaignInsight[]
-  auditLogs       AuditLog[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  metaCampaignId String            @unique
+  name           String
+  objective      String            @default("MESSAGES") // MESSAGES, OUTCOME_TRAFFIC, etc.
+  status         String // ACTIVE, PAUSED, ARCHIVED
+  dailyBudget    Float             @default(20.0) // USD
+  metaAccountId  String
+  metaAccount    MetaAccount       @relation(fields: [metaAccountId], references: [id])
+  videoPath      String            @db.Text // Local path or S3 URL
+  videoAssetId   String? // Meta video asset ID
+  adSets         AdSet[]
+  insights       CampaignInsight[]
+  auditLogs      AuditLog[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 }
 
 model AdSet {
-  id               String          @id @default(cuid())
-  metaAdSetId      String          @unique
-  campaignId       String
-  campaign         Campaign        @relation(fields: [campaignId], references: [id])
-  status           String          // ACTIVE, PAUSED
-  targeting        Json            // Store targeting criteria
-  dailyBudget      Float           @default(20.0)
-  ads              Ad[]
-  insights         AdSetInsight[]
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id          String         @id @default(cuid())
+  metaAdSetId String         @unique
+  campaignId  String
+  campaign    Campaign       @relation(fields: [campaignId], references: [id])
+  status      String // ACTIVE, PAUSED
+  targeting   Json // Store targeting criteria
+  dailyBudget Float          @default(20.0)
+  ads         Ad[]
+  insights    AdSetInsight[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 }
 
 model Ad {
-  id            String        @id @default(cuid())
-  metaAdId      String        @unique
-  adSetId       String
-  adSet         AdSet         @relation(fields: [adSetId], references: [id])
-  status        String        // ACTIVE, PAUSED
-  adCreativeId  String
-  adCreative    AdCreative    @relation(fields: [adCreativeId], references: [id])
-  isWinner      Boolean       @default(false)
-  insights      AdInsight[]
-  auditLogs     AuditLog[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id           String      @id @default(cuid())
+  metaAdId     String      @unique
+  adSetId      String
+  adSet        AdSet       @relation(fields: [adSetId], references: [id])
+  status       String // ACTIVE, PAUSED
+  adCreativeId String
+  adCreative   AdCreative  @relation(fields: [adCreativeId], references: [id])
+  isWinner     Boolean     @default(false)
+  insights     AdInsight[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 }
 
 model AdCreative {
-  id                 String   @id @default(cuid())
-  metaCreativeId     String   @unique
+  id                 String         @id @default(cuid())
+  metaCreativeId     String         @unique
   videoAssetId       String
-  primaryTextTH      String   @db.Text
-  primaryTextEN      String   @db.Text
-  headlineTH         String?  @db.Text
-  headlineEN         String?  @db.Text
-  ctaMessagePromptTH String   @db.Text
-  ctaMessagePromptEN String   @db.Text
+  primaryTextTH      String         @db.Text
+  primaryTextEN      String         @db.Text
+  headlineTH         String?        @db.Text
+  headlineEN         String?        @db.Text
+  ctaMessagePromptTH String         @db.Text
+  ctaMessagePromptEN String         @db.Text
   ads                Ad[]
   aiAnalysisLogId    String?
   aiAnalysisLog      AIAnalysisLog? @relation(fields: [aiAnalysisLogId], references: [id])
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 }
 
 model AIAnalysisLog {
@@ -163,7 +165,7 @@ model AdInsight {
   messages       Int
   costPerMessage Float
   createdAt      DateTime @default(now())
-  
+
   @@unique([adId, date])
 }
 
@@ -176,38 +178,38 @@ model AdSetInsight {
   messages       Int
   costPerMessage Float?
   createdAt      DateTime @default(now())
-  
+
   @@unique([adSetId, date])
 }
 
 model DecisionLog {
   id         String   @id @default(cuid())
-  entityType String   // "Campaign", "AdSet", "Ad"
+  entityType String // "Campaign", "AdSet", "Ad"
   entityId   String
-  action     String   // "PAUSE", "RESUME", "MARK_WINNER"
+  action     String // "PAUSE", "RESUME", "MARK_WINNER"
   reason     String   @db.Text
-  metadata   Json?    // Additional context
+  metadata   Json? // Additional context
   createdAt  DateTime @default(now())
-  
+
   @@index([entityType, entityId])
   @@index([createdAt])
 }
 
 model AuditLog {
-  id           String   @id @default(cuid())
-  userId       String?
-  action       String   // "CREATE_CAMPAIGN", "PAUSE_AD", "API_CALL"
-  entityType   String?
-  entityId     String?
-  campaignId   String?
-  campaign     Campaign? @relation(fields: [campaignId], references: [id])
-  adId         String?
-  ad           Ad?      @relation(fields: [adId], references: [id])
-  details      Json?
-  ipAddress    String?
-  userAgent    String?  @db.Text
-  createdAt    DateTime @default(now())
-  
+  id         String    @id @default(cuid())
+  userId     String?
+  action     String // "CREATE_CAMPAIGN", "PAUSE_AD", "API_CALL"
+  entityType String?
+  entityId   String?
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  adId       String?
+  ad         Ad?       @relation(fields: [adId], references: [id])
+  details    Json?
+  ipAddress  String?
+  userAgent  String?   @db.Text
+  createdAt  DateTime  @default(now())
+
   @@index([userId])
   @@index([action])
   @@index([createdAt])
@@ -216,7 +218,9 @@ model AuditLog {
 model FacebookInterest {
   id                     String   @id @default(cuid())
   fbId                   String   @unique
-  name                   String
+  name                   String   // English (default)
+  nameTH                 String?  // Thai
+  nameEN                 String?  // English (explicit)
   audienceSizeLowerBound BigInt?
   audienceSizeUpperBound BigInt?
   path                   Json?
@@ -225,40 +229,66 @@ model FacebookInterest {
   updatedAt              DateTime @updatedAt
 
   @@index([name])
+  @@index([nameTH])
 }
 
 model ExportConfig {
-  id                    String   @id @default(cuid())
-  userId                String
-  name                  String
-  spreadsheetUrl        String   @db.Text
-  spreadsheetId         String
-  spreadsheetName       String?
-  sheetName             String
-  dataType              String   // ads, campaigns, adsets, accounts
-  columnMapping         String   @db.Text // JSON string
-  
+  id              String  @id @default(cuid())
+  userId          String
+  name            String
+  spreadsheetUrl  String  @db.Text
+  spreadsheetId   String
+  spreadsheetName String?
+  sheetName       String
+  dataType        String // ads, campaigns, adsets, accounts
+  columnMapping   String  @db.Text // JSON string
+
   // Auto Export
-  autoExportEnabled     Boolean  @default(false)
-  exportFrequency       String?  // daily, hourly
-  exportHour            Int?
-  exportMinute          Int?
-  exportInterval        Int?     // hours lookback (1, 6, 12, 24)
-  
-  appendMode            Boolean  @default(true)
-  includeDate           Boolean  @default(true)
-  
-  accountIds            String?  @db.Text // JSON string array of account IDs
-  
-  useAdAccountTimezone  Boolean  @default(false)
-  adAccountTimezone     String?  // e.g., "Asia/Bangkok"
-  
-  lastExportAt          DateTime?
-  lastExportStatus      String?  // SUCCESS, FAILED
-  lastExportError       String?  @db.Text
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  autoExportEnabled Boolean @default(false)
+  exportFrequency   String? // daily, hourly
+  exportHour        Int?
+  exportMinute      Int?
+  exportInterval    Int? // hours lookback (1, 6, 12, 24)
+
+  appendMode  Boolean @default(true)
+  includeDate Boolean @default(true)
+
+  accountIds String? @db.Text // JSON string array of account IDs
+
+  useAdAccountTimezone Boolean @default(false)
+  adAccountTimezone    String? // e.g., "Asia/Bangkok"
+
+  lastExportAt     DateTime?
+  lastExportStatus String? // SUCCESS, FAILED
+  lastExportError  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model TeamMember {
+  id     String @id @default(cuid())
+  userId String // The host/owner user ID
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Facebook account details
+  facebookUserId     String   @unique
+  facebookName       String
+  facebookEmail      String?
+  accessToken        String   @db.Text
+  accessTokenExpires DateTime
+  refreshToken       String?  @db.Text
+
+  // Team role
+  role String @default("MEMBER") // HOST, MEMBER
+
+  // Metadata
+  addedAt    DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([facebookUserId])
 }

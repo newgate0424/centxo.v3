@@ -15,137 +15,95 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get Facebook access token from session
-    const accessToken = (session as any).accessToken;
+    // Fetch user with team members from database
+    const { prisma } = await import('@/lib/prisma');
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        teamMembers: true,
+      },
+    });
 
-    if (!accessToken) {
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Collect all tokens
+    const tokens = [];
+    const mainAccessToken = (session as any).accessToken;
+    if (mainAccessToken) {
+      tokens.push({
+        token: mainAccessToken,
+        name: user.name || 'Main Account',
+      });
+    }
+
+    if ((user as any).teamMembers) {
+      (user as any).teamMembers.forEach((m: any) => {
+        if (m.accessToken) {
+          tokens.push({
+            token: m.accessToken,
+            name: m.facebookName || 'Team Member',
+          });
+        }
+      });
+    }
+
+    if (tokens.length === 0) {
       return NextResponse.json(
         { error: 'Facebook not connected', pages: [] },
         { status: 400 }
       );
     }
 
-    // Fetch ALL pages from Facebook Graph API with pagination support
-    let pages: any[] = [];
-    let nextUrl: string | null = `https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,category,picture,tasks,is_published,fan_count,verification_status,page_token&limit=200&access_token=${accessToken}`;
+    const allPages: any[] = [];
 
-    console.log('🔍 Starting to fetch pages from /me/accounts...');
+    // Fetch pages for all tokens
+    await Promise.all(tokens.map(async (tokenData) => {
+      try {
+        let nextUrl: string | null = `https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,category,picture,tasks,is_published,fan_count,verification_status,page_token&limit=200&access_token=${tokenData.token}`;
 
-    // Fetch all pages with pagination
-    let pageCount = 0;
-    while (nextUrl) {
-      pageCount++;
-      console.log(`📄 Fetching page ${pageCount} from: ${nextUrl.substring(0, 100)}...`);
+        let tokenPages: any[] = [];
+        let pageCount = 0;
 
-      const response: Response = await fetch(nextUrl);
+        while (nextUrl && pageCount < 5) { // Safety limit
+          pageCount++;
+          const response: Response = await fetch(nextUrl);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ Facebook API error:', errorData);
-        break;
-      }
+          if (!response.ok) break;
 
-      const data = await response.json();
-      const pagesBatch = data.data || [];
-      pages = pages.concat(pagesBatch);
-
-      console.log(`✓ Fetched ${pagesBatch.length} pages in this batch`);
-
-      // Log details of each page
-      pagesBatch.forEach((page: any, index: number) => {
-        console.log(`  Page ${index + 1}: ${page.name} (${page.id})`);
-        console.log(`    Tasks: ${page.tasks ? page.tasks.join(', ') : 'none'}`);
-      });
-
-      console.log(`📊 Total pages so far: ${pages.length}`);
-      console.log(`🔗 Has next page: ${!!data.paging?.next}`);
-
-      // Check if there's a next page
-      nextUrl = data.paging?.next || null;
-
-      // Safety limit to prevent infinite loop
-      if (pageCount > 10) {
-        console.warn('⚠️ Reached safety limit of 10 requests');
-        break;
-      }
-    }
-
-    console.log(`✅ Finished fetching from /me/accounts: ${pages.length} pages total`);
-
-    // Also try to fetch pages from business accounts
-    try {
-      const businessResponse = await fetch(
-        `https://graph.facebook.com/v22.0/me/businesses?fields=id,name,owned_pages{id,name,access_token,category,picture,tasks,is_published,fan_count,verification_status,page_token},client_pages{id,name,access_token,category,picture,tasks,is_published,fan_count,verification_status,page_token}&access_token=${accessToken}`
-      );
-
-      if (businessResponse.ok) {
-        const businessData = await businessResponse.json();
-        console.log('Business data:', JSON.stringify(businessData, null, 2));
-
-        // Extract pages from all businesses
-        if (businessData.data && Array.isArray(businessData.data)) {
-          for (const business of businessData.data) {
-            // Add owned pages
-            if (business.owned_pages?.data) {
-              const ownedPages = business.owned_pages.data;
-              console.log(`Found ${ownedPages.length} owned pages from business ${business.name}`);
-
-              // Add only if not already in pages array
-              for (const page of ownedPages) {
-                if (!pages.find((p: any) => p.id === page.id)) {
-                  pages.push(page);
-                }
-              }
-            }
-
-            // Add client pages
-            if (business.client_pages?.data) {
-              const clientPages = business.client_pages.data;
-              console.log(`Found ${clientPages.length} client pages from business ${business.name}`);
-
-              // Add only if not already in pages array
-              for (const page of clientPages) {
-                if (!pages.find((p: any) => p.id === page.id)) {
-                  pages.push(page);
-                }
-              }
-            }
-          }
+          const data = await response.json();
+          const pagesBatch = data.data || [];
+          tokenPages = tokenPages.concat(pagesBatch);
+          nextUrl = data.paging?.next || null;
         }
+
+        // Add to main list with owner info
+        const pagesWithSource = tokenPages.map((p: any) => ({
+          ...p,
+          owner_name: tokenData.name
+        }));
+        allPages.push(...pagesWithSource);
+
+      } catch (err) {
+        console.error(`Error fetching pages for ${tokenData.name}:`, err);
       }
-    } catch (businessError) {
-      console.log('Could not fetch business pages (user may not have business_management permission):', businessError);
-      // Continue with pages we already have
-    }
+    }));
 
-    console.log(`Total ${pages.length} pages after merging all sources`);
+    // Deduplicate by Page ID
+    // If duplicates exist, we keep the first one encountered.
+    // Ideally, we might want to prioritize "Main Account" (which is first in tokens list).
+    const uniquePages = Array.from(new Map(allPages.map(item => [item.id, item])).values());
 
-    // If no pages found, log for debugging
-    if (pages.length === 0) {
-      console.log('No pages found. This could mean:');
-      console.log('1. User is not an admin of any Facebook Pages');
-      console.log('2. User did not grant pages_show_list permission');
-      console.log('3. Token does not have correct permissions');
-    }
-
-    // Helper function to determine page status
     const getPageStatus = (page: any) => {
-      // Check if page is unpublished
-      if (page.is_published === false) {
-        return 'UNPUBLISHED';
-      }
-
-      // Check if page has ADVERTISE task (can run ads)
+      if (page.is_published === false) return 'UNPUBLISHED';
       const canAdvertise = page.tasks?.includes('ADVERTISE');
-      if (!canAdvertise) {
-        return 'RESTRICTED';
-      }
-
+      if (!canAdvertise) return 'RESTRICTED';
       return 'ACTIVE';
     };
 
     return NextResponse.json({
-      pages: pages.map((page: any) => ({
+      pages: uniquePages.map((page: any) => ({
         id: page.id,
         name: page.name,
         access_token: page.access_token,
@@ -154,8 +112,9 @@ export async function GET(request: NextRequest) {
         status: getPageStatus(page),
         is_published: page.is_published,
         can_advertise: page.tasks?.includes('ADVERTISE') || false,
+        owner: page.owner_name, // Add Owner
       })),
-      total: pages.length,
+      total: uniquePages.length,
     });
   } catch (error) {
     console.error('Error fetching Facebook pages:', error);

@@ -82,6 +82,31 @@
   .glass-card {
     @apply bg-white/95 dark:bg-card/95 backdrop-blur-md border border-white/20 dark:border-white/5 shadow-sm rounded-xl;
   }
+
+  /* Minimal Scrollbar - Hide arrows, faint thumb */
+  .scrollbar-minimal::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-button {
+    display: none;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1); /* Faint */
+    border-radius: 10px;
+  }
+  .dark .scrollbar-minimal::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2); /* Darker on hover */
+  }
+  .dark .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
 }
 
 @layer base {

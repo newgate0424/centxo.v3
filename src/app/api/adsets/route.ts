@@ -1,13 +1,9 @@
-/**
- * GET /api/adsets
- * Fetch ad sets from Meta API for selected ad accounts
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 import { withCacheSWR, generateCacheKey, CacheTTL, deleteCache } from '@/lib/cache/redis';
+import { TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-helper';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,10 +32,34 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    // Get Facebook access token
-    const accessToken = (session as any).accessToken;
+    // Fetch user with team members to get all tokens
+    const { prisma } = await import('@/lib/prisma');
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        teamMembers: true,
+      },
+    });
 
-    if (!accessToken) {
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Collect all tokens
+    const tokens: TokenInfo[] = [];
+    const mainAccessToken = (session as any).accessToken;
+    if (mainAccessToken) {
+      tokens.push({ token: mainAccessToken, name: 'Main' });
+    }
+    if ((user as any).teamMembers) {
+      (user as any).teamMembers.forEach((m: any) => {
+        if (m.accessToken) {
+          tokens.push({ token: m.accessToken, name: m.facebookName || 'Member' });
+        }
+      });
+    }
+
+    if (tokens.length === 0) {
       return NextResponse.json(
         { error: 'Facebook not connected', adSets: [] },
         { status: 400 }
@@ -66,7 +86,7 @@ export async function GET(request: NextRequest) {
       CacheTTL.ADSETS_LIST,
       STALE_TTL,
       async () => {
-        return await fetchAdSetsFromMeta(adAccountIds, accessToken, dateFrom, dateTo);
+        return await fetchAdSetsFromMeta(adAccountIds, tokens, dateFrom, dateTo);
       }
     );
 
@@ -89,7 +109,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function fetchAdSetsFromMeta(adAccountIds: string[], accessToken: string, dateFrom?: string | null, dateTo?: string | null) {
+async function fetchAdSetsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null) {
   const allAdSets: any[] = [];
   const errors: string[] = [];
 
@@ -104,29 +124,36 @@ async function fetchAdSetsFromMeta(adAccountIds: string[], accessToken: string, 
   }
 
   // Chunk requests to avoid rate limiting
-  // Increased from 3 to 10 for better performance while respecting limits
   const CHUNK_SIZE = 10;
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
 
     await Promise.all(chunk.map(async (accountId) => {
-      try {
-        // Run requests in parallel
-        const [accountResponse, adSetsResponse] = await Promise.all([
-          fetch(
-            `https://graph.facebook.com/v22.0/${accountId}?fields=currency&access_token=${accessToken}`
-          ),
-          fetch(
-            `https://graph.facebook.com/v22.0/${accountId}/adsets?fields=id,name,status,effective_status,configured_status,issues_info,ads{effective_status},campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount,targeting,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${accessToken}`
-          )
-        ]);
+      // Use helper to find correct token (uses Redis cache)
+      const token = await getValidTokenForAdAccount(accountId, tokens);
 
-        let accountCurrency = 'USD';
-        if (accountResponse.ok) {
-          const accountData = await accountResponse.json();
-          accountCurrency = accountData.currency || 'USD';
+      if (!token) {
+        errors.push(`No valid access token found for account ${accountId}`);
+        return;
+      }
+
+      try {
+        const accountResponse = await fetch(
+          `https://graph.facebook.com/v22.0/${accountId}?fields=currency&access_token=${token}`
+        );
+
+        // accountResponse check omitted as token helper confirms access, but we need fields
+        if (!accountResponse.ok) {
+          // Should potentially retry token here? Helper should have returned a valid one.
         }
+
+        const accountData = await accountResponse.json();
+        const accountCurrency = accountData.currency || 'USD';
+
+        const adSetsResponse = await fetch(
+          `https://graph.facebook.com/v22.0/${accountId}/adsets?fields=id,name,status,effective_status,configured_status,issues_info,ads{effective_status},campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount,targeting,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${token}`
+        );
 
         if (adSetsResponse.ok) {
           const data = await adSetsResponse.json();
@@ -175,16 +202,14 @@ async function fetchAdSetsFromMeta(adAccountIds: string[], accessToken: string, 
           allAdSets.push(...adSetsWithAccount);
         } else {
           const errorData = await adSetsResponse.json();
-          console.error(`Meta API Error for account ${accountId}:`, errorData);
           errors.push(`Failed to fetch for account ${accountId}: ${errorData.error?.message || adSetsResponse.statusText}`);
         }
-      } catch (err) {
-        console.error(`Error fetching ad sets for account ${accountId}:`, err);
-        errors.push(`Network or parsing error for account ${accountId}: ${err instanceof Error ? err.message : String(err)}`);
+
+      } catch (err: any) {
+        errors.push(`Error for account ${accountId}: ${err.message}`);
       }
     }));
 
-    // Add small delay between chunks to respect rate limits
     if (i + CHUNK_SIZE < adAccountIds.length) {
       await new Promise(resolve => setTimeout(resolve, 200));
     }

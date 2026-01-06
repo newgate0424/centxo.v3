@@ -3,27 +3,63 @@
 import { useSession } from 'next-auth/react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { AccountsTab } from "@/components/campaigns/AccountsTab";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, RefreshCw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NoFacebookAccountsPrompt } from '@/components/NoFacebookAccountsPrompt';
 
 export default function AdsManagerAccountsPage() {
     const { data: session } = useSession();
     const { t } = useLanguage();
-    // We need a refresh trigger state as required by AccountsTab
     const [accountsRefreshTrigger, setAccountsRefreshTrigger] = useState(0);
     const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
     const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(false); // Used for refresh button animation
+    const [loading, setLoading] = useState(false);
+    const [hasTeamMembers, setHasTeamMembers] = useState<boolean | null>(null);
+
+    // Check if user has team members
+    useEffect(() => {
+        const checkTeamMembers = async () => {
+            try {
+                const response = await fetch('/api/team/members');
+                if (response.ok) {
+                    const data = await response.json();
+                    setHasTeamMembers(data.members && data.members.length > 0);
+                }
+            } catch (error) {
+                console.error('Error checking team members:', error);
+                setHasTeamMembers(false);
+            }
+        };
+
+        if (session?.user) {
+            checkTeamMembers();
+        }
+    }, [session]);
 
     const handleRefresh = () => {
         setLoading(true);
         setAccountsRefreshTrigger(prev => prev + 1);
-        // Simulate a small delay for the spinner if the fetch is too fast, 
-        // essentially just waiting for the child component to react.
-        // In a real scenario, we might want a callback from the child, but this is a visual sync.
         setTimeout(() => setLoading(false), 1000);
     };
+
+    // Show loading state while checking
+    if (hasTeamMembers === null) {
+        return (
+            <div className="h-full p-4 md:p-6 lg:p-8 flex items-center justify-center">
+                <div className="text-muted-foreground">Loading...</div>
+            </div>
+        );
+    }
+
+    // Show prompt if no team members
+    if (!hasTeamMembers) {
+        return (
+            <div className="h-full p-4 md:p-6 lg:p-8">
+                <NoFacebookAccountsPrompt />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full p-4 md:p-6 lg:p-8 flex flex-col overflow-hidden">
@@ -34,12 +70,6 @@ export default function AdsManagerAccountsPage() {
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('adsManager.accounts', 'Ad Accounts')}</h1>
                         <p className="text-gray-600 dark:text-gray-400">{t('adsManager.accountsSubtitle', 'Manage your connected ad accounts')}</p>
                     </div>
-
-                    {/* Placeholder for potential New Account button or other actions */}
-                    {/* <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                        <Plus className="h-4 w-4 mr-2" />
-                        {t('accounts.newAccount', 'New Ad Account')}
-                    </Button> */}
                 </div>
 
                 {/* Toolbar */}
@@ -82,8 +112,6 @@ export default function AdsManagerAccountsPage() {
                     </Button>
                 </div>
 
-
-
                 {/* Table Content */}
                 <AccountsTab
                     refreshTrigger={accountsRefreshTrigger}
@@ -95,4 +123,3 @@ export default function AdsManagerAccountsPage() {
         </div>
     );
 }
-

@@ -77,12 +77,13 @@ const globalLimiter = new RateLimiter();
  */
 export function rateLimit(
     request: NextRequest,
-    config: RateLimitConfig = { maxRequests: 100, windowMs: 60000 } // 100 requests per minute default
+    config: RateLimitConfig = { maxRequests: 100, windowMs: 60000 },
+    identifier?: string // Optional custom identifier (e.g., session.user.id)
 ): NextResponse | null {
-    // Get identifier (prefer user ID, fallback to IP)
-    const userId = request.headers.get('x-user-id');
+    // Get identifier (prefer custom identifier, then header, fallback to IP)
+    const headerUserId = request.headers.get('x-user-id');
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
-    const key = userId || ip;
+    const key = identifier || headerUserId || ip;
 
     const isAllowed = globalLimiter.check(key, config);
 

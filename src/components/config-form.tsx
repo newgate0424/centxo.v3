@@ -110,11 +110,11 @@ export function ConfigForm() {
                 <TabsList className="grid w-full grid-cols-2 lg:w-96">
                     <TabsTrigger value="accounts" className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
-                        Ad Accounts ({selectedAccounts.length})
+                        Ad Accounts ({adAccounts.length})
                     </TabsTrigger>
                     <TabsTrigger value="pages" className="flex items-center gap-2">
                         <FileText className="h-4 w-4" />
-                        Pages ({selectedPages.length})
+                        Pages ({pages.length})
                     </TabsTrigger>
                 </TabsList>
 
@@ -147,7 +147,7 @@ export function ConfigForm() {
                         </div>
 
                         {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
+                        <div className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
                             <Checkbox
                                 checked={allAccountsSelected}
                                 onCheckedChange={toggleAllAccounts}
@@ -155,6 +155,7 @@ export function ConfigForm() {
                             />
                             <span>Name</span>
                             <span>ID</span>
+                            <span>Owner</span>
                             <span>Status</span>
                         </div>
 
@@ -197,7 +198,7 @@ export function ConfigForm() {
                                             <div
                                                 key={account.id}
                                                 onClick={() => toggleAccount(account)}
-                                                className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                             >
                                                 <Checkbox
                                                     checked={isSelected}
@@ -205,6 +206,7 @@ export function ConfigForm() {
                                                 />
                                                 <span className="font-medium text-sm truncate">{account.name}</span>
                                                 <span className="text-sm text-muted-foreground truncate">{account.account_id}</span>
+                                                <span className="text-sm text-muted-foreground truncate">{(account as any)._source?.facebookName || 'Unknown'}</span>
                                                 <div className="flex items-center gap-2">
                                                     <div className={`w-2 h-2 rounded-full ${statusInfo.color || 'bg-gray-400'
                                                         }`} />
@@ -250,7 +252,7 @@ export function ConfigForm() {
                         </div>
 
                         {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
+                        <div className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
                             <Checkbox
                                 checked={allPagesSelected}
                                 onCheckedChange={toggleAllPages}
@@ -258,6 +260,7 @@ export function ConfigForm() {
                             />
                             <span>Name</span>
                             <span>ID</span>
+                            <span>Owner</span>
                             <span>Status</span>
                         </div>
 
@@ -291,7 +294,7 @@ export function ConfigForm() {
                                             <div
                                                 key={page.id}
                                                 onClick={() => togglePage(page)}
-                                                className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                             >
                                                 <Checkbox
                                                     checked={isSelected}
@@ -299,6 +302,7 @@ export function ConfigForm() {
                                                 />
                                                 <span className="font-medium text-sm truncate">{page.name}</span>
                                                 <span className="text-sm text-muted-foreground truncate">{page.id}</span>
+                                                <span className="text-sm text-muted-foreground truncate">{(page as any)._source?.facebookName || 'Unknown'}</span>
                                                 <div onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center gap-2">
                                                         <div className={`w-2 h-2 rounded-full ${status === 'ACTIVE' ? 'bg-green-500' :

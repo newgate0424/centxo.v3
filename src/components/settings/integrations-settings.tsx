@@ -30,7 +30,7 @@ export function IntegrationsSettings() {
     };
 
     const handleDisconnect = async (provider: string) => {
-        if (!confirm(`Are you sure you want to disconnect your ${provider} account?`)) {
+        if (!confirm(t('settings.integrations.disconnectConfirm', 'Are you sure you want to disconnect your {provider} account?').replace('{provider}', provider))) {
             return;
         }
 
@@ -82,10 +82,10 @@ export function IntegrationsSettings() {
             </div>
 
             <div className="glass-card p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-6">Connected Accounts</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-6">{t('settings.integrations.connectedAccounts', 'Connected Accounts')}</h3>
 
                 {loadingAccounts ? (
-                    <div className="text-center py-8 text-gray-600">Loading...</div>
+                    <div className="text-center py-8 text-gray-600">{t('common.loading', 'Loading...')}</div>
                 ) : (
                     <div className="space-y-4">
                         {availableProviders.map((provider) => {
@@ -115,10 +115,10 @@ export function IntegrationsSettings() {
                                             <h4 className="font-semibold text-gray-900">{provider.name}</h4>
                                             {provider.connected && connectedAccount ? (
                                                 <p className="text-sm text-gray-600">
-                                                    Connected as {connectedAccount.email || 'User'}
+                                                    {t('settings.integrations.connectedAs', 'Connected as')} {connectedAccount.email || 'User'}
                                                 </p>
                                             ) : (
-                                                <p className="text-sm text-gray-500">Not connected</p>
+                                                <p className="text-sm text-gray-500">{t('settings.integrations.notConnected', 'Not connected')}</p>
                                             )}
                                         </div>
                                     </div>
@@ -129,14 +129,14 @@ export function IntegrationsSettings() {
                                             className="text-red-600 border-red-300 hover:bg-red-50"
                                             onClick={() => handleDisconnect(provider.id)}
                                         >
-                                            Disconnect
+                                            {t('settings.integrations.disconnect', 'Disconnect')}
                                         </Button>
                                     ) : (
                                         <Button
                                             className="bg-blue-600 hover:bg-blue-700 text-white"
                                             onClick={() => handleConnectProvider(provider.id as 'google' | 'facebook')}
                                         >
-                                            Connect
+                                            {t('settings.integrations.connect', 'Connect')}
                                         </Button>
                                     )}
                                 </div>

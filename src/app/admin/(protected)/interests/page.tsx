@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Target, Search, Download } from 'lucide-react';
+import { RefreshCw, Target, Search, Download, Facebook } from 'lucide-react';
 import {
     Table,
     TableBody,
@@ -30,8 +30,25 @@ interface Interest {
 export default function AdminInterestsPage() {
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
+    const [connecting, setConnecting] = useState(false);
+    const [hasConnection, setHasConnection] = useState(false);
+    const [checkingConnection, setCheckingConnection] = useState(true);
     const [interests, setInterests] = useState<Interest[]>([]);
     const [stats, setStats] = useState({ total: 0, topics: 0 });
+
+    const checkFacebookConnection = async () => {
+        try {
+            const res = await fetch('/api/team/members');
+            if (res.ok) {
+                const data = await res.json();
+                setHasConnection(data.members && data.members.length > 0);
+            }
+        } catch (error) {
+            console.error('Error checking connection:', error);
+        } finally {
+            setCheckingConnection(false);
+        }
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -60,8 +77,27 @@ export default function AdminInterestsPage() {
     };
 
     useEffect(() => {
+        checkFacebookConnection();
         fetchData();
     }, []);
+
+    const handleConnectFacebook = async () => {
+        setConnecting(true);
+        try {
+            const response = await fetch('/api/team/add-member?returnTo=/admin/interests');
+            if (response.ok) {
+                const data = await response.json();
+                // Redirect to Facebook OAuth
+                window.location.href = data.authUrl;
+            } else {
+                throw new Error('Failed to initiate Facebook connection');
+            }
+        } catch (error: any) {
+            console.error('Error connecting Facebook:', error);
+            showCustomToast(`Failed to connect: ${error.message}`, { type: 'error' });
+            setConnecting(false);
+        }
+    };
 
     const handleSync = async () => {
         setSyncing(true);
@@ -91,6 +127,15 @@ export default function AdminInterestsPage() {
                     <p className="text-muted-foreground">Manage and sync Facebook targeting interests.</p>
                 </div>
                 <div className="flex gap-2">
+                    <Button
+                        variant={hasConnection ? "outline" : "default"}
+                        onClick={handleConnectFacebook}
+                        disabled={connecting || checkingConnection || hasConnection}
+                        className={`gap-2 ${hasConnection ? 'border-green-500 text-green-600' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                    >
+                        <Facebook className="h-4 w-4" />
+                        {checkingConnection ? 'Checking...' : hasConnection ? 'Facebook Connected ✓' : connecting ? 'Connecting...' : 'Connect Facebook'}
+                    </Button>
                     <Button
                         variant="outline"
                         onClick={() => window.location.href = '/api/targeting/super-target/export?format=xlsx'}

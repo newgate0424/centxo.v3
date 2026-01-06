@@ -17,9 +17,9 @@ export function AppearanceSettings() {
     const [compactMode, setCompactMode] = useState(false);
 
     const themes: { value: Theme; label: string; icon: React.ReactNode }[] = [
-        { value: 'light', label: 'Light', icon: <Sun className="h-4 w-4" /> },
-        { value: 'dark', label: 'Dark', icon: <Moon className="h-4 w-4" /> },
-        { value: 'system', label: 'System', icon: <Monitor className="h-4 w-4" /> },
+        { value: 'light', label: t('settings.appearance.theme.light', 'Light'), icon: <Sun className="h-4 w-4" /> },
+        { value: 'dark', label: t('settings.appearance.theme.dark', 'Dark'), icon: <Moon className="h-4 w-4" /> },
+        { value: 'system', label: t('settings.appearance.theme.system', 'System'), icon: <Monitor className="h-4 w-4" /> },
     ];
 
     return (
@@ -30,16 +30,16 @@ export function AppearanceSettings() {
                     {t('settings.appearance', 'Appearance')}
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                    Customize the appearance of the application
+                    {t('settings.appearanceSubtitle', 'Customize the appearance of the application')}
                 </p>
             </div>
 
             {/* Theme Selection */}
             <div className="space-y-4">
                 <div>
-                    <Label className="text-base font-medium">Theme</Label>
+                    <Label className="text-base font-medium">{t('settings.appearance.theme', 'Theme')}</Label>
                     <p className="text-sm text-muted-foreground mb-3">
-                        Select your preferred theme
+                        {t('settings.appearance.themeDesc', 'Select your preferred theme')}
                     </p>
                 </div>
 
@@ -68,10 +68,10 @@ export function AppearanceSettings() {
             <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                     <Label htmlFor="compact-mode" className="text-base font-medium">
-                        Compact Mode
+                        {t('settings.appearance.compact', 'Compact Mode')}
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                        Reduce spacing and padding for a more compact interface
+                        {t('settings.appearance.compactDesc', 'Reduce spacing and padding for a more compact interface')}
                     </p>
                 </div>
                 <Switch
@@ -86,7 +86,7 @@ export function AppearanceSettings() {
             {/* Save Button */}
             <div className="pt-4">
                 <Button>
-                    Save Preferences
+                    {t('settings.appearance.save', 'Save Preferences')}
                 </Button>
             </div>
         </div>

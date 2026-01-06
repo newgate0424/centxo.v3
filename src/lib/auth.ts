@@ -84,7 +84,7 @@ export const authOptions: NextAuthOptions = {
             authorization: {
                 url: "https://www.facebook.com/v21.0/dialog/oauth",
                 params: {
-                    scope: process.env.FACEBOOK_SCOPE || 'email,public_profile,ads_read,ads_management,pages_read_engagement,pages_show_list,pages_messaging,pages_manage_metadata,pages_manage_ads,pages_manage_engagement,pages_read_user_content,read_insights,business_management',
+                    scope: process.env.FACEBOOK_SCOPE || 'email,public_profile,ads_read,ads_management,pages_read_engagement,pages_show_list,pages_messaging,pages_manage_metadata,pages_manage_ads,pages_manage_engagement,pages_read_user_content,read_insights',
                     auth_type: 'rerequest',
                 },
             },

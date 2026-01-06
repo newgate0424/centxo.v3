@@ -308,18 +308,18 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure you want to log out?</AlertDialogTitle>
+                            <AlertDialogTitle>{t('header.logout.title', 'Are you sure you want to log out?')}</AlertDialogTitle>
                             <AlertDialogDescription>
-                                You will be redirected to the login page.
+                                {t('header.logout.desc', 'You will be redirected to the login page.')}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel>{t('header.logout.cancel', 'Cancel')}</AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={() => signOut({ callbackUrl: "/login" })}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             >
-                                Log out
+                                {t('header.logout.confirm', 'Log out')}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

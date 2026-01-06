@@ -38,7 +38,7 @@ interface TopicStat {
 }
 
 export default function SuperTargetPage() {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage(); // Use language from context
     const [loading, setLoading] = useState(true);
     const [top20, setTop20] = useState<Interest[]>([]);
     const [topics, setTopics] = useState<TopicStat[]>([]);
@@ -46,7 +46,7 @@ export default function SuperTargetPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/targeting/super-target');
+            const res = await fetch(`/api/targeting/super-target?lang=${language}`);
             if (res.ok) {
                 const data = await res.json();
                 setTop20(data.top20 || []);
@@ -63,12 +63,12 @@ export default function SuperTargetPage() {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [language]); // Re-fetch when language changes
 
     const handleTopicClick = async (topicName: string) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/targeting/super-target?topic=${encodeURIComponent(topicName)}`);
+            const res = await fetch(`/api/targeting/super-target?topic=${encodeURIComponent(topicName)}&lang=${language}`);
             if (res.ok) {
                 const data = await res.json();
                 setTop20(data.interests || []);

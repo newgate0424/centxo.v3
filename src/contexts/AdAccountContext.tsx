@@ -24,12 +24,22 @@ interface AdAccount {
   disable_reason?: number;
   spend_cap?: string | number;
   amount_spent?: string | number;
+  _source?: {
+    teamMemberId?: string;
+    facebookName?: string;
+    facebookUserId?: string;
+  };
 }
 
 interface Page {
   id: string;
   name: string;
   access_token?: string;
+  _source?: {
+    teamMemberId?: string;
+    facebookName?: string;
+    facebookUserId?: string;
+  };
 }
 
 interface ConfigContextType {
@@ -56,8 +66,8 @@ interface ConfigContextType {
 // Create context with proper initial value
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
-// Cache duration in milliseconds (10 minutes)
-const CACHE_DURATION = 10 * 60 * 1000;
+// Cache duration in milliseconds (1 minute)
+const CACHE_DURATION = 1 * 60 * 1000;
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
@@ -120,7 +130,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [adAccounts, setAdAccounts] = useState<AdAccount[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('adPilotCache');
+        const cached = localStorage.getItem('adPilotCache_v2');
         if (cached) {
           return JSON.parse(cached).accounts || [];
         }
@@ -132,7 +142,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [pages, setPages] = useState<Page[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('adPilotCache');
+        const cached = localStorage.getItem('adPilotCache_v2');
         if (cached) {
           return JSON.parse(cached).pages || [];
         }
@@ -144,7 +154,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [lastFetched, setLastFetched] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('adPilotCache');
+        const cached = localStorage.getItem('adPilotCache_v2');
         if (cached) {
           return JSON.parse(cached).timestamp || 0;
         }
@@ -175,7 +185,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
   // Persist cache helper
   const saveToCache = (accounts: AdAccount[], p: Page[], timestamp: number) => {
-    localStorage.setItem('adPilotCache', JSON.stringify({ accounts, pages: p, timestamp }));
+    localStorage.setItem('adPilotCache_v2', JSON.stringify({ accounts, pages: p, timestamp }));
   };
 
   const handleApiError = async (response: Response) => {
@@ -203,7 +213,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch('/api/facebook/ad-accounts');
+      // Use team-based endpoint instead of old MetaAccount endpoint
+      const res = await fetch('/api/team/ad-accounts');
       if (!res.ok) {
         if (adAccounts.length > 0) {
           try { await handleApiError(res); } catch (e) { console.warn(e); }
@@ -213,6 +224,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       }
       const data = await res.json();
       const accounts = data.accounts || [];
+      console.log('[AdAccountContext] Fetched ad accounts:', accounts.length, accounts);
       setAdAccounts(accounts);
 
       // Validate and fix selectedAccounts
@@ -257,7 +269,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const res = await fetch('/api/facebook/pages');
+      // Use team-based endpoint instead of old MetaAccount endpoint
+      const res = await fetch('/api/team/pages');
       if (!res.ok) {
         if (pages.length > 0) {
           try { await handleApiError(res); } catch (e) { console.warn(e); }
@@ -316,10 +329,12 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
   // Initial load
   useEffect(() => {
-    if ((session as any)?.accessToken) {
+    console.log('[AdAccountContext] useEffect triggered, session:', session?.user?.email);
+    if (session?.user) {
+      console.log('[AdAccountContext] Calling refreshData');
       refreshData(false);
     }
-  }, [(session as any)?.accessToken]);
+  }, [session?.user?.email]);
 
   const setSelectedAccounts = (accounts: AdAccount[]) => {
     const limit = getPlanLimit(userPlan);

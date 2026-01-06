@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useAdAccount } from '@/contexts/AdAccountContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -20,8 +21,19 @@ import {
     Facebook, Instagram, MessageCircle, Target, DollarSign, Video
 } from 'lucide-react';
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/utils/custom-toast';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function AutomationCampaignsV2Page() {
+    const { t } = useLanguage();
     const { data: session } = useSession();
     const router = useRouter();
     const [step, setStep] = useState(1);
@@ -58,6 +70,9 @@ export default function AutomationCampaignsV2Page() {
     const [editedCaptions, setEditedCaptions] = useState<any[]>([]);
     const [editedTargeting, setEditedTargeting] = useState<any[]>([]);
     const [editedIceBreakers, setEditedIceBreakers] = useState<any[]>([]);
+    // Video Deletion State
+    const [videoToDelete, setVideoToDelete] = useState<any>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Step 4: Campaign Settings
     const { selectedAccounts: adAccounts, selectedPages: pages } = useAdAccount();
@@ -143,7 +158,7 @@ export default function AutomationCampaignsV2Page() {
             // Add to auto thumbnails list if not already there
             setAutoThumbnails(prev => [url, ...prev]);
 
-            showSuccessToast('Cover image uploaded successfully');
+            showSuccessToast(t('automation.v2.toast.coverUploaded', 'Cover image uploaded successfully'));
         }
     };
 
@@ -277,7 +292,7 @@ export default function AutomationCampaignsV2Page() {
     }, [mediaFile, mediaPreview, autoThumbnails.length]);
 
     const runAIAnalysis = async () => {
-        if (!mediaFile && !selectedLibraryVideo) return showErrorToast('Please upload media or select from library');
+        if (!mediaFile && !selectedLibraryVideo) return showErrorToast(t('automation.v2.toast.selectMedia', 'Please upload media or select from library'));
 
         setAnalyzing(true);
         const formData = new FormData();
@@ -300,18 +315,26 @@ export default function AutomationCampaignsV2Page() {
 
             console.log(`📸 Sending ${selectedThumbnails.length} thumbnails (filtered from ${autoThumbnails.length}) for AI analysis`);
 
-            // Parallel fetch for speed
+            // Parallel fetch for speed with error handling
             await Promise.all(selectedThumbnails.map(async (url, i) => {
                 try {
+                    // Check if URL is valid before fetching
+                    if (!url) return;
+
                     const response = await fetch(url);
+                    if (!response.ok) {
+                        console.warn(`Failed to fetch thumbnail ${i}: ${response.status}`);
+                        return;
+                    }
                     const blob = await response.blob();
                     formData.append('thumbnails', blob, `thumbnail_${i}.jpg`);
                 } catch (err) {
+                    // Log error but continue - do not fail the entire process
                     console.error(`Failed to fetch thumbnail ${url}:`, err);
                 }
             }));
         }
-        // Fallback: send selected thumbnail if no auto thumbnails
+        // Fallback: send selected thumbnail if no auto thumbnails AND it exists
         else if (thumbnailBlob) {
             formData.append('analysisImage', thumbnailBlob, 'thumbnail.jpg');
         }
@@ -331,12 +354,12 @@ export default function AutomationCampaignsV2Page() {
                 setEditedTargeting(data.data.interestGroups || []);
                 setEditedIceBreakers(data.data.iceBreakers || []);
                 setStep(3);
-                showSuccessToast('Analysis complete! 🎉');
+                showSuccessToast(t('automation.v2.toast.analysisComplete', 'Analysis complete! 🎉'));
             } else {
-                showErrorToast(data.error || 'Analysis failed');
+                showErrorToast(data.error || t('automation.v2.toast.analysisFailed', 'Analysis failed'));
             }
         } catch (error) {
-            showErrorToast('Error during analysis');
+            showErrorToast(t('automation.v2.toast.analysisError', 'Error during analysis'));
         } finally {
             setAnalyzing(false);
         }
@@ -346,7 +369,7 @@ export default function AutomationCampaignsV2Page() {
         if (!aiResult) return;
 
         setLoading(true);
-        showInfoToast('Regenerating...');
+        showInfoToast(t('automation.v2.toast.regenerating', 'Regenerating...'));
 
         try {
             const formData = new FormData();
@@ -370,12 +393,12 @@ export default function AutomationCampaignsV2Page() {
                 } else if (section === 'icebreakers') {
                     setEditedIceBreakers(data.data.iceBreakers);
                 }
-                showSuccessToast('Regeneration complete! ✨');
+                showSuccessToast(t('automation.v2.toast.regenComplete', 'Regeneration complete! ✨'));
             } else {
-                showErrorToast('Failed to regenerate');
+                showErrorToast(t('automation.v2.toast.regenFailed', 'Failed to regenerate'));
             }
         } catch (error) {
-            showErrorToast('An error occurred');
+            showErrorToast(t('automation.v2.toast.error', 'An error occurred'));
         } finally {
             setLoading(false);
         }
@@ -383,7 +406,7 @@ export default function AutomationCampaignsV2Page() {
 
     const launchCampaign = async () => {
         if (!selectedAdAccount || !selectedPage) {
-            return showErrorToast('Please select an ad account and page');
+            return showErrorToast(t('automation.v2.toast.selectAccountPage', 'Please select an ad account and page'));
         }
 
         setLoading(true);
@@ -429,28 +452,59 @@ export default function AutomationCampaignsV2Page() {
             const res = await fetch('/api/campaigns/create', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
-                showSuccessToast(saveDraft ? 'Draft saved successfully! 📝' : 'Campaign launched successfully! 🚀');
+                showSuccessToast(saveDraft ? t('automation.v2.launch.draftSaved', 'Draft saved successfully! 📝') : t('automation.v2.launch.success', 'Campaign launched successfully! 🚀'));
                 router.push('/dashboard');
             } else {
-                showErrorToast(data.error || 'Campaign launch failed');
+                showErrorToast(data.error || t('automation.v2.toast.launchFailed', 'Campaign launch failed'));
             }
         } catch (e) {
-            showErrorToast('An error occurred');
+            showErrorToast(t('automation.v2.toast.error', 'An error occurred'));
         } finally {
             setLoading(false);
         }
     };
 
+    const handleDeleteVideo = async (video: any) => {
+        setVideoToDelete(video);
+    };
+
+    const confirmDelete = async () => {
+        if (!videoToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/videos/delete`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileName: videoToDelete.filename })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                setLibraryVideos(prev => prev.filter(v => v.id !== videoToDelete.id));
+                showSuccessToast('Video deleted successfully');
+                setVideoToDelete(null);
+            } else {
+                showErrorToast(data.error || 'Failed to delete video');
+            }
+        } catch (error) {
+            console.error('Delete failed:', error);
+            showErrorToast('Error deleting video');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     const steps = [
-        { num: 1, title: 'Upload & Thumbnail', icon: Upload },
-        { num: 2, title: 'AI Analysis', icon: Sparkles },
-        { num: 3, title: 'Review & Edit', icon: Eye },
-        { num: 4, title: 'Launch', icon: Rocket }
+        { num: 1, title: t('automation.v2.steps.media', 'Upload & Thumbnail'), icon: Upload },
+        { num: 2, title: t('automation.v2.steps.analysis', 'AI Analysis'), icon: Sparkles },
+        { num: 3, title: t('automation.v2.steps.review', 'Review & Edit'), icon: Eye },
+        { num: 4, title: t('automation.v2.steps.launch', 'Launch'), icon: Rocket }
     ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 p-4 md:p-8">
-            <div className="container mx-auto max-w-6xl space-y-6">
+        <div className="p-4 md:p-6 lg:p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1600px] mx-auto pb-20">
+            <div className="space-y-6">
 
                 {/* Progress Steps */}
                 <div className="flex justify-center items-center gap-2 md:gap-3 py-3">
@@ -461,7 +515,7 @@ export default function AutomationCampaignsV2Page() {
                                     ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/50'
                                     : step === s.num
                                         ? 'bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/50 animate-pulse'
-                                        : 'bg-gray-200'
+                                        : 'bg-gray-200 dark:bg-gray-700'
                                     }`}>
                                     {step > s.num ? (
                                         <CheckCircle className="w-5 h-5 text-white" />
@@ -469,12 +523,12 @@ export default function AutomationCampaignsV2Page() {
                                         <s.icon className={`w-5 h-5 ${step === s.num ? 'text-white' : 'text-gray-400'}`} />
                                     )}
                                 </div>
-                                <span className={`text-xs mt-1.5 font-medium ${step >= s.num ? 'text-gray-900' : 'text-gray-400'}`}>
+                                <span className={`text-xs mt-1.5 font-medium ${step >= s.num ? 'text-foreground' : 'text-muted-foreground'}`}>
                                     {s.title}
                                 </span>
                             </div>
                             {idx < steps.length - 1 && (
-                                <div className={`w-6 md:w-12 h-0.5 mx-1.5 rounded-full transition-all duration-300 ${step > s.num ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gray-200'
+                                <div className={`w-6 md:w-12 h-0.5 mx-1.5 rounded-full transition-all duration-300 ${step > s.num ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gray-200 dark:bg-gray-700'
                                     }`} />
                             )}
                         </div>
@@ -483,13 +537,13 @@ export default function AutomationCampaignsV2Page() {
 
                 {/* Step Content */}
                 {step === 1 && (
-                    <Card className="border-2 shadow-xl">
-                        <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50">
+                    <Card className="glass-card">
+                        <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30">
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Upload className="w-6 h-6 text-blue-600" />
-                                Step 1: Upload Media & Select Thumbnail
+                                {t('automation.v2.media.title', 'Step 1: Upload Media & Select Thumbnail')}
                             </CardTitle>
-                            <CardDescription>Upload a video or image and select a thumbnail.</CardDescription>
+                            <CardDescription>{t('automation.v2.media.desc', 'Upload a video or image and select a thumbnail.')}</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -499,18 +553,18 @@ export default function AutomationCampaignsV2Page() {
                                         <TabsList className="grid w-full grid-cols-2">
                                             <TabsTrigger value="upload">
                                                 <Upload className="w-4 h-4 mr-2" />
-                                                Upload New
+                                                {t('automation.v2.media.tab.upload', 'Upload New')}
                                             </TabsTrigger>
                                             <TabsTrigger value="library">
                                                 <Video className="w-4 h-4 mr-2" />
-                                                Library
+                                                {t('automation.v2.media.tab.library', 'Library')}
                                             </TabsTrigger>
                                         </TabsList>
 
                                         <TabsContent value="upload" className="mt-4">
                                             <div
                                                 onClick={() => !mediaPreview && fileInputRef.current?.click()}
-                                                className="h-72 border-2 border-dashed border-gray-300 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col items-center justify-center relative overflow-hidden group hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer"
+                                                className="h-72 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl bg-gray-50 dark:bg-gray-800 flex flex-col items-center justify-center relative overflow-hidden group hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer"
                                             >
                                                 {mediaPreview ? (
                                                     <>
@@ -549,8 +603,8 @@ export default function AutomationCampaignsV2Page() {
                                                 ) : (
                                                     <div className="text-center text-gray-400 group-hover:text-blue-500 transition-colors">
                                                         <Upload className="w-16 h-16 mx-auto mb-4 opacity-50 group-hover:opacity-100 transition-opacity" />
-                                                        <span className="text-lg font-medium">Click to upload</span>
-                                                        <p className="text-sm mt-2">Supports Videos and Images</p>
+                                                        <span className="text-lg font-medium">{t('automation.v2.media.clickUpload', 'Click to upload')}</span>
+                                                        <p className="text-sm mt-2">{t('automation.v2.media.supports', 'Supports Videos and Images')}</p>
                                                     </div>
                                                 )}
                                                 <input
@@ -572,7 +626,7 @@ export default function AutomationCampaignsV2Page() {
                                                 ) : libraryVideos.length === 0 ? (
                                                     <div className="h-full flex flex-col items-center justify-center text-gray-400">
                                                         <Video className="w-16 h-16 mb-4 opacity-50" />
-                                                        <p className="text-sm">No videos in library</p>
+                                                        <p className="text-sm">{t('automation.v2.media.noLibrary', 'No videos in library')}</p>
                                                     </div>
                                                 ) : (
                                                     <div className="grid grid-cols-2 gap-3">
@@ -618,13 +672,13 @@ export default function AutomationCampaignsV2Page() {
                                                                     }`}
                                                             >
                                                                 {/* Video Preview with Play Icon */}
-                                                                <div className="relative w-full h-full bg-gray-900">
+                                                                <div className="relative w-full h-full bg-gray-900 pointer-events-none">
                                                                     <video
                                                                         src={video.url}
                                                                         className="w-full h-full object-cover"
                                                                         muted
                                                                     />
-                                                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                                                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
                                                                         <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
                                                                             <svg className="w-6 h-6 text-purple-600 ml-1" fill="currentColor" viewBox="0 0 24 24">
                                                                                 <path d="M8 5v14l11-7z" />
@@ -632,38 +686,19 @@ export default function AutomationCampaignsV2Page() {
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Delete Button - Only show on hover */}
+                                                                    {/* Delete Button - Only show on hover - IMPROVED CLICKABILITY */}
                                                                     <button
+                                                                        type="button"
                                                                         onClick={(e) => {
+                                                                            e.preventDefault();
                                                                             e.stopPropagation();
-                                                                            if (confirm(`Are you sure you want to delete video "${video.filename}"?`)) {
-                                                                                // Delete video
-                                                                                fetch(`/api/videos/delete`, {
-                                                                                    method: 'DELETE',
-                                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                                    body: JSON.stringify({ fileName: video.filename })
-                                                                                })
-                                                                                    .then(res => res.json())
-                                                                                    .then(data => {
-                                                                                        if (data.success) {
-                                                                                            // Remove from library list
-                                                                                            setLibraryVideos(prev => prev.filter(v => v.id !== video.id));
-                                                                                            console.log('✅ Video deleted successfully');
-                                                                                        } else {
-                                                                                            console.error('Delete failed:', data.error);
-                                                                                            alert(data.error || 'Failed to delete video');
-                                                                                        }
-                                                                                    })
-                                                                                    .catch(err => {
-                                                                                        console.error('Delete failed:', err);
-                                                                                        alert('Error deleting video');
-                                                                                    });
-                                                                            }
+                                                                            handleDeleteVideo(video);
                                                                         }}
-                                                                        className="absolute top-2 right-2 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110 opacity-0 group-hover:opacity-100 z-10"
+                                                                        className="absolute top-2 right-2 w-9 h-9 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110 z-20 pointer-events-auto cursor-pointer"
+                                                                        title="Delete Video"
                                                                     >
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                            <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
                                                                         </svg>
                                                                     </button>
                                                                 </div>
@@ -684,14 +719,17 @@ export default function AutomationCampaignsV2Page() {
                                 {/* Thumbnail Selector */}
                                 {(mediaFile?.type.startsWith('video') || (!mediaFile && mediaPreview && mediaPreview.includes('/api/'))) && (
                                     <div className="space-y-4">
-                                        <Label className="text-lg font-semibold">Select Thumbnail</Label>
+                                        <Label className="text-lg font-semibold">{t('automation.v2.media.selectThumb', 'Select Thumbnail')}</Label>
                                         <div className={`grid ${isVerticalVideo ? 'grid-cols-6 auto-rows-min' : 'grid-cols-3'} gap-4 p-4 bg-gray-50 border-2 rounded-2xl h-72 overflow-y-auto`}>
                                             {autoThumbnails.map((thumb, idx) => (
                                                 <div
                                                     key={idx}
                                                     onClick={() => {
                                                         setThumbnailPreview(thumb);
-                                                        fetch(thumb).then(r => r.blob()).then(setThumbnailBlob);
+                                                        fetch(thumb)
+                                                            .then(r => r.blob())
+                                                            .then(setThumbnailBlob)
+                                                            .catch(err => console.error('Failed to load thumbnail blob:', err));
                                                     }}
                                                     className={`relative ${isVerticalVideo ? 'aspect-[9/16]' : 'aspect-video'} bg-black cursor-pointer rounded-lg overflow-hidden transition-all ${thumbnailPreview === thumb
                                                         ? 'ring-4 ring-blue-500 scale-105'
@@ -729,7 +767,7 @@ export default function AutomationCampaignsV2Page() {
                                                 disabled={!videoRef.current}
                                             >
                                                 <Wand2 className="w-4 h-4 mr-2" />
-                                                Capture from Frame
+                                                {t('automation.v2.media.capture', 'Capture from Frame')}
                                             </Button>
                                             <Button
                                                 variant="outline"
@@ -737,7 +775,7 @@ export default function AutomationCampaignsV2Page() {
                                                 className="w-full"
                                             >
                                                 <Upload className="w-4 h-4 mr-2" />
-                                                Upload Custom Image
+                                                {t('automation.v2.media.uploadCustom', 'Upload Custom Image')}
                                             </Button>
                                         </div>
                                         <input
@@ -761,7 +799,7 @@ export default function AutomationCampaignsV2Page() {
                                     size="lg"
                                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                                 >
-                                    Next: AI Configuration
+                                    {t('automation.v2.media.next', 'Next: AI Configuration')}
                                     <ChevronRight className="w-5 h-5 ml-2" />
                                 </Button>
                             </div>
@@ -772,54 +810,54 @@ export default function AutomationCampaignsV2Page() {
 
                 {/* Step 2: AI Configuration */}
                 {step === 2 && (
-                    <Card className="border-2 shadow-xl">
-                        <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+                    <Card className="glass-card">
+                        <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30">
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Sparkles className="w-6 h-6 text-purple-600" />
-                                Step 2: AI Configuration
+                                {t('automation.v2.analysis.title', 'Step 2: AI Configuration')}
                             </CardTitle>
-                            <CardDescription>Provide details for better AI analysis.</CardDescription>
+                            <CardDescription>{t('automation.v2.analysis.desc', 'Provide details for better AI analysis.')}</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6">
                             <div className="space-y-2">
                                 <Label htmlFor="context" className="text-base font-semibold">
-                                    Product/Service Context (Optional)
+                                    {t('automation.v2.analysis.context', 'Product/Service Context (Optional)')}
                                 </Label>
                                 <Textarea
                                     id="context"
-                                    placeholder="e.g. 'Tesla Model 3 for modern lifestyle' or 'Anti-aging cream for women 40+'"
+                                    placeholder={t('automation.v2.analysis.contextPlaceholder', "e.g. 'Tesla Model 3 for modern lifestyle' or 'Anti-aging cream for women 40+'")}
                                     value={productContext}
                                     onChange={e => setProductContext(e.target.value)}
                                     className="h-32 text-base"
                                 />
                                 <p className="text-sm text-gray-500">
-                                    💡 More details help AI generate better content.
+                                    {t('automation.v2.analysis.hint', '💡 More details help AI generate better content.')}
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <Label className="text-base font-semibold">Number of Ad Sets</Label>
+                                    <Label className="text-base font-semibold">{t('automation.v2.analysis.adSets', 'Number of Ad Sets')}</Label>
                                     <Select value={adSetCount.toString()} onValueChange={v => setAdSetCount(parseInt(v))}>
                                         <SelectTrigger className="text-base">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="1">1 Set</SelectItem>
-                                            <SelectItem value="3">3 Sets (Recommended)</SelectItem>
-                                            <SelectItem value="5">5 Sets</SelectItem>
-                                            <SelectItem value="7">7 Sets</SelectItem>
+                                            <SelectItem value="1">{t('automation.v2.analysis.sets', '{count} Set').replace('{count}', '1')}</SelectItem>
+                                            <SelectItem value="3">{t('automation.v2.analysis.setsRec', '{count} Sets (Recommended)').replace('{count}', '3')}</SelectItem>
+                                            <SelectItem value="5">{t('automation.v2.analysis.sets', '{count} Sets').replace('{count}', '5')}</SelectItem>
+                                            <SelectItem value="7">{t('automation.v2.analysis.sets', '{count} Sets').replace('{count}', '7')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label className="text-base font-semibold">Platforms</Label>
+                                    <Label className="text-base font-semibold">{t('automation.v2.analysis.platforms', 'Platforms')}</Label>
                                     <div className="flex gap-4 pt-2">
                                         {[
-                                            { id: 'facebook', label: 'Facebook', icon: Facebook },
-                                            { id: 'instagram', label: 'Instagram', icon: Instagram },
-                                            { id: 'messenger', label: 'Messenger', icon: MessageCircle }
+                                            { id: 'facebook', label: t('automation.v2.platform.facebook', 'Facebook'), icon: Facebook },
+                                            { id: 'instagram', label: t('automation.v2.platform.instagram', 'Instagram'), icon: Instagram },
+                                            { id: 'messenger', label: t('automation.v2.platform.messenger', 'Messenger'), icon: MessageCircle }
                                         ].map(platform => (
                                             <div key={platform.id} className="flex items-center gap-2">
                                                 <Checkbox
@@ -848,7 +886,7 @@ export default function AutomationCampaignsV2Page() {
                             <div className="flex justify-between">
                                 <Button variant="outline" onClick={() => setStep(1)} size="lg">
                                     <ChevronLeft className="w-5 h-5 mr-2" />
-                                    Back
+                                    {t('automation.v2.analysis.back', 'Back')}
                                 </Button>
                                 <Button
                                     onClick={runAIAnalysis}
@@ -859,12 +897,12 @@ export default function AutomationCampaignsV2Page() {
                                     {analyzing ? (
                                         <>
                                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                            Analyzing...
+                                            {t('automation.v2.analysis.analyzing', 'Analyzing...')}
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles className="w-5 h-5 mr-2" />
-                                            Start AI Analysis
+                                            {t('automation.v2.analysis.start', 'Start AI Analysis')}
                                         </>
                                     )}
                                 </Button>
@@ -876,13 +914,13 @@ export default function AutomationCampaignsV2Page() {
                 {/* Step 3: Review & Edit */}
                 {step === 3 && aiResult && (
                     <div className="space-y-6">
-                        <Card className="border-2 shadow-xl">
-                            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50">
+                        <Card className="glass-card">
+                            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30">
                                 <CardTitle className="flex items-center gap-2 text-2xl">
                                     <Eye className="w-6 h-6 text-green-600" />
-                                    Step 3: Review & Edit Results
+                                    {t('automation.v2.review.title', 'Step 3: Review & Edit Results')}
                                 </CardTitle>
-                                <CardDescription>Review and fine-tune AI-generated content or regenerate.</CardDescription>
+                                <CardDescription>{t('automation.v2.review.desc', 'Review and fine-tune AI-generated content or regenerate.')}</CardDescription>
                             </CardHeader>
                             <CardContent className="pt-6 space-y-8 max-h-[600px] overflow-y-auto">
                                 {/* Ad Copy Variations */}
@@ -890,7 +928,7 @@ export default function AutomationCampaignsV2Page() {
                                     <div className="flex items-center justify-between">
                                         <Label className="text-lg font-semibold flex items-center gap-2">
                                             <Wand2 className="w-5 h-5 text-purple-600" />
-                                            Ad Captions
+                                            {t('automation.v2.review.captions', 'Ad Captions')}
                                         </Label>
                                         <Button
                                             variant="outline"
@@ -913,7 +951,7 @@ export default function AutomationCampaignsV2Page() {
                                                 size="sm"
                                                 className={selectedCopyIndex === idx ? 'bg-gradient-to-r from-blue-600 to-purple-600' : ''}
                                             >
-                                                Caption {idx + 1}
+                                                {t('automation.v2.review.captionLabel', 'Caption {index}').replace('{index}', (idx + 1).toString())}
                                             </Button>
                                         ))}
                                     </div>
@@ -921,7 +959,7 @@ export default function AutomationCampaignsV2Page() {
                                     {/* Selected Caption Editor */}
                                     <div className="space-y-4 p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl border-2 border-blue-100">
                                         <div className="space-y-2">
-                                            <Label className="font-semibold">Headline</Label>
+                                            <Label className="font-semibold">{t('automation.v2.review.headline', 'Headline')}</Label>
                                             <Input
                                                 value={editedCaptions[selectedCopyIndex]?.headline || ''}
                                                 onChange={(e) => {
@@ -933,7 +971,7 @@ export default function AutomationCampaignsV2Page() {
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="font-semibold">Primary Text</Label>
+                                            <Label className="font-semibold">{t('automation.v2.review.primaryText', 'Primary Text')}</Label>
                                             <Textarea
                                                 value={editedCaptions[selectedCopyIndex]?.primaryText || ''}
                                                 onChange={(e) => {
@@ -954,7 +992,7 @@ export default function AutomationCampaignsV2Page() {
                                     <div className="flex items-center justify-between">
                                         <Label className="text-lg font-semibold flex items-center gap-2">
                                             <Target className="w-5 h-5 text-green-600" />
-                                            Target Audience ({editedTargeting.length} Groups)
+                                            {t('automation.v2.review.targeting', 'Target Audience ({count} Groups)').replace('{count}', editedTargeting.length.toString())}
                                         </Label>
                                         <Button
                                             variant="outline"
@@ -971,7 +1009,7 @@ export default function AutomationCampaignsV2Page() {
                                         {editedTargeting.map((group, idx) => (
                                             <div key={idx} className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-100">
                                                 <div className="font-semibold text-green-900 mb-2 flex items-center gap-2">
-                                                    <Badge variant="outline" className="bg-white">Group {idx + 1}</Badge>
+                                                    <Badge variant="outline" className="bg-white">{t('automation.v2.review.group', 'Group {index}').replace('{index}', (idx + 1).toString())}</Badge>
                                                     {group.name}
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5">
@@ -993,7 +1031,7 @@ export default function AutomationCampaignsV2Page() {
                                     <div className="flex items-center justify-between">
                                         <Label className="text-lg font-semibold flex items-center gap-2">
                                             <MessageCircle className="w-5 h-5 text-blue-600" />
-                                            Ice Breakers (Auto-reply)
+                                            {t('automation.v2.review.iceBreakers', 'Ice Breakers (Auto-reply)')}
                                         </Label>
                                         <Button
                                             variant="outline"
@@ -1025,12 +1063,12 @@ export default function AutomationCampaignsV2Page() {
                                 {aiResult.productCategory && (
                                     <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                                         <div>
-                                            <span className="text-sm text-gray-600">Product Category:</span>
+                                            <span className="text-sm text-gray-600">{t('automation.v2.review.productCategory', 'Product Category:')}</span>
                                             <Badge className="ml-2 bg-purple-600">{aiResult.productCategory}</Badge>
                                         </div>
                                         {aiResult.confidence && (
                                             <div>
-                                                <span className="text-sm text-gray-600">Confidence:</span>
+                                                <span className="text-sm text-gray-600">{t('automation.v2.review.confidence', 'Confidence:')}</span>
                                                 <Badge className="ml-2 bg-green-600">
                                                     {Math.round(aiResult.confidence * 100)}%
                                                 </Badge>
@@ -1043,14 +1081,14 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="flex justify-between pt-4">
                                     <Button variant="outline" onClick={() => setStep(2)} size="lg">
                                         <ChevronLeft className="w-5 h-5 mr-2" />
-                                        Back
+                                        {t('automation.v2.analysis.back', 'Back')}
                                     </Button>
                                     <Button
                                         onClick={() => setStep(4)}
                                         size="lg"
                                         className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
                                     >
-                                        Next: Launch Settings
+                                        {t('automation.v2.review.next', 'Next: Launch Settings')}
                                         <ChevronRight className="w-5 h-5 ml-2" />
                                     </Button>
                                 </div>
@@ -1061,13 +1099,13 @@ export default function AutomationCampaignsV2Page() {
 
                 {/* Step 4: Launch */}
                 {step === 4 && (
-                    <Card className="border-2 shadow-xl">
-                        <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50">
+                    <Card className="glass-card">
+                        <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/30 dark:to-red-950/30">
                             <CardTitle className="flex items-center gap-2 text-2xl">
                                 <Rocket className="w-6 h-6 text-orange-600" />
-                                Step 4: Launch Campaign
+                                {t('automation.v2.launch.title', 'Step 4: Launch Campaign')}
                             </CardTitle>
-                            <CardDescription>Finalize settings and launch your campaign.</CardDescription>
+                            <CardDescription>{t('automation.v2.launch.desc', 'Finalize settings and launch your campaign.')}</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-6 space-y-6 max-h-[600px] overflow-y-auto">
                             {/* Ad Account & Page Selection */}
@@ -1075,11 +1113,11 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <Facebook className="w-4 h-4 text-blue-600" />
-                                        Ad Account
+                                        {t('automation.v2.launch.adAccount', 'Ad Account')}
                                     </Label>
                                     <Select value={selectedAdAccount} onValueChange={setSelectedAdAccount}>
                                         <SelectTrigger className="text-base">
-                                            <SelectValue placeholder="Select Ad Account" />
+                                            <SelectValue placeholder={t('automation.v2.launch.selectAccount', 'Select Ad Account')} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {adAccounts.map(acc => (
@@ -1094,11 +1132,11 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <Facebook className="w-4 h-4 text-blue-600" />
-                                        Facebook Page
+                                        {t('automation.v2.launch.page', 'Facebook Page')}
                                     </Label>
                                     <Select value={selectedPage} onValueChange={setSelectedPage}>
                                         <SelectTrigger className="text-base">
-                                            <SelectValue placeholder="Select Page" />
+                                            <SelectValue placeholder={t('automation.v2.launch.selectPage', 'Select Page')} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {pages.map(page => (
@@ -1118,7 +1156,7 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <Target className="w-4 h-4 text-green-600" />
-                                        Campaign Objective
+                                        {t('automation.v2.launch.objective', 'Campaign Objective')}
                                     </Label>
                                     <Select value={objective} onValueChange={setObjective}>
                                         <SelectTrigger className="text-base">
@@ -1126,13 +1164,13 @@ export default function AutomationCampaignsV2Page() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="OUTCOME_ENGAGEMENT">
-                                                💬 Engagement (Messages)
+                                                {t('automation.v2.objective.engagement', '💬 Engagement (Messages)')}
                                             </SelectItem>
                                             <SelectItem value="OUTCOME_TRAFFIC">
-                                                🔗 Traffic (Link Clicks)
+                                                {t('automation.v2.objective.traffic', '🔗 Traffic (Link Clicks)')}
                                             </SelectItem>
                                             <SelectItem value="OUTCOME_SALES">
-                                                💰 Sales (Conversions)
+                                                {t('automation.v2.objective.sales', '💰 Sales (Conversions)')}
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -1141,7 +1179,7 @@ export default function AutomationCampaignsV2Page() {
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
                                         <DollarSign className="w-4 h-4 text-green-600" />
-                                        Daily Budget (THB)
+                                        {t('automation.v2.launch.budget', 'Daily Budget (THB)')}
                                     </Label>
                                     <Input
                                         type="number"
@@ -1152,7 +1190,7 @@ export default function AutomationCampaignsV2Page() {
                                         step="50"
                                     />
                                     <p className="text-xs text-gray-500">
-                                        Min 100 THB/day
+                                        {t('automation.v2.launch.minBudget', 'Min 100 THB/day')}
                                     </p>
                                 </div>
                             </div>
@@ -1163,27 +1201,27 @@ export default function AutomationCampaignsV2Page() {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
-                                        🌍 Target Country
+                                        🌍 {t('automation.v2.launch.country', 'Target Country')}
                                     </Label>
                                     <Select value={targetCountry} onValueChange={setTargetCountry}>
                                         <SelectTrigger className="text-base">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="TH">🇹🇭 Thailand</SelectItem>
-                                            <SelectItem value="US">🇺🇸 USA</SelectItem>
-                                            <SelectItem value="GB">🇬🇧 UK</SelectItem>
-                                            <SelectItem value="JP">🇯🇵 Japan</SelectItem>
-                                            <SelectItem value="SG">🇸🇬 Singapore</SelectItem>
-                                            <SelectItem value="MY">🇲🇾 Malaysia</SelectItem>
-                                            <SelectItem value="VN">🇻🇳 Vietnam</SelectItem>
+                                            <SelectItem value="TH">{t('automation.v2.country.th', '🇹🇭 Thailand')}</SelectItem>
+                                            <SelectItem value="US">{t('automation.v2.country.us', '🇺🇸 USA')}</SelectItem>
+                                            <SelectItem value="GB">{t('automation.v2.country.gb', '🇬🇧 UK')}</SelectItem>
+                                            <SelectItem value="JP">{t('automation.v2.country.jp', '🇯🇵 Japan')}</SelectItem>
+                                            <SelectItem value="SG">{t('automation.v2.country.sg', '🇸🇬 Singapore')}</SelectItem>
+                                            <SelectItem value="MY">{t('automation.v2.country.my', '🇲🇾 Malaysia')}</SelectItem>
+                                            <SelectItem value="VN">{t('automation.v2.country.vn', '🇻🇳 Vietnam')}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
-                                        👤 Min Age
+                                        👤 {t('automation.v2.launch.minAge', 'Min Age')}
                                     </Label>
                                     <Select value={ageMin} onValueChange={setAgeMin}>
                                         <SelectTrigger className="text-base">
@@ -1192,7 +1230,7 @@ export default function AutomationCampaignsV2Page() {
                                         <SelectContent>
                                             {Array.from({ length: 48 }, (_, i) => i + 18).map(age => (
                                                 <SelectItem key={age} value={age.toString()}>
-                                                    {age} Years
+                                                    {age} {t('automation.v2.launch.years', 'Years')}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1201,7 +1239,7 @@ export default function AutomationCampaignsV2Page() {
 
                                 <div className="space-y-2">
                                     <Label className="text-base font-semibold flex items-center gap-2">
-                                        👤 Max Age
+                                        👤 {t('automation.v2.launch.maxAge', 'Max Age')}
                                     </Label>
                                     <Select value={ageMax} onValueChange={setAgeMax}>
                                         <SelectTrigger className="text-base">
@@ -1222,12 +1260,12 @@ export default function AutomationCampaignsV2Page() {
 
                             {/* Placements */}
                             <div className="space-y-3">
-                                <Label className="text-base font-semibold">Ad Placements</Label>
+                                <Label className="text-base font-semibold">{t('automation.v2.launch.placements', 'Ad Placements')}</Label>
                                 <div className="flex flex-wrap gap-4">
                                     {[
-                                        { id: 'facebook', label: 'Facebook', icon: Facebook, color: 'blue' },
-                                        { id: 'instagram', label: 'Instagram', icon: Instagram, color: 'pink' },
-                                        { id: 'messenger', label: 'Messenger', icon: MessageCircle, color: 'purple' }
+                                        { id: 'facebook', label: t('automation.v2.platform.facebook', 'Facebook'), icon: Facebook, color: 'blue' },
+                                        { id: 'instagram', label: t('automation.v2.platform.instagram', 'Instagram'), icon: Instagram, color: 'pink' },
+                                        { id: 'messenger', label: t('automation.v2.platform.messenger', 'Messenger'), icon: MessageCircle, color: 'purple' }
                                     ].map(platform => (
                                         <div
                                             key={platform.id}
@@ -1276,10 +1314,10 @@ export default function AutomationCampaignsV2Page() {
                                     <div>
                                         <Label htmlFor="saveDraft" className="font-semibold cursor-pointer flex items-center gap-2">
                                             <Save className="w-4 h-4" />
-                                            Save as Draft
+                                            {t('automation.v2.launch.saveDraft', 'Save as Draft')}
                                         </Label>
                                         <p className="text-sm text-gray-600 mt-1">
-                                            Save without launching immediately. You can edit and launch later.
+                                            {t('automation.v2.launch.saveDraftDesc', 'Save without launching immediately. You can edit and launch later.')}
                                         </p>
                                     </div>
                                 </div>
@@ -1287,16 +1325,23 @@ export default function AutomationCampaignsV2Page() {
 
                             {/* Summary */}
                             <div className="p-4 bg-gray-50 rounded-lg space-y-2">
-                                <h4 className="font-semibold text-gray-900">Campaign Summary</h4>
+                                <h4 className="font-semibold text-gray-900">{t('automation.v2.launch.summary', 'Campaign Summary')}</h4>
                                 <div className="grid grid-cols-2 gap-2 text-sm">
-                                    <div className="text-gray-600">Platforms:</div>
-                                    <div className="font-medium">{selectedPlatforms.join(', ')}</div>
-                                    <div className="text-gray-600">Budget:</div>
-                                    <div className="font-medium">{dailyBudget} THB/day</div>
-                                    <div className="text-gray-600">Targeting:</div>
-                                    <div className="font-medium">{editedTargeting.length} Groups</div>
-                                    <div className="text-gray-600">Captions:</div>
-                                    <div className="font-medium">{editedCaptions.length} Variations</div>
+                                    <div className="text-gray-600">{t('automation.v2.analysis.platforms', 'Platforms')}:</div>
+                                    <div className="font-medium">
+                                        {selectedPlatforms.map(id => {
+                                            if (id === 'facebook') return t('automation.v2.platform.facebook', 'Facebook');
+                                            if (id === 'instagram') return t('automation.v2.platform.instagram', 'Instagram');
+                                            if (id === 'messenger') return t('automation.v2.platform.messenger', 'Messenger');
+                                            return id;
+                                        }).join(', ')}
+                                    </div>
+                                    <div className="text-gray-600">{t('automation.v2.launch.budget', 'Budget')}:</div>
+                                    <div className="font-medium">{dailyBudget} {t('automation.v2.launch.perDay', 'THB/day')}</div>
+                                    <div className="text-gray-600">{t('automation.v2.review.targeting', 'Targeting')}:</div>
+                                    <div className="font-medium">{editedTargeting.length} {t('automation.v2.review.group', 'Groups')}</div>
+                                    <div className="text-gray-600">{t('automation.v2.review.captions', 'Captions')}:</div>
+                                    <div className="font-medium">{editedCaptions.length} {t('automation.v2.launch.variations', 'Variations')}</div>
                                 </div>
                             </div>
 
@@ -1304,7 +1349,7 @@ export default function AutomationCampaignsV2Page() {
                             <div className="flex justify-between pt-4">
                                 <Button variant="outline" onClick={() => setStep(3)} size="lg">
                                     <ChevronLeft className="w-5 h-5 mr-2" />
-                                    Back
+                                    {t('automation.v2.analysis.back', 'Back')}
                                 </Button>
                                 <Button
                                     onClick={launchCampaign}
@@ -1318,17 +1363,17 @@ export default function AutomationCampaignsV2Page() {
                                     {loading ? (
                                         <>
                                             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                            Launching...
+                                            {t('automation.v2.launch.launching', 'Launching...')}
                                         </>
                                     ) : saveDraft ? (
                                         <>
                                             <Save className="w-5 h-5 mr-2" />
-                                            Save Draft
+                                            {t('automation.v2.launch.saveDraft', 'Save Draft')}
                                         </>
                                     ) : (
                                         <>
                                             <Rocket className="w-5 h-5 mr-2" />
-                                            🚀 Launch Campaign
+                                            {t('automation.v2.launch.launchBtn', 'Launch Campaign')}
                                         </>
                                     )}
                                 </Button>
@@ -1336,6 +1381,37 @@ export default function AutomationCampaignsV2Page() {
                         </CardContent>
                     </Card>
                 )}
+                {/* Delete Confirmation Dialog */}
+                <AlertDialog open={!!videoToDelete} onOpenChange={(open) => !open && setVideoToDelete(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will permanently delete the video "{videoToDelete?.filename}". This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    confirmDelete();
+                                }}
+                                disabled={isDeleting}
+                                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    'Delete Video'
+                                )}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </div>
     );

@@ -26,9 +26,9 @@ const SEED_KEYWORDS = [
     'Mobile', 'Software', 'Hardware', 'Cosmetics', 'Spa', 'Clinic'
 ];
 
-async function fetchInterests(keyword: string, accessToken: string) {
+async function fetchInterests(keyword: string, accessToken: string, locale: string = 'th_TH') {
     try {
-        const url = `https://graph.facebook.com/v22.0/search?type=adinterest&q=${encodeURIComponent(keyword)}&limit=1000&locale=th_TH&access_token=${accessToken}`;
+        const url = `https://graph.facebook.com/v22.0/search?type=adinterest&q=${encodeURIComponent(keyword)}&limit=1000&locale=${locale}&access_token=${accessToken}`;
         const response = await fetch(url, {
             headers: {
                 'User-Agent': 'CentxoAi/1.0 (Compatible; Business Tool)',
@@ -38,16 +38,60 @@ async function fetchInterests(keyword: string, accessToken: string) {
 
         if (!response.ok) {
             const text = await response.text();
-            console.error(`FB API Error for ${keyword}: ${response.status} ${text}`);
+            console.error(`FB API Error for ${keyword} (${locale}): ${response.status} ${text}`);
             return [];
         }
 
         const data = await response.json();
         return data.data || [];
     } catch (error) {
-        console.error(`Error fetching for ${keyword}:`, error);
+        console.error(`Error fetching for ${keyword} (${locale}):`, error);
         return [];
     }
+}
+
+async function fetchBilingualInterests(keyword: string, accessToken: string) {
+    // Fetch both Thai and English versions
+    const [thaiResults, englishResults] = await Promise.all([
+        fetchInterests(keyword, accessToken, 'th_TH'),
+        fetchInterests(keyword, accessToken, 'en_US')
+    ]);
+
+    // Create a map to merge by fbId
+    const mergedMap = new Map();
+
+    // Add Thai results
+    thaiResults.forEach((item: any) => {
+        mergedMap.set(item.id, {
+            fbId: item.id,
+            nameTH: item.name,
+            nameEN: null,
+            audienceSizeLowerBound: item.audience_size_lower_bound,
+            audienceSizeUpperBound: item.audience_size_upper_bound,
+            path: item.path,
+            topic: item.topic
+        });
+    });
+
+    // Merge English results
+    englishResults.forEach((item: any) => {
+        if (mergedMap.has(item.id)) {
+            const existing = mergedMap.get(item.id);
+            existing.nameEN = item.name;
+        } else {
+            mergedMap.set(item.id, {
+                fbId: item.id,
+                nameTH: null,
+                nameEN: item.name,
+                audienceSizeLowerBound: item.audience_size_lower_bound,
+                audienceSizeUpperBound: item.audience_size_upper_bound,
+                path: item.path,
+                topic: item.topic
+            });
+        }
+    });
+
+    return Array.from(mergedMap.values());
 }
 
 export async function GET(request: NextRequest) {
@@ -57,6 +101,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
+        console.log('[Interest Sync] Starting sync for user:', session?.user?.email, 'ID:', session?.user?.id);
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
@@ -83,29 +128,56 @@ export async function POST(request: NextRequest) {
             accessToken = account?.access_token;
         }
 
-        // 4. SUPER ADMIN SYSTEM FALLBACK
+        // 4. Fallback: Try TeamMember table (New "Team" connection model)
+        if (!accessToken) {
+            // Find valid token from user's team members
+            const userWithTeam: any = await (prisma as any).user.findUnique({
+                where: { id: session.user.id },
+                include: { teamMembers: true }
+            });
+
+            if (userWithTeam?.teamMembers && userWithTeam.teamMembers.length > 0) {
+                // Use the most recently added member's token
+                const newestMember = userWithTeam.teamMembers.sort((a: any, b: any) =>
+                    new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()
+                )[0];
+                accessToken = newestMember.accessToken;
+            }
+        }
+
+        // 5. SUPER ADMIN SYSTEM FALLBACK
         // If the user is a Super Admin but hasn't linked their own Facebook, 
         // try to find ANY valid token in the system to perform the sync.
         // This is acceptable for Public Interest Search which doesn't require specific user context.
         if (!accessToken && (session.user as any).role === 'SUPER_ADMIN') {
             console.log('Super Admin Sync: attempting to find system fallback token...');
 
-            // Try newest MetaAccount first
-            const systemMetaAccount = await prisma.metaAccount.findFirst({
-                orderBy: { updatedAt: 'desc' },
-                select: { accessToken: true }
+            // Try TeamMember table first (most likely to have fresh tokens)
+            const anyTeamMember: any = await (prisma as any).teamMember.findFirst({
+                orderBy: { addedAt: 'desc' }
             });
 
-            if (systemMetaAccount?.accessToken) {
-                accessToken = systemMetaAccount.accessToken;
+            if (anyTeamMember?.accessToken) {
+                console.log('Super Admin: Using token from TeamMember:', anyTeamMember.facebookName);
+                accessToken = anyTeamMember.accessToken;
             } else {
-                // Try newest Account
-                const systemAccount = await prisma.account.findFirst({
-                    where: { provider: 'facebook' },
-                    orderBy: { id: 'desc' }, // Account doesn't always have updatedAt
-                    select: { access_token: true }
+                // Try newest MetaAccount
+                const systemMetaAccount = await prisma.metaAccount.findFirst({
+                    orderBy: { updatedAt: 'desc' },
+                    select: { accessToken: true }
                 });
-                accessToken = systemAccount?.access_token;
+
+                if (systemMetaAccount?.accessToken) {
+                    accessToken = systemMetaAccount.accessToken;
+                } else {
+                    // Try newest Account
+                    const systemAccount = await prisma.account.findFirst({
+                        where: { provider: 'facebook' },
+                        orderBy: { id: 'desc' }, // Account doesn't always have updatedAt
+                        select: { access_token: true }
+                    });
+                    accessToken = systemAccount?.access_token;
+                }
             }
         }
 
@@ -137,25 +209,29 @@ export async function POST(request: NextRequest) {
                 const delay = Math.floor(Math.random() * 3000) + 2000;
                 await new Promise(r => setTimeout(r, delay));
 
-                const interests = await fetchInterests(keyword, accessToken);
+                const interests = await fetchBilingualInterests(keyword, accessToken);
 
                 for (const item of interests) {
                     try {
-                        const lower = BigInt(item.audience_size_lower_bound || 0);
-                        const upper = BigInt(item.audience_size_upper_bound || 0);
+                        const lower = BigInt(item.audienceSizeLowerBound || 0);
+                        const upper = BigInt(item.audienceSizeUpperBound || 0);
 
-                        await prisma.facebookInterest.upsert({
-                            where: { fbId: item.id },
+                        await (prisma as any).facebookInterest.upsert({
+                            where: { fbId: item.fbId },
                             update: {
-                                name: item.name,
+                                name: item.nameEN || item.nameTH || 'Unknown',
+                                nameTH: item.nameTH,
+                                nameEN: item.nameEN,
                                 audienceSizeLowerBound: lower,
                                 audienceSizeUpperBound: upper,
                                 path: item.path ? JSON.stringify(item.path) : undefined,
                                 topic: item.topic,
                             },
                             create: {
-                                fbId: item.id,
-                                name: item.name,
+                                fbId: item.fbId,
+                                name: item.nameEN || item.nameTH || 'Unknown',
+                                nameTH: item.nameTH,
+                                nameEN: item.nameEN,
                                 audienceSizeLowerBound: lower,
                                 audienceSizeUpperBound: upper,
                                 path: item.path ? JSON.stringify(item.path) : undefined,
