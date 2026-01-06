@@ -118,16 +118,40 @@ export const authOptions: NextAuthOptions = {
     },
 
     callbacks: {
-        async jwt({ token, user, account }) {
+        async jwt({ token, user, account, trigger }) {
             if (user) {
                 token.id = user.id;
                 // Type assertion since user comes from adapter or authorize
                 token.role = (user as any).role || 'USER';
             }
+
             // Store Facebook access token in JWT
             if (account?.provider === 'facebook' && account?.access_token) {
                 token.accessToken = account.access_token;
             }
+
+            // Handle session update (when linking accounts)
+            if (trigger === 'update') {
+                // Fetch fresh user data from database
+                const dbUser = await prisma.user.findUnique({
+                    where: { id: token.id as string },
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        image: true,
+                        role: true,
+                    },
+                });
+
+                if (dbUser) {
+                    token.name = dbUser.name;
+                    token.email = dbUser.email;
+                    token.picture = dbUser.image;
+                    token.role = dbUser.role;
+                }
+            }
+
             return token;
         },
 

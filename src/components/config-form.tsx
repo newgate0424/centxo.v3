@@ -147,7 +147,7 @@ export function ConfigForm() {
                         </div>
 
                         {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,200px,120px] gap-3 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
+                        <div className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
                             <Checkbox
                                 checked={allAccountsSelected}
                                 onCheckedChange={toggleAllAccounts}
@@ -197,7 +197,7 @@ export function ConfigForm() {
                                             <div
                                                 key={account.id}
                                                 onClick={() => toggleAccount(account)}
-                                                className="grid grid-cols-[auto,1fr,200px,120px] gap-3 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                             >
                                                 <Checkbox
                                                     checked={isSelected}
@@ -250,7 +250,7 @@ export function ConfigForm() {
                         </div>
 
                         {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,150px,120px] gap-3 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
+                        <div className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
                             <Checkbox
                                 checked={allPagesSelected}
                                 onCheckedChange={toggleAllPages}
@@ -291,7 +291,7 @@ export function ConfigForm() {
                                             <div
                                                 key={page.id}
                                                 onClick={() => togglePage(page)}
-                                                className="grid grid-cols-[auto,1fr,150px,120px] gap-3 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                className="grid grid-cols-[auto,1fr,250px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                             >
                                                 <Checkbox
                                                     checked={isSelected}

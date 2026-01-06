@@ -86,6 +86,7 @@ const navStructure: NavGroup[] = [
                     { name: "Super Target", href: "/ads-manager/super-target", icon: Target, translationKey: 'adsManager.superTarget', isChild: true },
                 ]
             },
+            { name: "Settings", href: "/settings", icon: Settings, translationKey: 'nav.settings' },
         ]
     }
 ]

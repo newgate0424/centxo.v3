@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   Avatar,
   AvatarFallback,
@@ -19,13 +18,11 @@ import {
 import { signOut, useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SettingsDialog } from "./settings-dialog";
 
-// Force rebuild - Settings Dialog Integration
+// Force rebuild - Settings Page Integration
 export function UserNav() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleLogout = async () => {
     // Clear all localStorage data before logout
@@ -80,9 +77,11 @@ export function UserNav() {
                 Dashboard
               </DropdownMenuItem>
             </Link>
-            <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
-              Settings
-            </DropdownMenuItem>
+            <Link href="/settings">
+              <DropdownMenuItem>
+                Settings
+              </DropdownMenuItem>
+            </Link>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout}>
@@ -90,8 +89,6 @@ export function UserNav() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }
