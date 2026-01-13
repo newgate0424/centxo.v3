@@ -217,14 +217,7 @@ export function AccountSettings() {
     return (
         <div className="space-y-6 max-w-3xl">
             {/* Header */}
-            <div>
-                <h2 className="text-2xl font-bold text-foreground mb-1">
-                    {t('settings.accountSettings', 'Account Settings')}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    {t('settings.accountSubtitle', 'Manage your account information and preferences')}
-                </p>
-            </div>
+            {/* Header removed - moved to layout */}
 
             {/* Profile Photo Section */}
             <div className="space-y-4">

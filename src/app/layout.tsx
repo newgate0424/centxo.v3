@@ -5,6 +5,7 @@ import AuthProvider from '@/app/providers/auth-provider';
 import { AdAccountProvider } from '@/contexts/AdAccountContext';
 import { ThemeProvider } from '@/components/theme-provider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
+import { ThemeColorProvider } from '@/contexts/ThemeColorContext';
 import { Roboto, Sarabun, Inter } from 'next/font/google';
 import './globals.css';
 
@@ -45,13 +46,15 @@ export default function RootLayout({
                     storageKey="adpilot-theme"
                 >
                     <LanguageProvider>
-                        <AuthProvider>
-                            <AdAccountProvider>
-                                {children}
-                            </AdAccountProvider>
-                        </AuthProvider>
-                        <Toaster />
-                        <SonnerToaster />
+                        <ThemeColorProvider>
+                            <AuthProvider>
+                                <AdAccountProvider>
+                                    {children}
+                                </AdAccountProvider>
+                            </AuthProvider>
+                            <Toaster />
+                            <SonnerToaster />
+                        </ThemeColorProvider>
                     </LanguageProvider>
                 </ThemeProvider>
             </body>

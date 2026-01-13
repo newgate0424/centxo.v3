@@ -22,16 +22,7 @@ export function LanguageSettings() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                    {t('settings.language', 'Language')}
-                </h2>
-                <p className="text-muted-foreground">
-                    {language === 'th'
-                        ? 'เลือกภาษาที่คุณต้องการใช้ในแอปพลิเคชัน'
-                        : 'Select your preferred language for the application'}
-                </p>
-            </div>
+            {/* Header removed - moved to layout */}
 
             <div className="glass-card p-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-6">

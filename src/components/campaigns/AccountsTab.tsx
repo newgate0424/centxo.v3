@@ -3,7 +3,7 @@
 import { showCustomToast } from "@/utils/custom-toast";
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Loader2, ExternalLink, CreditCard, Building2, Edit3, RotateCcw, Trash2, MoreHorizontal, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Loader2, ExternalLink, CreditCard, Building2, Edit3, RotateCcw, Trash2, MoreHorizontal, ArrowUp, ArrowDown, ArrowUpDown, PlusCircle } from "lucide-react";
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from "@/components/ui/button";
@@ -111,8 +111,8 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
 
         if (status === 1) {
             // Active
-            // Check for spending limit reached
-            if (account.spendingCap && account.spentAmount && account.spentAmount >= account.spendingCap) {
+            // Check for spending limit reached (only if there's an actual limit set)
+            if (Number(account.spendingCap) > 0 && Number(account.spentAmount) >= Number(account.spendingCap)) {
                 statusText = 'Spending Limit Reached';
                 statusColor = 'bg-red-500';
                 textColor = 'text-red-700 dark:text-red-400';
@@ -249,7 +249,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
         setIsLoadingAccounts(true);
         setLoading(true);
         try {
-            const response = await fetch('/api/facebook/ad-accounts');
+            const response = await fetch('/api/team/ad-accounts');
 
             if (response.ok) {
                 const data = await response.json();
@@ -267,14 +267,14 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                         account_id: acc.account_id,
                         status: fbAccount?.account_status ?? 'UNKNOWN',
                         disable_reason: fbAccount?.disable_reason,
-                        activeAds: 0,
+                        activeAds: fbAccount?.ads?.summary?.total_count || 0,
                         spendingCap: fbAccount?.spend_cap || null,
                         spentAmount: fbAccount?.amount_spent || null,
                         timeZone: fbAccount?.timezone_name || '-',
                         timeZoneOffset: fbAccount?.timezone_offset,
                         nationality: fbAccount?.business_country_code || '-',
                         currency: fbAccount?.currency || '-',
-                        paymentMethod: fbAccount?.funding_source || '-',
+                        paymentMethod: fbAccount?.funding_source_details?.display_string || fbAccount?.funding_source_details?.type || '-',
                     };
                 });
 
@@ -587,26 +587,26 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                     >
                                         {isLoadingAccounts ? (
                                             <div className="h-5 w-20 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
-                                        ) : account.spendingCap ? (
+                                        ) : (Number(account.spendingCap) > 0) ? (
                                             <div className="flex items-center gap-2 justify-end">
                                                 {/* Amount */}
                                                 <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                                                    ${account.spentAmount?.toFixed(2) || '0.00'}
+                                                    ${Number(account.spentAmount || 0).toFixed(2)}
                                                 </span>
 
                                                 {/* Progress Bar with Tooltip */}
                                                 <div className="w-[60%] relative">
                                                     <Progress
-                                                        value={account.spendingCap ? ((account.spentAmount || 0) / account.spendingCap) * 100 : 0}
-                                                        className={`h-1.5 w-full [&>div]:transition-colors ${(account.spendingCap ? ((account.spentAmount || 0) / account.spendingCap) * 100 : 0) >= 100 ? '[&>div]:bg-red-500' :
-                                                            (account.spendingCap ? ((account.spentAmount || 0) / account.spendingCap) * 100 : 0) >= 80 ? '[&>div]:bg-orange-500' :
+                                                        value={Number(account.spendingCap) > 0 ? ((Number(account.spentAmount) || 0) / Number(account.spendingCap)) * 100 : 0}
+                                                        className={`h-1.5 w-full [&>div]:transition-colors ${(Number(account.spendingCap) > 0 ? ((Number(account.spentAmount) || 0) / Number(account.spendingCap)) * 100 : 0) >= 100 ? '[&>div]:bg-red-500' :
+                                                            (Number(account.spendingCap) > 0 ? ((Number(account.spentAmount) || 0) / Number(account.spendingCap)) * 100 : 0) >= 80 ? '[&>div]:bg-orange-500' :
                                                                 '[&>div]:bg-green-500'
                                                             }`}
                                                     />
 
                                                     {/* Custom Black Tooltip */}
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#0F172A] text-white text-[11px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg select-none">
-                                                        ${account.spentAmount?.toFixed(2)} / ${account.spendingCap.toFixed(2)}
+                                                        ${Number(account.spentAmount || 0).toFixed(2)} / ${Number(account.spendingCap || 0).toFixed(2)}
                                                         {/* Triangle/Arrow */}
                                                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#0F172A]"></div>
                                                     </div>
@@ -614,20 +614,25 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
 
                                                 {/* Percentage */}
                                                 <span className="text-xs text-gray-500 dark:text-gray-400 w-9 text-right font-medium">
-                                                    {Math.round(account.spendingCap ? ((account.spentAmount || 0) / account.spendingCap) * 100 : 0)}%
+                                                    {Math.round(Number(account.spendingCap) > 0 ? ((Number(account.spentAmount) || 0) / Number(account.spendingCap)) * 100 : 0)}%
                                                 </span>
                                             </div>
                                         ) : (
-                                            <button
-                                                className="text-xs text-blue-600 hover:underline w-full text-right flex items-center justify-end gap-1"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openSpendingLimitDialog(account);
-                                                }}
-                                            >
-                                                {t('accounts.actions.setLimit', 'Set Limit')}
-                                                <div className="i-lucide-plus-circle w-3 h-3" />
-                                            </button>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <span className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                                    {t('accounts.noLimit', 'No Limit')}
+                                                </span>
+                                                <button
+                                                    className="text-xs text-blue-600 hover:text-blue-700 dark:hover:text-blue-500 transition-colors"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openSpendingLimitDialog(account);
+                                                    }}
+                                                    title={t('accounts.actions.setLimit', 'Set Limit')}
+                                                >
+                                                    <PlusCircle className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         )}
                                     </TableCell>
                                     <TableCell className="px-4 py-2">
@@ -735,7 +740,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                     <span className="font-medium text-[#0F172A] dark:text-gray-200">{t('accounts.spendingLimit.moneyLeft', 'Money Left')}: </span>
                                     <span className="text-[#0F172A] dark:text-gray-200">
                                         ${selectedAccountForLimit.spendingCap
-                                            ? Math.max(0, (selectedAccountForLimit.spendingCap - (selectedAccountForLimit.spentAmount || 0))).toFixed(2)
+                                            ? Math.max(0, (Number(selectedAccountForLimit.spendingCap) - Number(selectedAccountForLimit.spentAmount || 0))).toFixed(2)
                                             : '∞'
                                         }
                                     </span>
@@ -743,11 +748,11 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                 <div className="text-[15px]">
                                     <span className="text-[#0F172A] dark:text-gray-200">{t('accounts.spendingLimit.spent', 'Spent')} </span>
                                     <span className="text-blue-600 dark:text-blue-400 font-medium">
-                                        ${(selectedAccountForLimit.spentAmount || 0).toFixed(2)}
+                                        ${Number(selectedAccountForLimit.spentAmount || 0).toFixed(2)}
                                     </span>
                                     <span className="text-[#0F172A] dark:text-gray-200"> • {t('accounts.table.limit', 'Limit')}: </span>
                                     <span className="text-blue-600 dark:text-blue-400 font-medium">
-                                        ${selectedAccountForLimit.spendingCap?.toFixed(2) || '∞'}
+                                        ${Number(selectedAccountForLimit.spendingCap || 0).toFixed(2) || '∞'}
                                     </span>
                                 </div>
                             </div>

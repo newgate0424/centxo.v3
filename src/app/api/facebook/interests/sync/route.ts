@@ -106,15 +106,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // 1. Try to get token from session first (preferred for immediate use)
-        let accessToken = (session as any).accessToken;
+        // 1. Try MetaAccount table first (most reliable - Persistent Business Connection)
+        const metaAccount = await prisma.metaAccount.findUnique({
+            where: { userId: session.user.id },
+            select: { accessToken: true },
+        });
+        let accessToken = metaAccount?.accessToken;
 
-        // 2. Fallback: Try MetaAccount table (Persistent Business Connection)
+        // 2. Fallback: Try session token
         if (!accessToken) {
-            const metaAccount = await prisma.metaAccount.findUnique({
-                where: { userId: session.user.id }
-            });
-            accessToken = metaAccount?.accessToken;
+            accessToken = (session as any).accessToken;
         }
 
         // 3. Fallback: Try Account table (NextAuth generic connection)

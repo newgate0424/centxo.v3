@@ -15,6 +15,14 @@ import {
     Layers,
     Target,
     FileSpreadsheet,
+    User,
+    Link2,
+    Users,
+    Bell,
+    Shield,
+    Languages,
+    Palette,
+    Trash2,
 } from 'lucide-react';
 import {
     CollapsibleContent,
@@ -86,7 +94,22 @@ const navStructure: NavGroup[] = [
                     { name: "Super Target", href: "/ads-manager/super-target", icon: Target, translationKey: 'adsManager.superTarget', isChild: true },
                 ]
             },
-            { name: "Settings", href: "/settings", icon: Settings, translationKey: 'nav.settings' },
+            {
+                name: "Settings",
+                icon: Settings,
+                translationKey: 'nav.settings',
+                children: [
+                    { name: "Account", href: "/settings/account", icon: User, translationKey: 'settings.account', isChild: true },
+                    { name: "Connections", href: "/settings/connections", icon: Link2, translationKey: 'settings.connections', isChild: true },
+                    { name: "Team", href: "/settings/team", icon: Users, translationKey: 'settings.team', isChild: true },
+                    { name: "Ad Accounts", href: "/settings/ad-accounts", icon: Megaphone, translationKey: 'settings.adAccounts', isChild: true },
+                    { name: "Notifications", href: "/settings/notifications", icon: Bell, translationKey: 'settings.notifications', isChild: true },
+                    { name: "Security", href: "/settings/security", icon: Shield, translationKey: 'settings.security', isChild: true },
+                    { name: "Language", href: "/settings/language", icon: Languages, translationKey: 'settings.language', isChild: true },
+                    { name: "Appearance", href: "/settings/appearance", icon: Palette, translationKey: 'settings.appearance', isChild: true },
+                    { name: "Delete Account", href: "/settings/delete-account", icon: Trash2, translationKey: 'settings.deleteAccount', isChild: true },
+                ]
+            },
         ]
     }
 ]
@@ -147,7 +170,7 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                 )}>
                 {/* Logo - Text hidden on collapse */}
                 <Link href="/dashboard" className={cn(
-                    "flex items-center gap-3 transition-opacity duration-200",
+                    "flex items-center gap-4 transition-opacity duration-200",
                     isCollapsed ? "hidden" : "opacity-100"
                 )}>
                     <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-xl" />
@@ -201,14 +224,14 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                             >
                                                 <div className={cn(
                                                     "flex items-center",
-                                                    isCollapsed ? "justify-center" : "gap-3"
+                                                    isCollapsed ? "justify-center" : "gap-4"
                                                 )}>
-                                                    <item.icon className={cn("h-4 w-4", isAnyChildActive ? "text-primary" : "text-muted-foreground")} />
+                                                    <item.icon className={cn("h-5 w-5", isAnyChildActive ? "text-primary" : "text-muted-foreground")} />
                                                     {!isCollapsed && <span className="whitespace-nowrap">{t(item.translationKey, item.name)}</span>}
                                                 </div>
                                                 {!isCollapsed && (
                                                     <ChevronRight className={cn(
-                                                        "h-3 w-3 text-muted-foreground/50 transition-transform duration-200",
+                                                        "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
                                                         isOpen && "rotate-90"
                                                     )} />
                                                 )}
@@ -260,9 +283,9 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                     >
                                         <div className={cn(
                                             "flex items-center",
-                                            isCollapsed ? "justify-center" : "gap-3"
+                                            isCollapsed ? "justify-center" : "gap-4"
                                         )}>
-                                            <item.icon className="h-4 w-4" />
+                                            <item.icon className="h-5 w-5" />
                                             {!isCollapsed && <span className="whitespace-nowrap">{t(item.translationKey ?? item.name, item.name)}</span>}
                                         </div>
                                     </Link>
@@ -289,7 +312,7 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                         )}
                         title={isCollapsed ? "Expand" : "Collapse"}
                     >
-                        <Menu size={18} />
+                        <Menu size={20} />
                     </button>
                 )}
 
@@ -298,11 +321,12 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                         <button
                             className={cn(
                                 "flex items-center w-full py-2 text-sm font-medium text-destructive/80 hover:text-destructive rounded-lg hover:bg-destructive/10 transition-all",
-                                isCollapsed ? "justify-center px-0" : "px-3 gap-3"
+                                isCollapsed ? "justify-center px-0" : "px-3 gap-4"
                             )}
                             title={isCollapsed ? t('header.logout', 'Log out') : undefined}
+                            suppressHydrationWarning
                         >
-                            <LogOut className="h-4 w-4" />
+                            <LogOut className="h-5 w-5" />
                             {!isCollapsed && <span className="whitespace-nowrap">{t('header.logout', 'Log out')}</span>}
                         </button>
                     </AlertDialogTrigger>

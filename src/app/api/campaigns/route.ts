@@ -5,6 +5,7 @@ import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 import { campaignsQuerySchema, validateQueryParams } from '@/lib/validation';
 import { withCache, withCacheSWR, generateCacheKey, CacheTTL, deleteCache } from '@/lib/cache/redis';
 import { TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-helper';
+import { decryptToken } from '@/lib/services/metaClient';
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,12 +36,18 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    // Fetch user with team members to get all tokens
+    // Fetch user with team members and MetaAccount to get all tokens
     const { prisma } = await import('@/lib/prisma');
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
-        teamMembers: true,
+        metaAccount: {
+          select: { accessToken: true },
+        },
+        accounts: {
+          where: { provider: 'facebook' },
+          select: { access_token: true },
+        },
       },
     });
 
@@ -50,16 +57,67 @@ export async function GET(request: NextRequest) {
 
     // Collect all tokens
     const tokens: TokenInfo[] = [];
-    const mainAccessToken = (session as any).accessToken;
-    if (mainAccessToken) {
-      tokens.push({ token: mainAccessToken, name: 'Main' });
+    
+    // 1. MetaAccount token (encrypted, needs decryption)
+    if ((user as any).metaAccount?.accessToken) {
+      try {
+        const decrypted = decryptToken((user as any).metaAccount.accessToken);
+        tokens.push({ token: decrypted, name: user.name || 'Main Account' });
+      } catch (e) {
+        console.error('[campaigns] Failed to decrypt MetaAccount token:', e);
+      }
     }
-    if ((user as any).teamMembers) {
-      (user as any).teamMembers.forEach((m: any) => {
-        if (m.accessToken) {
-          tokens.push({ token: m.accessToken, name: m.facebookName || 'Member' });
+
+    // 2. NextAuth Facebook account tokens
+    if ((user as any).accounts) {
+      (user as any).accounts.forEach((acc: any) => {
+        if (acc.access_token && !tokens.some(t => t.token === acc.access_token)) {
+          tokens.push({ token: acc.access_token, name: user.name || 'Account' });
         }
       });
+    }
+
+    // 3. Query team members (check both as host and as member)
+    let teamMembers = await prisma.teamMember.findMany({
+      where: {
+        userId: user.id,
+        memberType: 'facebook',
+        facebookUserId: { not: null },
+        accessToken: { not: null },
+      },
+    });
+
+    // If no team members found, check if this user is a member
+    if (teamMembers.length === 0) {
+      const memberRecord = await prisma.teamMember.findFirst({
+        where: { memberEmail: session.user.email },
+      });
+
+      if (memberRecord?.userId) {
+        teamMembers = await prisma.teamMember.findMany({
+          where: {
+            userId: memberRecord.userId,
+            memberType: 'facebook',
+            facebookUserId: { not: null },
+            accessToken: { not: null },
+          },
+        });
+      }
+    }
+
+    // Add team member tokens
+    teamMembers.forEach((member: any) => {
+      if (member.accessToken && !tokens.some(t => t.token === member.accessToken)) {
+        tokens.push({ token: member.accessToken, name: member.facebookName || 'Team Member' });
+      }
+    });
+
+    console.log('[campaigns] Found tokens:', tokens.length);
+    
+    // 4. Fallback to session token
+    const sessionToken = (session as any).accessToken;
+    if (sessionToken && !tokens.some(t => t.token === sessionToken)) {
+      tokens.push({ token: sessionToken, name: 'Session' });
     }
 
     if (tokens.length === 0) {

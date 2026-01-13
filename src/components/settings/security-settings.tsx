@@ -125,7 +125,7 @@ export function SecuritySettings() {
 
     if (hasPassword === null) {
         return (
-            <div className="space-y-6 max-w-2xl">
+            <div className="space-y-6">
                 <div className="flex items-center justify-center p-12">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
@@ -134,16 +134,8 @@ export function SecuritySettings() {
     }
 
     return (
-        <div className="space-y-6 max-w-2xl">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-bold text-foreground mb-1">
-                    {t('settings.security', 'Security')}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    {t('settings.securitySubtitle', 'Manage your password and security settings')}
-                </p>
-            </div>
+        <div className="space-y-6">
+            {/* Header removed - moved to layout */}
 
             {/* Change/Set Password Section */}
             <div className="space-y-4">

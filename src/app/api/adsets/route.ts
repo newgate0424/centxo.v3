@@ -32,12 +32,15 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
 
-    // Fetch user with team members to get all tokens
+    // Fetch user with team members and MetaAccount to get all tokens
     const { prisma } = await import('@/lib/prisma');
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
         teamMembers: true,
+        metaAccount: {
+          select: { accessToken: true },
+        },
       },
     });
 
@@ -47,13 +50,22 @@ export async function GET(request: NextRequest) {
 
     // Collect all tokens
     const tokens: TokenInfo[] = [];
-    const mainAccessToken = (session as any).accessToken;
-    if (mainAccessToken) {
-      tokens.push({ token: mainAccessToken, name: 'Main' });
+    
+    // 1. Try MetaAccount first (most reliable)
+    if ((user as any).metaAccount?.accessToken) {
+      tokens.push({ token: (user as any).metaAccount.accessToken, name: 'Main' });
     }
+    
+    // 2. Fallback to session token
+    const mainAccessToken = (session as any).accessToken;
+    if (mainAccessToken && !tokens.some(t => t.token === mainAccessToken)) {
+      tokens.push({ token: mainAccessToken, name: 'Session' });
+    }
+    
+    // 3. Add team members tokens
     if ((user as any).teamMembers) {
       (user as any).teamMembers.forEach((m: any) => {
-        if (m.accessToken) {
+        if (m.accessToken && !tokens.some(t => t.token === m.accessToken)) {
           tokens.push({ token: m.accessToken, name: m.facebookName || 'Member' });
         }
       });

@@ -7,15 +7,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { PrismaClient } from '@prisma/client';
 import MetaAPIClient from '@/lib/services/metaClient';
+import { getEffectiveUserIds } from '@/lib/team-utils';
 
 const prisma = new PrismaClient();
 
 // Get available ad accounts
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -23,26 +25,56 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type'); // 'accounts' or 'pages'
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email! },
-      include: { metaAccount: true },
+    // Get effective user IDs (includes team host IDs if user is a team member)
+    const effectiveUserIds = await getEffectiveUserIds(session);
+
+    if (effectiveUserIds.length === 0) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Get all MetaAccounts from effective user IDs
+    const metaAccounts = await prisma.metaAccount.findMany({
+      where: {
+        userId: {
+          in: effectiveUserIds,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
     });
 
-    if (!user?.metaAccount) {
+    if (metaAccounts.length === 0) {
       return NextResponse.json(
         { error: 'Meta account not connected' },
         { status: 400 }
       );
     }
 
-    const metaClient = new MetaAPIClient(user.metaAccount.accessToken);
+    // Use the first meta account (or merge results from all accounts)
+    const metaAccount = metaAccounts[0];
+    const metaClient = new MetaAPIClient(metaAccount.accessToken);
 
     if (type === 'accounts') {
-      const accounts = await metaClient.getAdAccounts(user.metaAccount.metaUserId);
-      return NextResponse.json({ accounts: accounts.data || [] });
+      const accounts = await metaClient.getAdAccounts(metaAccount.metaUserId);
+      return NextResponse.json({ 
+        accounts: accounts.data || [],
+        source: metaAccount.user.email || metaAccount.user.name,
+      });
     } else if (type === 'pages') {
-      const pages = await metaClient.getPages(user.metaAccount.metaUserId);
-      return NextResponse.json({ pages: pages.data || [] });
+      const pages = await metaClient.getPages(metaAccount.metaUserId);
+      return NextResponse.json({ 
+        pages: pages.data || [],
+        source: metaAccount.user.email || metaAccount.user.name,
+      });
     }
 
     return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });
@@ -58,7 +90,7 @@ export async function GET(request: NextRequest) {
 // Save selected ad account and page
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -73,12 +105,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email! },
-      include: { metaAccount: true },
+    // Get effective user IDs
+    const effectiveUserIds = await getEffectiveUserIds(session);
+
+    if (effectiveUserIds.length === 0) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Find meta account from effective user IDs
+    const metaAccount = await prisma.metaAccount.findFirst({
+      where: {
+        userId: {
+          in: effectiveUserIds,
+        },
+      },
     });
 
-    if (!user?.metaAccount) {
+    if (!metaAccount) {
       return NextResponse.json(
         { error: 'Meta account not connected' },
         { status: 400 }
@@ -87,7 +133,7 @@ export async function POST(request: NextRequest) {
 
     // Update Meta account with selected data
     await prisma.metaAccount.update({
-      where: { id: user.metaAccount.id },
+      where: { id: metaAccount.id },
       data: {
         adAccountId,
         adAccountName,

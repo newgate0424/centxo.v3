@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,8 +14,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get Facebook access token from session
-    const accessToken = (session as any).accessToken;
+    // Get access token - try multiple sources
+    let accessToken: string | null = null;
+    const metaAccount = await prisma.metaAccount.findUnique({
+      where: { userId: session.user.id },
+      select: { accessToken: true },
+    });
+    accessToken = metaAccount?.accessToken || null;
+
+    if (!accessToken) {
+      const facebookAccount = await prisma.account.findFirst({
+        where: { userId: session.user.id, provider: 'facebook' },
+        select: { access_token: true },
+      });
+      accessToken = facebookAccount?.access_token || null;
+    }
+
+    if (!accessToken) {
+      accessToken = (session as any).accessToken || null;
+    }
 
     if (!accessToken) {
       return NextResponse.json(

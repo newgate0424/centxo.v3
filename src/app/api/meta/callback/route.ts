@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     if (!code || !state) {
       return NextResponse.redirect(
-        new URL('/settings/meta?error=missing_code', request.url)
+        new URL('/settings?section=connections&error=missing_code', request.url)
       );
     }
 
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.redirect(
-        new URL('/settings/meta?error=user_not_found', request.url)
+        new URL('/settings?section=connections&error=user_not_found', request.url)
       );
     }
 
@@ -83,12 +83,12 @@ export async function GET(request: NextRequest) {
 
     // Redirect to settings page
     return NextResponse.redirect(
-      new URL('/settings/meta?success=true', request.url)
+      new URL('/settings?section=connections&success=true', request.url)
     );
   } catch (error) {
     console.error('Meta callback error:', error);
     return NextResponse.redirect(
-      new URL('/settings/meta?error=callback_failed', request.url)
+      new URL('/settings?section=connections&error=callback_failed', request.url)
     );
   }
 }

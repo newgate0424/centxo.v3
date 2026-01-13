@@ -22,15 +22,7 @@ export function AdAccountsSettings() {
 
     if (loading) {
         return (
-            <div className="space-y-6 max-w-7xl">
-                <div>
-                    <h2 className="text-2xl font-bold text-foreground mb-2">
-                        {t('settings.adAccounts', 'Ad Accounts')}
-                    </h2>
-                    <p className="text-muted-foreground">
-                        {t('settings.adAccountsSubtitle', 'Manage your advertising accounts and pages')}
-                    </p>
-                </div>
+            <div className="space-y-6">
                 <div className="flex items-center justify-center p-12">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
@@ -40,15 +32,7 @@ export function AdAccountsSettings() {
 
     if (!hasData) {
         return (
-            <div className="space-y-6 max-w-7xl">
-                <div>
-                    <h2 className="text-2xl font-bold text-foreground mb-2">
-                        {t('settings.adAccounts', 'Ad Accounts')}
-                    </h2>
-                    <p className="text-muted-foreground">
-                        {t('settings.adAccountsSubtitle', 'Manage your advertising accounts and pages')}
-                    </p>
-                </div>
+            <div className="space-y-6">
 
                 <Card className="p-12">
                     <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -76,15 +60,8 @@ export function AdAccountsSettings() {
     }
 
     return (
-        <div className="space-y-6 max-w-7xl">
-            <div>
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                    {t('settings.adAccounts', 'Ad Accounts')}
-                </h2>
-                <p className="text-muted-foreground">
-                    {t('settings.adAccountsSubtitle', 'Manage your advertising accounts and pages')}
-                </p>
-            </div>
+        <div className="space-y-6">
+            {/* Header removed - moved to layout */}
 
             <div className="glass-card p-6">
                 <ConfigForm />

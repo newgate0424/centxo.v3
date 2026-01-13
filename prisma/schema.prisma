@@ -273,16 +273,23 @@ model TeamMember {
   userId String // The host/owner user ID
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Facebook account details
-  facebookUserId     String   @unique
-  facebookName       String
+  // Member type: 'facebook' or 'email'
+  memberType String @default("facebook") // facebook, email
+
+  // For email-based members
+  memberEmail String? // Email of the team member
+  memberName  String? // Name of the team member
+
+  // Facebook account details (for Facebook members)
+  facebookUserId     String?  @unique
+  facebookName       String?
   facebookEmail      String?
-  accessToken        String   @db.Text
-  accessTokenExpires DateTime
+  accessToken        String?  @db.Text
+  accessTokenExpires DateTime?
   refreshToken       String?  @db.Text
 
   // Team role
-  role String @default("MEMBER") // HOST, MEMBER
+  role String @default("MEMBER") // HOST, MEMBER, VIEWER
 
   // Metadata
   addedAt    DateTime @default(now())
@@ -291,4 +298,6 @@ model TeamMember {
 
   @@index([userId])
   @@index([facebookUserId])
+  @@index([memberEmail])
+  @@unique([userId, memberEmail])
 }

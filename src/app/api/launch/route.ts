@@ -294,10 +294,19 @@ export async function GET(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email! },
-      include: { metaAccount: true },
+      include: { 
+        metaAccount: true,
+        accounts: {
+          where: { provider: 'facebook' },
+        },
+      },
     });
 
-    const isMetaConnected = !!user?.metaAccount;
+    // Check if user has Facebook connected (either MetaAccount or NextAuth Account)
+    const hasMetaAccount = !!user?.metaAccount;
+    const hasFacebookAccount = user?.accounts && user.accounts.length > 0;
+    const isMetaConnected = hasMetaAccount || hasFacebookAccount;
+    
     const hasAdAccount = !!user?.metaAccount?.adAccountId;
     const hasPage = !!user?.metaAccount?.pageId;
 

@@ -20,38 +20,53 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch user with team members from database to get all tokens
+    // Fetch user with team members and MetaAccount from database to get all tokens
     const { prisma } = await import('@/lib/prisma');
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       include: {
         teamMembers: true,
+        metaAccount: {
+          select: { accessToken: true },
+        },
       },
     });
+
+    console.log('[ad-accounts] User ID:', session.user.id);
+    console.log('[ad-accounts] Team members count:', (user as any)?.teamMembers?.length || 0);
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Collect all tokens: Main User + Team Members
+    // Collect all tokens: MetaAccount + Main User + Team Members
     const tokens = [];
 
-    // 1. Main User Token
-    const mainAccessToken = (session as any).accessToken;
-    if (mainAccessToken) {
+    // 1. MetaAccount Token (most reliable)
+    if ((user as any).metaAccount?.accessToken) {
       tokens.push({
-        token: mainAccessToken,
+        token: (user as any).metaAccount.accessToken,
         name: user.name || 'Main Account',
         isTeamMember: false
       });
     }
 
-    // 2. Team Members Tokens
+    // 2. Main User Token (fallback)
+    const mainAccessToken = (session as any).accessToken;
+    if (mainAccessToken && !tokens.some(t => t.token === mainAccessToken)) {
+      tokens.push({
+        token: mainAccessToken,
+        name: user.name || 'Session Account',
+        isTeamMember: false
+      });
+    }
+
+    // 3. Team Members Tokens
     if ((user as any).teamMembers && (user as any).teamMembers.length > 0) {
+      console.log('[ad-accounts] Processing team members:', (user as any).teamMembers.length);
       (user as any).teamMembers.forEach((member: any) => {
-        // Check if token is expired/valid if possible (simple check exists in other route)
-        // For now, push all, handle errors in fetch
-        if (member.accessToken) {
+        console.log('[ad-accounts] Team member:', member.id, 'hasToken:', !!member.accessToken, 'type:', member.memberType);
+        if (member.accessToken && !tokens.some(t => t.token === member.accessToken)) {
           tokens.push({
             token: member.accessToken,
             name: member.facebookName || 'Team Member',
@@ -60,6 +75,8 @@ export async function GET(request: NextRequest) {
         }
       });
     }
+
+    console.log('[ad-accounts] Total tokens collected:', tokens.length);
 
     if (tokens.length === 0) {
       return NextResponse.json(

@@ -118,6 +118,43 @@ export const authOptions: NextAuthOptions = {
     },
 
     callbacks: {
+        async signIn({ user, account, profile }) {
+            // Auto-create MetaAccount when user signs in with Facebook
+            if (account?.provider === 'facebook' && account?.access_token && user?.id) {
+                try {
+                    // Check if MetaAccount already exists
+                    const existingMetaAccount = await prisma.metaAccount.findUnique({
+                        where: { userId: user.id },
+                    });
+
+                    if (!existingMetaAccount && account.providerAccountId) {
+                        // Import encryption function
+                        const { encryptToken } = await import('@/lib/services/metaClient');
+                        const encryptedToken = encryptToken(account.access_token);
+                        
+                        // Create MetaAccount
+                        const expiresAt = account.expires_at 
+                            ? new Date(account.expires_at * 1000) 
+                            : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days default
+
+                        await prisma.metaAccount.create({
+                            data: {
+                                userId: user.id,
+                                metaUserId: account.providerAccountId,
+                                accessToken: encryptedToken,
+                                accessTokenExpires: expiresAt,
+                            },
+                        });
+                        console.log('✅ Auto-created MetaAccount for user:', user.email);
+                    }
+                } catch (error) {
+                    console.error('Failed to auto-create MetaAccount:', error);
+                    // Don't block sign-in if MetaAccount creation fails
+                }
+            }
+            return true;
+        },
+
         async jwt({ token, user, account, trigger }) {
             if (user) {
                 token.id = user.id;

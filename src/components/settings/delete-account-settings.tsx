@@ -61,16 +61,8 @@ export function DeleteAccountSettings() {
     const canDelete = confirmText === 'DELETE';
 
     return (
-        <div className="space-y-6 max-w-2xl">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-bold text-destructive mb-1">
-                    {t('settings.delete.title', 'Delete Account')}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    {t('settings.delete.subtitle', 'Permanently delete your account and all associated data')}
-                </p>
-            </div>
+        <div className="space-y-6">
+            {/* Header removed - moved to layout */}
 
             {/* Warning Section */}
             <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-6">

@@ -17,16 +17,8 @@ export function NotificationsSettings() {
     });
 
     return (
-        <div className="space-y-6 max-w-2xl">
-            {/* Header */}
-            <div>
-                <h2 className="text-2xl font-bold text-foreground mb-1">
-                    {t('settings.notifications', 'Notifications')}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    {t('settings.notificationsSubtitle', 'Configure how you receive notifications')}
-                </p>
-            </div>
+        <div className="space-y-6">
+            {/* Header removed - moved to layout */}
 
             {/* Notification Settings */}
             <div className="space-y-6">

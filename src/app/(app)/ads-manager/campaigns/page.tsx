@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { Edit2, Trash2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { Edit2, Trash2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, FileImage, LayoutGrid, Briefcase, Folder } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAdAccount } from '@/contexts/AdAccountContext';
@@ -1533,6 +1533,7 @@ export default function CampaignsPage() {
                   : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
                   } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
+                <Folder className="h-4 w-4" />
                 <span>{t('campaigns.tabs.campaigns', 'Campaigns')}</span>
                 {selectedCampaignIds.size > 0 && (
                   <>
@@ -1555,52 +1556,50 @@ export default function CampaignsPage() {
                 className={`${activeTab === 'adsets'
                   ? 'border-gray-200 dark:border-zinc-800 border-b-transparent text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900 font-semibold'
                   : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
-                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center justify-start rounded-t-xl -mb-px`}
+                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
-                <span className="flex items-center gap-2">
-                  {t('campaigns.tabs.adSets', 'Ad sets')}
-                  {selectedAdSetIds.size > 0 && (
-                    <>
-                      <span className="flex-1" />
-                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                        Selected {selectedAdSetIds.size}
-                        <span
-                          onClick={(e) => { e.stopPropagation(); setSelectedAdSetIds(new Set()); }}
-                          className="hover:bg-blue-200 rounded-full p-0.5 transition-colors cursor-pointer"
-                          title="Clear selection"
-                        >
-                          <X className="h-3 w-3" />
-                        </span>
+                <LayoutGrid className="h-4 w-4" />
+                <span>{t('campaigns.tabs.adSets', 'Ad sets')}</span>
+                {selectedAdSetIds.size > 0 && (
+                  <>
+                    <span className="flex-1" />
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      Selected {selectedAdSetIds.size}
+                      <span
+                        onClick={(e) => { e.stopPropagation(); setSelectedAdSetIds(new Set()); }}
+                        className="hover:bg-blue-200 rounded-full p-0.5 transition-colors cursor-pointer"
+                        title="Clear selection"
+                      >
+                        <X className="h-3 w-3" />
                       </span>
-                    </>
-                  )}
-                </span>
+                    </span>
+                  </>
+                )}
               </button>
               <button
                 onClick={() => handleTabChange('ads')}
                 className={`${activeTab === 'ads'
                   ? 'border-gray-200 dark:border-zinc-800 border-b-transparent text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900 font-semibold'
                   : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
-                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center justify-start rounded-t-xl -mb-px`}
+                  } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
-                <span className="flex items-center gap-2">
-                  {t('campaigns.tabs.ads', 'Ads')}
-                  {selectedAdIds.size > 0 && (
-                    <>
-                      <span className="flex-1" />
-                      <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                        Selected {selectedAdIds.size}
-                        <span
-                          onClick={(e) => { e.stopPropagation(); setSelectedAdIds(new Set()); }}
-                          className="hover:bg-blue-200 rounded-full p-0.5 transition-colors cursor-pointer"
-                          title="Clear selection"
-                        >
-                          <X className="h-3 w-3" />
-                        </span>
+                <Briefcase className="h-4 w-4" />
+                <span>{t('campaigns.tabs.ads', 'Ads')}</span>
+                {selectedAdIds.size > 0 && (
+                  <>
+                    <span className="flex-1" />
+                    <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      Selected {selectedAdIds.size}
+                      <span
+                        onClick={(e) => { e.stopPropagation(); setSelectedAdIds(new Set()); }}
+                        className="hover:bg-blue-200 rounded-full p-0.5 transition-colors cursor-pointer"
+                        title="Clear selection"
+                      >
+                        <X className="h-3 w-3" />
                       </span>
-                    </>
-                  )}
-                </span>
+                    </span>
+                  </>
+                )}
               </button>
             </nav>
           </div>
