@@ -638,7 +638,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                     <TableCell className="px-4 py-2">
                                         {isLoadingAccounts ? (
                                             <div className="h-5 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
-                                        ) : account.paymentMethod && account.paymentMethod !== '-' ? (
+                                        ) : (typeof account.paymentMethod === 'string' && account.paymentMethod !== '-') ? (
                                             <div className="flex items-center gap-2">
                                                 {account.paymentMethod.includes('VISA') ? (
                                                     <div className="w-8 h-5 flex items-center justify-center bg-[#182C9E] rounded-[3px]">

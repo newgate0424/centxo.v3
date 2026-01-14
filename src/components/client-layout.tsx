@@ -37,7 +37,7 @@ export default function ClientLayout({ children, defaultCollapsed = false }: Cli
     }
 
     return (
-        <div className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/20">
+        <div className="flex flex-col h-screen overflow-hidden bg-background relative selection:bg-primary/20">
             {/* Mobile Overlay */}
             {isMobileMenuOpen && (
                 <div
@@ -60,26 +60,27 @@ export default function ClientLayout({ children, defaultCollapsed = false }: Cli
                 />
             </div>
 
-            {/* Desktop Sidebar */}
-            <div className="hidden md:block z-30 relative">
-                <AppSidebar
-                    isCollapsed={isCollapsed}
-                    toggleSidebar={toggleSidebar}
-                />
-            </div>
+            {/* Header - Top Full Width */}
+            <AppHeader onMobileMenuToggle={toggleMobileMenu} isCollapsed={isCollapsed} />
 
-            {/* Main Content Area */}
-            <div className="flex flex-col flex-1 overflow-hidden relative z-10">
-                <AppHeader onMobileMenuToggle={toggleMobileMenu} />
+            {/* Main Layout: Sidebar (Left) + Content (Right) */}
+            <div className="flex flex-1 overflow-hidden relative z-10">
 
+                {/* Desktop Sidebar */}
+                <div className="hidden md:block z-30 relative h-full">
+                    <AppSidebar
+                        isCollapsed={isCollapsed}
+                        toggleSidebar={toggleSidebar}
+                    />
+                </div>
+
+                {/* Main Content Area */}
                 <main
                     suppressHydrationWarning
-                    className="flex-1 overflow-hidden p-0 md:px-2 md:pb-2 lg:px-4 lg:pb-4 pt-0 bg-background"
+                    className="flex-1 overflow-y-auto scrollbar-minimal bg-background relative"
                 >
-                    <div className="flex flex-col flex-1 h-full overflow-hidden rounded-none md:rounded-2xl border-none md:border border-border bg-card shadow-sm md:mr-2 lg:mr-4">
-                        <div className="flex-1 overflow-y-auto scrollbar-minimal">
-                            {children}
-                        </div>
+                    <div className="min-h-full flex flex-col">
+                        {children}
                     </div>
                 </main>
             </div>

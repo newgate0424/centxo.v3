@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
                 // Fetch pages from this team member's Facebook account
                 const response = await fetch(
-                    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token&access_token=${member.accessToken}`
+                    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token&limit=500&access_token=${member.accessToken}`
                 );
 
                 if (!response.ok) {

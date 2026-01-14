@@ -32,8 +32,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Collect all tokens
-    const tokens = [];
-    
+    const tokens: { token: string; name: string }[] = [];
+
     // 1. MetaAccount Token (most reliable)
     if ((user as any).metaAccount?.accessToken) {
       tokens.push({
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
         name: user.name || 'Main Account',
       });
     }
-    
+
     // 2. Session Token (fallback)
     const mainAccessToken = (session as any).accessToken;
     if (mainAccessToken && !tokens.some(t => t.token === mainAccessToken)) {
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 
           if (!response.ok) break;
 
-          const data = await response.json();
+          const data: any = await response.json();
           const pagesBatch = data.data || [];
           tokenPages = tokenPages.concat(pagesBatch);
           nextUrl = data.paging?.next || null;

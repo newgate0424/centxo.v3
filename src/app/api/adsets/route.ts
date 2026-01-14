@@ -50,21 +50,60 @@ export async function GET(request: NextRequest) {
 
     // Collect all tokens
     const tokens: TokenInfo[] = [];
-    
+
     // 1. Try MetaAccount first (most reliable)
     if ((user as any).metaAccount?.accessToken) {
       tokens.push({ token: (user as any).metaAccount.accessToken, name: 'Main' });
     }
-    
+
     // 2. Fallback to session token
     const mainAccessToken = (session as any).accessToken;
     if (mainAccessToken && !tokens.some(t => t.token === mainAccessToken)) {
       tokens.push({ token: mainAccessToken, name: 'Session' });
     }
-    
-    // 3. Add team members tokens
-    if ((user as any).teamMembers) {
-      (user as any).teamMembers.forEach((m: any) => {
+
+    // 3. Query team members and team owner tokens
+    // Check if current user is a team member first
+    const memberRecord = await prisma.teamMember.findFirst({
+      where: { memberEmail: session.user.email },
+    });
+
+    let teamOwnerId = user.id; // Default to current user
+
+    if (memberRecord?.userId) {
+      // Current user is a team member, use team owner's ID
+      teamOwnerId = memberRecord.userId;
+      console.log('[adsets] User is team member, fetching owner tokens from:', teamOwnerId);
+    }
+
+    // Fetch team owner's data (MetaAccount + accounts)
+    const teamOwner = await prisma.user.findUnique({
+      where: { id: teamOwnerId },
+      include: {
+        metaAccount: {
+          select: { accessToken: true },
+        },
+      },
+    });
+
+    // Add team owner's MetaAccount token (if user is a team member)
+    if (teamOwner?.metaAccount?.accessToken && teamOwnerId !== user.id) {
+      tokens.push({ token: teamOwner.metaAccount.accessToken, name: teamOwner.name || 'Team Owner' });
+    }
+
+    // Fetch all team members under the team owner
+    const teamMembers = await prisma.teamMember.findMany({
+      where: {
+        userId: teamOwnerId,
+        memberType: 'facebook',
+        facebookUserId: { not: null },
+        accessToken: { not: null },
+      },
+    });
+
+    // Add team member tokens
+    if (teamMembers) {
+      teamMembers.forEach((m: any) => {
         if (m.accessToken && !tokens.some(t => t.token === m.accessToken)) {
           tokens.push({ token: m.accessToken, name: m.facebookName || 'Member' });
         }
@@ -121,6 +160,35 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper to fetch all pages of data from Facebook API
+async function fetchAllPages(initialUrl: string, token: string): Promise<any[]> {
+  let allData: any[] = [];
+  let nextUrl: string | null = initialUrl;
+
+  while (nextUrl) {
+    try {
+      const res: Response = await fetch(nextUrl);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch page: ${res.statusText}`);
+      }
+
+      const data: any = await res.json();
+      if (data.data && Array.isArray(data.data)) {
+        allData = allData.concat(data.data);
+      }
+
+      // Update nextUrl for next page
+      nextUrl = data.paging?.next || null;
+
+    } catch (error) {
+      console.error('Error fetching page:', error);
+      nextUrl = null; // Stop pagination on error
+    }
+  }
+
+  return allData;
+}
+
 async function fetchAdSetsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null) {
   const allAdSets: any[] = [];
   const errors: string[] = [];
@@ -136,7 +204,7 @@ async function fetchAdSetsFromMeta(adAccountIds: string[], tokens: TokenInfo[], 
   }
 
   // Chunk requests to avoid rate limiting
-  const CHUNK_SIZE = 10;
+  const CHUNK_SIZE = 5; // Reduced chunk size for pagination safety
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
@@ -163,13 +231,12 @@ async function fetchAdSetsFromMeta(adAccountIds: string[], tokens: TokenInfo[], 
         const accountData = await accountResponse.json();
         const accountCurrency = accountData.currency || 'USD';
 
-        const adSetsResponse = await fetch(
-          `https://graph.facebook.com/v22.0/${accountId}/adsets?fields=id,name,status,effective_status,configured_status,issues_info,ads{effective_status},campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount,targeting,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${token}`
-        );
+        const initialUrl = `https://graph.facebook.com/v22.0/${accountId}/adsets?fields=id,name,status,effective_status,configured_status,issues_info,ads{effective_status},campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_amount,targeting,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=200&access_token=${token}`;
 
-        if (adSetsResponse.ok) {
-          const data = await adSetsResponse.json();
-          const adSets = data.data || [];
+        // Use pagination helper
+        const adSets = await fetchAllPages(initialUrl, token);
+
+        if (adSets.length > 0) {
 
           // Add account ID and currency to each ad set
           const adSetsWithAccount = adSets.map((adSet: any) => {
@@ -212,9 +279,6 @@ async function fetchAdSetsFromMeta(adAccountIds: string[], tokens: TokenInfo[], 
           });
 
           allAdSets.push(...adSetsWithAccount);
-        } else {
-          const errorData = await adSetsResponse.json();
-          errors.push(`Failed to fetch for account ${accountId}: ${errorData.error?.message || adSetsResponse.statusText}`);
         }
 
       } catch (err: any) {

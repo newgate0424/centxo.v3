@@ -51,21 +51,60 @@ export async function GET(request: NextRequest) {
 
     // Collect all tokens
     const tokens: TokenInfo[] = [];
-    
+
     // 1. Try MetaAccount first (most reliable)
     if ((user as any).metaAccount?.accessToken) {
       tokens.push({ token: (user as any).metaAccount.accessToken, name: 'Main' });
     }
-    
+
     // 2. Fallback to session token
     const mainAccessToken = (session as any).accessToken;
     if (mainAccessToken && !tokens.some(t => t.token === mainAccessToken)) {
       tokens.push({ token: mainAccessToken, name: 'Session' });
     }
-    
-    // 3. Add team members tokens
-    if ((user as any).teamMembers) {
-      (user as any).teamMembers.forEach((m: any) => {
+
+    // 3. Query team members and team owner tokens
+    // Check if current user is a team member first
+    const memberRecord = await prisma.teamMember.findFirst({
+      where: { memberEmail: session.user.email },
+    });
+
+    let teamOwnerId = user.id; // Default to current user
+
+    if (memberRecord?.userId) {
+      // Current user is a team member, use team owner's ID
+      teamOwnerId = memberRecord.userId;
+      console.log('[ads] User is team member, fetching owner tokens from:', teamOwnerId);
+    }
+
+    // Fetch team owner's data (MetaAccount + accounts)
+    const teamOwner = await prisma.user.findUnique({
+      where: { id: teamOwnerId },
+      include: {
+        metaAccount: {
+          select: { accessToken: true },
+        },
+      },
+    });
+
+    // Add team owner's MetaAccount token (if user is a team member)
+    if (teamOwner?.metaAccount?.accessToken && teamOwnerId !== user.id) {
+      tokens.push({ token: teamOwner.metaAccount.accessToken, name: teamOwner.name || 'Team Owner' });
+    }
+
+    // Fetch all team members under the team owner
+    const teamMembers = await prisma.teamMember.findMany({
+      where: {
+        userId: teamOwnerId,
+        memberType: 'facebook',
+        facebookUserId: { not: null },
+        accessToken: { not: null },
+      },
+    });
+
+    // Add team member tokens
+    if (teamMembers) {
+      teamMembers.forEach((m: any) => {
         if (m.accessToken && !tokens.some(t => t.token === m.accessToken)) {
           tokens.push({ token: m.accessToken, name: m.facebookName || 'Member' });
         }
@@ -114,6 +153,35 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper to fetch all pages of data from Facebook API
+async function fetchAllPages(initialUrl: string, token: string): Promise<any[]> {
+  let allData: any[] = [];
+  let nextUrl: string | null = initialUrl;
+
+  while (nextUrl) {
+    try {
+      const res: Response = await fetch(nextUrl);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch page: ${res.statusText}`);
+      }
+
+      const data: any = await res.json();
+      if (data.data && Array.isArray(data.data)) {
+        allData = allData.concat(data.data);
+      }
+
+      // Update nextUrl for next page
+      nextUrl = data.paging?.next || null;
+
+    } catch (error) {
+      console.error('Error fetching page:', error);
+      nextUrl = null; // Stop pagination on error
+    }
+  }
+
+  return allData;
+}
+
 async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null) {
   const allAds: any[] = [];
 
@@ -128,7 +196,7 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
   }
 
   // Chunk requests to avoid rate limiting
-  const CHUNK_SIZE = 10;
+  const CHUNK_SIZE = 5; // Reduced for safety
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
@@ -138,7 +206,6 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
       const token = await getValidTokenForAdAccount(accountId, tokens);
 
       if (!token) {
-        // console.warn(`No valid token for account ${accountId}`);
         return;
       }
 
@@ -148,29 +215,23 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
         );
 
         if (!accountResponse.ok) {
-          // If token helper returned a working token, this might be a specific error
-          // but we can skip
         }
 
         const accountData = await accountResponse.json();
         const accountCurrency = accountData.currency || 'USD';
 
-        const adsResponse = await fetch(
-          `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=500&access_token=${token}`
-        );
+        const initialUrl = `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=200&access_token=${token}`;
 
-        if (adsResponse.ok) {
-          const data = await adsResponse.json();
+        const ads = await fetchAllPages(initialUrl, token);
 
-          // Add account ID and currency to each ad
-          const adsWithAccount = data.data.map((ad: any) => ({
-            ...ad,
-            adAccountId: accountId,
-            currency: accountCurrency,
-          }));
+        // Add account ID and currency to each ad
+        const adsWithAccount = ads.map((ad: any) => ({
+          ...ad,
+          adAccountId: accountId,
+          currency: accountCurrency,
+        }));
 
-          allAds.push(...adsWithAccount);
-        }
+        allAds.push(...adsWithAccount);
 
       } catch (err) {
         console.error(`Error fetching ads for account ${accountId}:`, err);

@@ -19,19 +19,54 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { useLanguage } from "@/contexts/LanguageContext"
 import { SettingsDialog } from "@/components/settings-dialog"
+import { usePathname } from "next/navigation"
+import { cn } from "@/lib/utils"
 
 interface AppHeaderProps {
     onMobileMenuToggle?: () => void
+    isCollapsed?: boolean
 }
 
-export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
+export default function AppHeader({ onMobileMenuToggle, isCollapsed = false }: AppHeaderProps) {
     const { data: session } = useSession()
     const { t, language } = useLanguage()
     const user = session?.user
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const pathname = usePathname()
+
+    // Determine if we should use the split border style
+    // If we are in settings (*), we use full dashed or full solid?
+    // User said: "For pages OTHER than settings, make it dashed ONLY for sidebar portion"
+    // implies: On Settings page, keep it as is (which was full dashed from previous step).
+    const isSettingsPage = pathname?.startsWith('/settings')
+
+    // Sidebar width based on collapsed state (matches app-sidebar.tsx)
+    const sidebarWidth = isCollapsed ? '88px' : '260px'
 
     return (
-        <header className="flex items-center justify-between h-16 px-4 md:px-8 z-20 relative">
+        <header className={cn(
+            "flex items-center justify-between h-16 px-4 md:px-8 z-20 sticky top-0 bg-card",
+            // Base border logic:
+            // If settings page: use full dashed border (as per recent "okay")
+            // If other pages: NO base border (we will draw it manually with divs)
+            isSettingsPage ? "border-b border-dashed border-border" : "relative border-b-0"
+        )}>
+            {/* Custom Split Border for Non-Settings Pages */}
+            {!isSettingsPage && (
+                <>
+                    {/* Sidebar Portion: Dashed */}
+                    <div
+                        className="absolute bottom-0 left-0 h-[1px] border-b border-dashed border-border transition-all duration-300 ease-out"
+                        style={{ width: sidebarWidth }}
+                    />
+                    {/* Content Portion: Solid */}
+                    <div
+                        className="absolute bottom-0 right-0 h-[1px] bg-border transition-all duration-300 ease-out"
+                        style={{ left: sidebarWidth }}
+                    />
+                </>
+            )}
+
             <div className="flex items-center gap-4">
                 {/* Mobile Menu Button */}
                 {onMobileMenuToggle && (
@@ -45,11 +80,10 @@ export default function AppHeader({ onMobileMenuToggle }: AppHeaderProps) {
                     </Button>
                 )}
 
-                {/* Mobile Logo */}
-                <Link href="/dashboard" className="flex md:hidden items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                        <span className="text-white font-bold text-lg">A</span>
-                    </div>
+                {/* Logo */}
+                <Link href="/dashboard" className="flex items-center gap-2 md:mr-8">
+                    <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-xl" />
+                    <span className="font-outfit font-bold text-xl tracking-tight text-foreground hidden md:block">Centxo</span>
                 </Link>
             </div>
 

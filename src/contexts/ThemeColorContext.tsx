@@ -5,13 +5,11 @@ import { useTheme } from 'next-themes';
 
 interface ThemeColors {
   primary: string;
-  background: string;
 }
 
 interface ThemeColorContextType {
   colors: ThemeColors;
   setPrimaryColor: (color: string) => void;
-  setBackgroundColor: (color: string) => void;
   resetColors: () => void;
 }
 
@@ -57,26 +55,17 @@ function hexToHSL(H: string) {
 
 // Default colors
 const DEFAULT_PRIMARY = '#3b82f6'; // blue-500
-const DEFAULT_BG_LIGHT = '#f8fafc'; // slate-50
-const DEFAULT_BG_DARK = '#0f172a'; // slate-900
 
 export function ThemeColorProvider({ children }: { children: React.ReactNode }) {
   const { theme, resolvedTheme } = useTheme();
 
   // State for raw hex values
   const [primaryColor, setPrimaryColorState] = useState<string>(DEFAULT_PRIMARY);
-  const [lightBg, setLightBg] = useState<string>(DEFAULT_BG_LIGHT);
-  const [darkBg, setDarkBg] = useState<string>(DEFAULT_BG_DARK);
 
   // Load saved colors on mount
   useEffect(() => {
     const savedPrimary = localStorage.getItem('theme-primary');
-    const savedLightBg = localStorage.getItem('theme-background-light');
-    const savedDarkBg = localStorage.getItem('theme-background-dark');
-
     if (savedPrimary) setPrimaryColorState(savedPrimary);
-    if (savedLightBg) setLightBg(savedLightBg);
-    if (savedDarkBg) setDarkBg(savedDarkBg);
   }, []);
 
   // Update CSS variables when colors or theme changes
@@ -93,41 +82,20 @@ export function ThemeColorProvider({ children }: { children: React.ReactNode }) 
       root.style.removeProperty('--ring');
     }
 
-    // Apply Background Color based on current theme
-    const isDark = resolvedTheme === 'dark';
-    const currentBg = isDark ? darkBg : lightBg;
+    // We do NOT override --background anymore. It is controlled purely by globals.css
+    root.style.removeProperty('--background');
 
-    if (currentBg) {
-      const hsl = hexToHSL(currentBg);
-      root.style.setProperty('--background', hsl);
-    } else {
-      root.style.removeProperty('--background');
-    }
-
-  }, [primaryColor, lightBg, darkBg, resolvedTheme]);
+  }, [primaryColor, resolvedTheme]);
 
   const setPrimaryColor = (color: string) => {
     setPrimaryColorState(color);
     localStorage.setItem('theme-primary', color);
   };
 
-  const setBackgroundColor = (color: string) => {
-    const isDark = resolvedTheme === 'dark';
-    if (isDark) {
-      setDarkBg(color);
-      localStorage.setItem('theme-background-dark', color);
-    } else {
-      setLightBg(color);
-      localStorage.setItem('theme-background-light', color);
-    }
-  };
-
   const resetColors = () => {
     setPrimaryColorState(DEFAULT_PRIMARY);
-    setLightBg(DEFAULT_BG_LIGHT);
-    setDarkBg(DEFAULT_BG_DARK);
-
     localStorage.removeItem('theme-primary');
+    // Also clear old keys to clean up
     localStorage.removeItem('theme-background-light');
     localStorage.removeItem('theme-background-dark');
 
@@ -136,14 +104,10 @@ export function ThemeColorProvider({ children }: { children: React.ReactNode }) 
     document.documentElement.style.removeProperty('--background');
   };
 
-  // Determine current active background for the context consumer
-  const activeBackground = resolvedTheme === 'dark' ? darkBg : lightBg;
-
   return (
     <ThemeColorContext.Provider value={{
-      colors: { primary: primaryColor, background: activeBackground },
+      colors: { primary: primaryColor },
       setPrimaryColor,
-      setBackgroundColor,
       resetColors
     }}>
       {children}

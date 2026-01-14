@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { Edit2, Trash2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, FileImage, LayoutGrid, Briefcase, Folder } from "lucide-react";
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAdAccount } from '@/contexts/AdAccountContext';
@@ -139,6 +140,10 @@ export default function CampaignsPage() {
 
 
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
   const { t, language } = useLanguage();
 
   // 1. Data State
@@ -171,11 +176,17 @@ export default function CampaignsPage() {
   // Sync View with Global Selection
   // Whenever global selectedAccounts changes, update the local view to match it exactly.
   // This ensures that if a user selects an account in Settings, it immediately appears here.
+  // Sync View with Global Selection
+  // Whenever global selectedAccounts changes, update the local view to match it exactly.
+  // Exception: If URL has adAccountId, priority is given to URL until user manually changes something (handled by state).
   useEffect(() => {
-    if (selectedAccounts.length > 0) {
-      setViewSelectedAccountIds(new Set(selectedAccounts.map(a => a.id)));
-    } else {
-      setViewSelectedAccountIds(new Set());
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('adAccountId')) {
+      if (selectedAccounts.length > 0) {
+        setViewSelectedAccountIds(new Set(selectedAccounts.map(a => a.id)));
+      } else {
+        setViewSelectedAccountIds(new Set());
+      }
     }
   }, [selectedAccounts]);
 
@@ -247,27 +258,99 @@ export default function CampaignsPage() {
       return;
     }
     setActiveTab(tab);
+    // URL update handled by unified effect
   };
 
   // Auto-select accounts and switch tab when coming from launch page
+  // Auto-select accounts and switch tab when coming from launch page or URL param
+  // Unified URL State Management
+  // 1. Initialize State from URL on Mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Accounts
+    const acctsParam = params.get('adAccountId');
+    if (acctsParam) {
+      const ids = new Set(acctsParam.split(','));
+      if (ids.size > 0) setViewSelectedAccountIds(ids);
+    }
+
+    // Dates
+    const dateFrom = params.get('dateFrom');
+    const dateTo = params.get('dateTo');
+    if (dateFrom && dateTo) {
+      setDateRange({ from: new Date(dateFrom), to: new Date(dateTo) });
+    }
+
+    // Status
+    const statusParam = params.get('status');
+    if (statusParam && ['all', 'active', 'paused', 'completed', 'rejected', 'with_issues', 'in_review'].includes(statusParam)) {
+      setStatusFilter(statusParam as any);
+    }
+
+    // Tab
     const tabParam = params.get('tab');
+    if (tabParam && ['campaigns', 'adsets', 'ads'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
 
-    // If we have a tab parameter and accounts from global context
-    if (tabParam && selectedAccounts.length > 0) {
-      // Auto-select all accounts from global context
-      if (viewSelectedAccountIds.size === 0) {
-        const accountIds = new Set(selectedAccounts.map(acc => acc.id));
-        setViewSelectedAccountIds(accountIds);
+  }, []);
+
+  // 2. Sync State to URL (Write)
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    let hasChanges = false;
+
+    // Tab
+    if (activeTab && params.get('tab') !== activeTab) {
+      params.set('tab', activeTab);
+      hasChanges = true;
+    }
+
+    // Accounts
+    if (viewSelectedAccountIds.size > 0) {
+      const accountsStr = Array.from(viewSelectedAccountIds).join(',');
+      if (params.get('adAccountId') !== accountsStr) {
+        params.set('adAccountId', accountsStr);
+        hasChanges = true;
       }
-
-      // Switch to the requested tab (after accounts are selected)
-      if (viewSelectedAccountIds.size > 0 && ['campaigns', 'adsets', 'ads'].includes(tabParam)) {
-        setActiveTab(tabParam as 'campaigns' | 'adsets' | 'ads');
+    } else {
+      if (params.has('adAccountId')) {
+        params.delete('adAccountId');
+        hasChanges = true;
       }
     }
-  }, [selectedAccounts, viewSelectedAccountIds.size]);
+
+    // Dates
+    if (dateRange?.from && dateRange?.to) {
+      const fromStr = dateRange.from.toISOString();
+      const toStr = dateRange.to.toISOString();
+      if (params.get('dateFrom') !== fromStr || params.get('dateTo') !== toStr) {
+        params.set('dateFrom', fromStr);
+        params.set('dateTo', toStr);
+        hasChanges = true;
+      }
+    }
+
+    // Status
+    if (statusFilter && statusFilter !== 'all') {
+      if (params.get('status') !== statusFilter) {
+        params.set('status', statusFilter);
+        hasChanges = true;
+      }
+    } else {
+      if (params.has('status')) {
+        params.delete('status');
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [activeTab, viewSelectedAccountIds, dateRange, statusFilter, isMounted, pathname, router]);
 
 
 
@@ -545,76 +628,84 @@ export default function CampaignsPage() {
 
   // Helper functions for detailed status
 
-  // Create account map for efficient status lookups
-  const accountMap = selectedAccounts.reduce((acc, curr) => {
-    acc[curr.id] = curr;
-    return acc;
-  }, {} as Record<string, DetailedAdAccount>);
+  // Helper functions for detailed status
 
-  const filteredCampaigns = campaigns.filter(c => {
-    // ... existing filter logic
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || getCampaignStatus(c, accountMap).type === statusFilter;
-    return matchesSearch && matchesStatus;
-  }).sort((a, b) => {
-    if (!sortConfig.key || !sortConfig.direction) return 0;
+  // Create accountMap with useMemo
+  const accountMap = useMemo(() => {
+    return selectedAccounts.reduce((acc, curr) => {
+      acc[curr.id] = curr;
+      return acc;
+    }, {} as Record<string, DetailedAdAccount>);
+  }, [selectedAccounts]);
 
-    const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
+  const filteredCampaigns = useMemo(() => {
+    return campaigns.filter(c => {
+      // ... existing filter logic
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || getCampaignStatus(c, accountMap).type === statusFilter;
+      return matchesSearch && matchesStatus;
+    }).sort((a, b) => {
+      if (!sortConfig.key || !sortConfig.direction) return 0;
 
-    if (sortConfig.key === 'status') {
-      const statusA = getCampaignStatus(a, accountMap).label;
-      const statusB = getCampaignStatus(b, accountMap).label;
-      return statusA.localeCompare(statusB) * directionMultiplier;
-    }
+      const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
 
-    const valA = a[sortConfig.key as keyof Campaign];
-    const valB = b[sortConfig.key as keyof Campaign];
+      if (sortConfig.key === 'status') {
+        const statusA = getCampaignStatus(a, accountMap).label;
+        const statusB = getCampaignStatus(b, accountMap).label;
+        return statusA.localeCompare(statusB) * directionMultiplier;
+      }
 
-    if (typeof valA === 'number' && typeof valB === 'number') {
-      return (valA - valB) * directionMultiplier;
-    }
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      return valA.localeCompare(valB) * directionMultiplier;
-    }
-    return 0;
-  });
+      const valA = a[sortConfig.key as keyof Campaign];
+      const valB = b[sortConfig.key as keyof Campaign];
 
-  const filteredAdSets = adSets.filter(adSet => {
-    // ... existing filter logic ...
-    // Campaign filter (if campaigns are selected, show only their adsets)
-    if (selectedCampaignIds.size > 0 && !selectedCampaignIds.has(adSet.campaignId)) {
-      return false;
-    }
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return (valA - valB) * directionMultiplier;
+      }
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return valA.localeCompare(valB) * directionMultiplier;
+      }
+      return 0;
+    });
+  }, [campaigns, searchQuery, statusFilter, accountMap, sortConfig]);
 
-    // Search & Status
-    const matchesSearch = adSet.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || getAdSetStatus(adSet, accountMap).type === statusFilter;
+  const filteredAdSets = useMemo(() => {
+    if (activeTab !== 'adsets') return []; // Performance optimization
 
-    return matchesSearch && matchesStatus;
-  }).sort((a, b) => {
-    if (!sortConfig.key || !sortConfig.direction) return 0;
+    return adSets.filter(adSet => {
+      // ... existing filter logic ...
+      // Campaign filter (if campaigns are selected, show only their adsets)
+      if (selectedCampaignIds.size > 0 && !selectedCampaignIds.has(adSet.campaignId)) {
+        return false;
+      }
 
-    const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
+      // Search & Status
+      const matchesSearch = adSet.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || getAdSetStatus(adSet, accountMap).type === statusFilter;
 
-    if (sortConfig.key === 'status') {
-      const statusA = getAdSetStatus(a, accountMap).label;
-      const statusB = getAdSetStatus(b, accountMap).label;
-      return statusA.localeCompare(statusB) * directionMultiplier;
-    }
+      return matchesSearch && matchesStatus;
+    }).sort((a, b) => {
+      if (!sortConfig.key || !sortConfig.direction) return 0;
 
-    const valA = a[sortConfig.key as keyof AdSet];
-    const valB = b[sortConfig.key as keyof AdSet];
+      const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
 
-    if (typeof valA === 'number' && typeof valB === 'number') {
-      return (valA - valB) * directionMultiplier;
-    }
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      return valA.localeCompare(valB) * directionMultiplier;
-    }
-    return 0;
-  });
+      if (sortConfig.key === 'status') {
+        const statusA = getAdSetStatus(a, accountMap).label;
+        const statusB = getAdSetStatus(b, accountMap).label;
+        return statusA.localeCompare(statusB) * directionMultiplier;
+      }
 
-  // ... (filteredAds remains same)
+      const valA = a[sortConfig.key as keyof AdSet];
+      const valB = b[sortConfig.key as keyof AdSet];
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return (valA - valB) * directionMultiplier;
+      }
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return valA.localeCompare(valB) * directionMultiplier;
+      }
+      return 0;
+    });
+  }, [activeTab, adSets, selectedCampaignIds, searchQuery, statusFilter, accountMap, sortConfig]);
 
   // ... (DetailedAdAccount interface remains same)
 
@@ -622,46 +713,50 @@ export default function CampaignsPage() {
 
 
 
-  const filteredAds = ads.filter(ad => {
-    // AdSet filter (if adsets are selected, show only their ads)
-    if (selectedAdSetIds.size > 0) {
-      if (!selectedAdSetIds.has(ad.adsetId)) return false;
-    }
-    // Fallback: Campaign filter (if campaigns are selected, show only their ads)
-    else if (selectedCampaignIds.size > 0) {
-      if (!selectedCampaignIds.has(ad.campaignId)) return false;
-    }
+  const filteredAds = useMemo(() => {
+    if (activeTab !== 'ads') return []; // Performance optimization
 
-    // Search & Status (Basic logic, can be refined to search body/title too)
-    const matchesSearch = ad.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ad.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ad.body?.toLowerCase().includes(searchQuery.toLowerCase());
+    return ads.filter(ad => {
+      // AdSet filter (if adsets are selected, show only their ads)
+      if (selectedAdSetIds.size > 0) {
+        if (!selectedAdSetIds.has(ad.adsetId)) return false;
+      }
+      // Fallback: Campaign filter (if campaigns are selected, show only their ads)
+      else if (selectedCampaignIds.size > 0) {
+        if (!selectedCampaignIds.has(ad.campaignId)) return false;
+      }
 
-    const matchesStatus = statusFilter === 'all' || getAdStatus(ad, accountMap[ad.adAccountId || '']).type === statusFilter;
+      // Search & Status (Basic logic, can be refined to search body/title too)
+      const matchesSearch = ad.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ad.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ad.body?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch && matchesStatus;
-  }).sort((a, b) => {
-    if (!sortConfig.key || !sortConfig.direction) return 0;
+      const matchesStatus = statusFilter === 'all' || getAdStatus(ad, accountMap[ad.adAccountId || '']).type === statusFilter;
 
-    const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
+      return matchesSearch && matchesStatus;
+    }).sort((a, b) => {
+      if (!sortConfig.key || !sortConfig.direction) return 0;
 
-    if (sortConfig.key === 'status') {
-      const statusA = getAdStatus(a, accountMap[a.adAccountId || '']).label;
-      const statusB = getAdStatus(b, accountMap[b.adAccountId || '']).label;
-      return statusA.localeCompare(statusB) * directionMultiplier;
-    }
+      const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
 
-    const valA = a[sortConfig.key as keyof Ad];
-    const valB = b[sortConfig.key as keyof Ad];
+      if (sortConfig.key === 'status') {
+        const statusA = getAdStatus(a, accountMap[a.adAccountId || '']).label;
+        const statusB = getAdStatus(b, accountMap[b.adAccountId || '']).label;
+        return statusA.localeCompare(statusB) * directionMultiplier;
+      }
 
-    if (typeof valA === 'number' && typeof valB === 'number') {
-      return (valA - valB) * directionMultiplier;
-    }
-    if (typeof valA === 'string' && typeof valB === 'string') {
-      return valA.localeCompare(valB) * directionMultiplier;
-    }
-    return 0;
-  });
+      const valA = a[sortConfig.key as keyof Ad];
+      const valB = b[sortConfig.key as keyof Ad];
+
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return (valA - valB) * directionMultiplier;
+      }
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return valA.localeCompare(valB) * directionMultiplier;
+      }
+      return 0;
+    });
+  }, [activeTab, ads, selectedAdSetIds, selectedCampaignIds, searchQuery, statusFilter, accountMap, sortConfig]);
 
 
 
@@ -787,7 +882,7 @@ export default function CampaignsPage() {
   const isFetchingRef = useRef(false);
 
   // Check for refresh param on mount
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  // Check for refresh param
   const shouldForceRefresh = searchParams?.get('refresh') === 'true';
 
   useEffect(() => {
@@ -914,6 +1009,11 @@ export default function CampaignsPage() {
         url += `&dateFrom=${dateRange.from.toISOString()}&dateTo=${dateRange.to.toISOString()}`;
       }
 
+      // Add status filter
+      if (statusFilter && statusFilter !== 'all') {
+        url += `&status=${statusFilter}`;
+      }
+
       if (forceRefresh) {
         url += '&refresh=true';
       }
@@ -982,6 +1082,11 @@ export default function CampaignsPage() {
         url += `&dateFrom=${dateRange.from.toISOString()}&dateTo=${dateRange.to.toISOString()}`;
       }
 
+      // Add status filter
+      if (statusFilter && statusFilter !== 'all') {
+        url += `&status=${statusFilter}`;
+      }
+
       if (forceRefresh) {
         url += '&refresh=true';
       }
@@ -1048,6 +1153,11 @@ export default function CampaignsPage() {
       let url = `/api/ads?adAccountId=${adAccountIds}`;
       if (dateRange?.from && dateRange?.to) {
         url += `&dateFrom=${dateRange.from.toISOString()}&dateTo=${dateRange.to.toISOString()}`;
+      }
+
+      // Add status filter
+      if (statusFilter && statusFilter !== 'all') {
+        url += `&status=${statusFilter}`;
       }
 
       if (forceRefresh) {

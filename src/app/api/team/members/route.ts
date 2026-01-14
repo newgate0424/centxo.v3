@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic'; // Prevent caching
+
 export async function GET(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -13,6 +15,8 @@ export async function GET(req: NextRequest) {
                 { status: 401 }
             );
         }
+
+        console.log('[API] Fetching team members for:', session.user.email);
 
         // Get current user
         const user = await prisma.user.findUnique({
@@ -90,16 +94,22 @@ export async function GET(req: NextRequest) {
             host,
             members: await Promise.all(teamMembers.map(async (member: any) => {
                 let memberImage = null;
-                
+
                 // If email member, try to get profile image from User table
                 if (member.memberType === 'email' && member.memberEmail) {
+                    console.log(`[API] Looking up image for email: "${member.memberEmail}" (trimmed: "${member.memberEmail.trim()}")`);
                     const userRecord = await prisma.user.findUnique({
-                        where: { email: member.memberEmail },
+                        where: { email: member.memberEmail.trim() },
                         select: { image: true },
                     });
+                    console.log(`[API] User found: ${!!userRecord}, Image in DB: ${userRecord?.image}`);
                     memberImage = userRecord?.image || null;
                 }
-                
+                // If Facebook member, construct Graph API image URL
+                else if (member.memberType === 'facebook' && member.facebookUserId) {
+                    memberImage = `https://graph.facebook.com/${member.facebookUserId}/picture?type=square`;
+                }
+
                 return {
                     id: member.id,
                     memberType: member.memberType,
@@ -114,6 +124,10 @@ export async function GET(req: NextRequest) {
                     lastUsedAt: member.lastUsedAt,
                 };
             })),
+        }, {
+            headers: {
+                'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            }
         });
     } catch (error) {
         console.error('Error fetching team members:', error);

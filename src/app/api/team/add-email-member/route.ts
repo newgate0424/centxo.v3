@@ -33,17 +33,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if email already exists in team
+    // Check if email already exists in ANY team
+    // User requirement: If user is already in a team, they cannot be added to another team
     const existingMember = await prisma.teamMember.findFirst({
       where: {
-        userId: session.user.id,
         memberEmail: email,
       },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
     });
 
     if (existingMember) {
+      const ownerName = existingMember.user.name || existingMember.user.email || 'another team leader';
       return NextResponse.json(
-        { error: 'This email is already in your team' },
+        { error: `This email is already a member of ${ownerName}'s team` },
         { status: 400 }
       );
     }

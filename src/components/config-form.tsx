@@ -146,80 +146,86 @@ export function ConfigForm() {
                             />
                         </div>
 
-                        {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
-                            <Checkbox
-                                checked={allAccountsSelected}
-                                onCheckedChange={toggleAllAccounts}
-                                className="mt-0.5"
-                            />
-                            <span>Name</span>
-                            <span>ID</span>
-                            <span>Owner</span>
-                            <span>Status</span>
-                        </div>
-
-                        <ScrollArea className="h-[400px] border rounded-b-md">
-                            {filteredAccounts.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-40 text-center">
-                                    <Building2 className="h-12 w-12 text-muted-foreground mb-2" />
-                                    <p className="text-sm text-muted-foreground">
-                                        {accountSearch ? 'No matching ad accounts found' : 'No ad accounts found'}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="divide-y">
-                                    {filteredAccounts.map((account) => {
-                                        const isSelected = selectedAccounts.some(acc => acc.id === account.id);
-
-                                        // Determine status
-                                        const getStatusInfo = (status?: number) => {
-                                            switch (status) {
-                                                case 1:
-                                                    return { label: 'Active', color: 'bg-green-500' };
-                                                case 2:
-                                                    return { label: 'Disabled', color: 'bg-red-500' };
-                                                case 3:
-                                                    return { label: 'Unsettled', color: 'bg-red-500' };
-                                                case 7:
-                                                    return { label: 'Pending Risk Review', color: 'bg-yellow-500' };
-                                                case 100:
-                                                    return { label: 'Pending Closure', color: 'bg-orange-500' };
-                                                case 101:
-                                                    return { label: 'Closed', color: 'bg-gray-400' };
-                                                default:
-                                                    return { label: 'Unknown', color: 'bg-gray-300' };
-                                            }
-                                        };
-
-                                        const statusInfo = getStatusInfo(account.account_status);
-
-                                        return (
-                                            <div
-                                                key={account.id}
-                                                onClick={() => toggleAccount(account)}
-                                                className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
-                                            >
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => toggleAccount(account)}
-                                                />
-                                                <span className="font-medium text-sm truncate">{account.name}</span>
-                                                <span className="text-sm text-muted-foreground truncate">{account.account_id}</span>
-                                                <span className="text-sm text-muted-foreground truncate">{(account as any)._source?.facebookName || 'Unknown'}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-2 h-2 rounded-full ${statusInfo.color || 'bg-gray-400'
-                                                        }`} />
-                                                    <span className="text-sm text-foreground">
-                                                        {statusInfo.label}
-                                                    </span>
-                                                </div>
+                        {/* Table Container with Horizontal Scroll */}
+                        <div className="border rounded-md overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <div className="min-w-[800px]">
+                                    <ScrollArea className="h-[400px]">
+                                        {/* Table Header - Sticky */}
+                                        <div className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                            <Checkbox
+                                                checked={allAccountsSelected}
+                                                onCheckedChange={toggleAllAccounts}
+                                                className="mt-0.5"
+                                            />
+                                            <span>Name</span>
+                                            <span>ID</span>
+                                            <span>Owner</span>
+                                            <span>Status</span>
+                                        </div>
+                                        {filteredAccounts.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-40 text-center">
+                                                <Building2 className="h-12 w-12 text-muted-foreground mb-2" />
+                                                <p className="text-sm text-muted-foreground">
+                                                    {accountSearch ? 'No matching ad accounts found' : 'No ad accounts found'}
+                                                </p>
                                             </div>
-                                        );
-                                    })}
+                                        ) : (
+                                            <div className="divide-y">
+                                                {filteredAccounts.map((account) => {
+                                                    const isSelected = selectedAccounts.some(acc => acc.id === account.id);
+
+                                                    // Determine status
+                                                    const getStatusInfo = (status?: number) => {
+                                                        switch (status) {
+                                                            case 1:
+                                                                return { label: 'Active', color: 'bg-green-500' };
+                                                            case 2:
+                                                                return { label: 'Disabled', color: 'bg-red-500' };
+                                                            case 3:
+                                                                return { label: 'Unsettled', color: 'bg-red-500' };
+                                                            case 7:
+                                                                return { label: 'Pending Risk Review', color: 'bg-yellow-500' };
+                                                            case 100:
+                                                                return { label: 'Pending Closure', color: 'bg-orange-500' };
+                                                            case 101:
+                                                                return { label: 'Closed', color: 'bg-gray-400' };
+                                                            default:
+                                                                return { label: 'Unknown', color: 'bg-gray-300' };
+                                                        }
+                                                    };
+
+                                                    const statusInfo = getStatusInfo(account.account_status);
+
+                                                    return (
+                                                        <div
+                                                            key={account.id}
+                                                            onClick={() => toggleAccount(account)}
+                                                            className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                        >
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => toggleAccount(account)}
+                                                            />
+                                                            <span className="font-medium text-sm truncate">{account.name}</span>
+                                                            <span className="text-sm text-muted-foreground truncate">{account.account_id}</span>
+                                                            <span className="text-sm text-muted-foreground truncate">{(account as any)._source?.facebookName || 'Unknown'}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`w-2 h-2 rounded-full ${statusInfo.color || 'bg-gray-400'
+                                                                    }`} />
+                                                                <span className="text-sm text-foreground">
+                                                                    {statusInfo.label}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </ScrollArea>
                                 </div>
-                            )}
-                        </ScrollArea>
+                            </div>
+                        </div>
                     </div>
                 </TabsContent>
 
@@ -251,77 +257,83 @@ export function ConfigForm() {
                             />
                         </div>
 
-                        {/* Table Header */}
-                        <div className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-2 px-2 border-b bg-muted/50 font-medium text-sm rounded-t-md">
-                            <Checkbox
-                                checked={allPagesSelected}
-                                onCheckedChange={toggleAllPages}
-                                className="mt-0.5"
-                            />
-                            <span>Name</span>
-                            <span>ID</span>
-                            <span>Owner</span>
-                            <span>Status</span>
-                        </div>
-
-                        <ScrollArea className="h-[400px] border rounded-b-md">
-                            {filteredPages.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-40 text-center">
-                                    <FileText className="h-12 w-12 text-muted-foreground mb-2" />
-                                    <p className="text-sm text-muted-foreground">
-                                        {pageSearch ? 'No matching pages found' : 'No pages found'}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="divide-y">
-                                    {filteredPages.map((page: any) => {
-                                        const isSelected = selectedPages.some(p => p.id === page.id);
-                                        const status = page.status || 'ACTIVE';
-
-                                        // Determine badge styling based on status
-                                        const getStatusBadge = () => {
-                                            if (status === 'ACTIVE') {
-                                                return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Active</Badge>;
-                                            } else if (status === 'RESTRICTED') {
-                                                return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Restricted</Badge>;
-                                            } else if (status === 'UNPUBLISHED') {
-                                                return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Unpublished</Badge>;
-                                            }
-                                            return <Badge variant="secondary">{status}</Badge>;
-                                        };
-
-                                        return (
-                                            <div
-                                                key={page.id}
-                                                onClick={() => togglePage(page)}
-                                                className="grid grid-cols-[auto,1fr,250px,200px,150px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
-                                            >
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => togglePage(page)}
-                                                />
-                                                <span className="font-medium text-sm truncate">{page.name}</span>
-                                                <span className="text-sm text-muted-foreground truncate">{page.id}</span>
-                                                <span className="text-sm text-muted-foreground truncate">{(page as any)._source?.facebookName || 'Unknown'}</span>
-                                                <div onClick={(e) => e.stopPropagation()}>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={`w-2 h-2 rounded-full ${status === 'ACTIVE' ? 'bg-green-500' :
-                                                            status === 'RESTRICTED' ? 'bg-red-500' :
-                                                                status === 'UNPUBLISHED' ? 'bg-gray-400' : 'bg-gray-400'
-                                                            }`} />
-                                                        <span className="text-sm text-foreground">
-                                                            {status === 'ACTIVE' ? 'Active' :
-                                                                status === 'RESTRICTED' ? 'Restricted' :
-                                                                    status === 'UNPUBLISHED' ? 'Unpublished' : status}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                        {/* Table Container with Horizontal Scroll */}
+                        <div className="border rounded-md overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <div className="min-w-[800px]">
+                                    <ScrollArea className="h-[400px]">
+                                        {/* Table Header - Sticky */}
+                                        <div className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                            <Checkbox
+                                                checked={allPagesSelected}
+                                                onCheckedChange={toggleAllPages}
+                                                className="mt-0.5"
+                                            />
+                                            <span>Name</span>
+                                            <span>ID</span>
+                                            <span>Owner</span>
+                                            <span>Status</span>
+                                        </div>
+                                        {filteredPages.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-40 text-center">
+                                                <FileText className="h-12 w-12 text-muted-foreground mb-2" />
+                                                <p className="text-sm text-muted-foreground">
+                                                    {pageSearch ? 'No matching pages found' : 'No pages found'}
+                                                </p>
                                             </div>
-                                        );
-                                    })}
+                                        ) : (
+                                            <div className="divide-y">
+                                                {filteredPages.map((page: any) => {
+                                                    const isSelected = selectedPages.some(p => p.id === page.id);
+                                                    const status = page.status || 'ACTIVE';
+
+                                                    // Determine badge styling based on status
+                                                    const getStatusBadge = () => {
+                                                        if (status === 'ACTIVE') {
+                                                            return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Active</Badge>;
+                                                        } else if (status === 'RESTRICTED') {
+                                                            return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Restricted</Badge>;
+                                                        } else if (status === 'UNPUBLISHED') {
+                                                            return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Unpublished</Badge>;
+                                                        }
+                                                        return <Badge variant="secondary">{status}</Badge>;
+                                                    };
+
+                                                    return (
+                                                        <div
+                                                            key={page.id}
+                                                            onClick={() => togglePage(page)}
+                                                            className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                        >
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => togglePage(page)}
+                                                            />
+                                                            <span className="font-medium text-sm truncate">{page.name}</span>
+                                                            <span className="text-sm text-muted-foreground truncate">{page.id}</span>
+                                                            <span className="text-sm text-muted-foreground truncate">{(page as any)._source?.facebookName || 'Unknown'}</span>
+                                                            <div onClick={(e) => e.stopPropagation()}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`w-2 h-2 rounded-full ${status === 'ACTIVE' ? 'bg-green-500' :
+                                                                        status === 'RESTRICTED' ? 'bg-red-500' :
+                                                                            status === 'UNPUBLISHED' ? 'bg-gray-400' : 'bg-gray-400'
+                                                                        }`} />
+                                                                    <span className="text-sm text-foreground">
+                                                                        {status === 'ACTIVE' ? 'Active' :
+                                                                            status === 'RESTRICTED' ? 'Restricted' :
+                                                                                status === 'UNPUBLISHED' ? 'Unpublished' : status}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </ScrollArea>
                                 </div>
-                            )}
-                        </ScrollArea>
+                            </div>
+                        </div>
                     </div>
                 </TabsContent>
             </Tabs>

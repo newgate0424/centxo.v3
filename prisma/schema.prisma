@@ -31,6 +31,25 @@ model User {
   subscriptionStatus String?
   subscriptionId     String?
   currentPeriodEnd   DateTime?
+
+  sessions Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Custom tracking fields
+  userAgent    String?  @db.Text
+  ipAddress    String?
+  lastActive   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([userId])
 }
 
 model Account {

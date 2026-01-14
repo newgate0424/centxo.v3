@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     // Collect all tokens
     const tokens: TokenInfo[] = [];
-    
+
     // 1. MetaAccount token (encrypted, needs decryption)
     if ((user as any).metaAccount?.accessToken) {
       try {
@@ -77,33 +77,64 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 3. Query team members (check both as host and as member)
-    let teamMembers = await prisma.teamMember.findMany({
+    // 3. Query team members and team owner tokens
+    // Check if current user is a team member first
+    const memberRecord = await prisma.teamMember.findFirst({
+      where: { memberEmail: session.user.email },
+    });
+
+    let teamOwnerId = user.id; // Default to current user
+
+    if (memberRecord?.userId) {
+      // Current user is a team member, use team owner's ID
+      teamOwnerId = memberRecord.userId;
+      console.log('[campaigns] User is team member, fetching owner tokens from:', teamOwnerId);
+    }
+
+    // Fetch team owner's data (MetaAccount + Facebook accounts)
+    const teamOwner = await prisma.user.findUnique({
+      where: { id: teamOwnerId },
+      include: {
+        metaAccount: {
+          select: { accessToken: true },
+        },
+        accounts: {
+          where: { provider: 'facebook' },
+          select: { access_token: true },
+        },
+      },
+    });
+
+    // Add team owner's MetaAccount token
+    if (teamOwner?.metaAccount?.accessToken && teamOwnerId !== user.id) {
+      try {
+        const decrypted = decryptToken(teamOwner.metaAccount.accessToken);
+        if (!tokens.some(t => t.token === decrypted)) {
+          tokens.push({ token: decrypted, name: teamOwner.name || 'Team Owner' });
+        }
+      } catch (e) {
+        console.error('[campaigns] Failed to decrypt team owner MetaAccount token:', e);
+      }
+    }
+
+    // Add team owner's Facebook account tokens
+    if (teamOwner?.accounts) {
+      teamOwner.accounts.forEach((acc: any) => {
+        if (acc.access_token && !tokens.some(t => t.token === acc.access_token)) {
+          tokens.push({ token: acc.access_token, name: teamOwner.name || 'Team Owner Account' });
+        }
+      });
+    }
+
+    // Fetch all team members under the team owner
+    const teamMembers = await prisma.teamMember.findMany({
       where: {
-        userId: user.id,
+        userId: teamOwnerId,
         memberType: 'facebook',
         facebookUserId: { not: null },
         accessToken: { not: null },
       },
     });
-
-    // If no team members found, check if this user is a member
-    if (teamMembers.length === 0) {
-      const memberRecord = await prisma.teamMember.findFirst({
-        where: { memberEmail: session.user.email },
-      });
-
-      if (memberRecord?.userId) {
-        teamMembers = await prisma.teamMember.findMany({
-          where: {
-            userId: memberRecord.userId,
-            memberType: 'facebook',
-            facebookUserId: { not: null },
-            accessToken: { not: null },
-          },
-        });
-      }
-    }
 
     // Add team member tokens
     teamMembers.forEach((member: any) => {
@@ -113,7 +144,7 @@ export async function GET(request: NextRequest) {
     });
 
     console.log('[campaigns] Found tokens:', tokens.length);
-    
+
     // 4. Fallback to session token
     const sessionToken = (session as any).accessToken;
     if (sessionToken && !tokens.some(t => t.token === sessionToken)) {
@@ -173,6 +204,35 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper to fetch all pages of data from Facebook API
+async function fetchAllPages(initialUrl: string, token: string): Promise<any[]> {
+  let allData: any[] = [];
+  let nextUrl: string | null = initialUrl;
+
+  while (nextUrl) {
+    try {
+      const res: Response = await fetch(nextUrl);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch page: ${res.statusText}`);
+      }
+
+      const data: any = await res.json();
+      if (data.data && Array.isArray(data.data)) {
+        allData = allData.concat(data.data);
+      }
+
+      // Update nextUrl for next page
+      nextUrl = data.paging?.next || null;
+
+    } catch (error) {
+      console.error('Error fetching page:', error);
+      nextUrl = null; // Stop pagination on error
+    }
+  }
+
+  return allData;
+}
+
 async function fetchCampaignsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null, mode?: string | null) {
   const allCampaigns: any[] = [];
   const errors: string[] = [];
@@ -188,7 +248,7 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], tokens: TokenInfo[
   }
 
   // Chunk requests to avoid rate limiting
-  const CHUNK_SIZE = 10;
+  const CHUNK_SIZE = 5; // Reduced for safety
 
   for (let i = 0; i < adAccountIds.length; i += CHUNK_SIZE) {
     const chunk = adAccountIds.slice(i, i + CHUNK_SIZE);
@@ -206,42 +266,36 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], tokens: TokenInfo[
         // Fetch Data using the found token
         // Lite Mode: Skip Insights, Skip AdSets, Minimal Fields
         if (mode === 'lite') {
-          const campaignsResponse = await fetch(
-            `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=id,name,status,effective_status,configured_status,created_time&limit=5&access_token=${token}`
-          );
+          // Pagination for Lite Mode
+          const initialUrl = `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=id,name,status,effective_status,configured_status,created_time&limit=200&access_token=${token}`;
+          const campaigns = await fetchAllPages(initialUrl, token);
 
-          if (campaignsResponse.ok) {
-            const data = await campaignsResponse.json();
-            const campaigns = data.data || [];
-            const formatted = campaigns.map((campaign: any) => ({
-              id: campaign.id,
-              name: campaign.name,
-              status: campaign.status,
-              effectiveStatus: campaign.effective_status,
-              createdAt: new Date(campaign.created_time),
-              // Minimal stats (placeholders)
-              metrics: { spend: 0, messages: 0, results: 0, costPerResult: 0 },
-              adAccountId: adAccountId,
-              currency: 'USD'
-            }));
-            allCampaigns.push(...formatted);
-          } else {
-            const errorData = await campaignsResponse.json();
-            errors.push(`Failed to fetch (lite) for account ${adAccountId}: ${errorData.error?.message}`);
-          }
+          const formatted = campaigns.map((campaign: any) => ({
+            id: campaign.id,
+            name: campaign.name,
+            status: campaign.status,
+            effectiveStatus: campaign.effective_status,
+            createdAt: new Date(campaign.created_time),
+            // Minimal stats (placeholders)
+            metrics: { spend: 0, messages: 0, results: 0, costPerResult: 0 },
+            adAccountId: adAccountId,
+            currency: 'USD'
+          }));
+          allCampaigns.push(...formatted);
           return; // Done for this account in lite mode
         }
 
         // Standard Mode (Full)
         // Run requests in parallel
-        const [accountResponse, campaignsResponse] = await Promise.all([
+        const [accountResponse] = await Promise.all([
           fetch(
             `https://graph.facebook.com/v22.0/${adAccountId}?fields=currency&access_token=${token}`
-          ),
-          fetch(
-            `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=id,name,status,effective_status,configured_status,objective,daily_budget,lifetime_budget,spend_cap,issues_info,adsets{effective_status,ads{effective_status}},created_time,insights.${insightsTimeRange}{spend,actions,cost_per_action_type,reach,impressions,clicks}&limit=500&access_token=${token}`
           )
         ]);
+
+        // Campaigns fetch with pagination
+        const initialUrl = `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=id,name,status,effective_status,configured_status,objective,daily_budget,lifetime_budget,spend_cap,issues_info,adsets{effective_status,ads{effective_status}},created_time,insights.${insightsTimeRange}{spend,actions,cost_per_action_type,reach,impressions,clicks}&limit=200&access_token=${token}`;
+        const campaigns = await fetchAllPages(initialUrl, token);
 
         let accountCurrency = 'USD';
         if (accountResponse.ok) {
@@ -249,78 +303,71 @@ async function fetchCampaignsFromMeta(adAccountIds: string[], tokens: TokenInfo[
           accountCurrency = accountData.currency || 'USD';
         }
 
-        if (campaignsResponse.ok) {
-          const data = await campaignsResponse.json();
-          const campaigns = data.data || [];
+        // Transform to our format
+        const formatted = campaigns.map((campaign: any) => {
+          const insights = campaign.insights?.data?.[0];
+          const messageAction = insights?.actions?.find((a: any) =>
+            a.action_type === 'onsite_conversion.messaging_conversation_started_7d'
+          );
+          const messages = parseInt(messageAction?.value || '0');
+          const spend = parseFloat(insights?.spend || '0');
 
-          // Transform to our format
-          const formatted = campaigns.map((campaign: any) => {
-            const insights = campaign.insights?.data?.[0];
-            const messageAction = insights?.actions?.find((a: any) =>
-              a.action_type === 'onsite_conversion.messaging_conversation_started_7d'
-            );
-            const messages = parseInt(messageAction?.value || '0');
-            const spend = parseFloat(insights?.spend || '0');
+          // Get post engagements
+          const postEngagementAction = insights?.actions?.find((a: any) =>
+            a.action_type === 'post_engagement'
+          );
+          const postEngagements = parseInt(postEngagementAction?.value || '0');
 
-            // Get post engagements
-            const postEngagementAction = insights?.actions?.find((a: any) =>
-              a.action_type === 'post_engagement'
-            );
-            const postEngagements = parseInt(postEngagementAction?.value || '0');
+          // Get messaging contacts
+          const messagingContactsAction = insights?.actions?.find((a: any) =>
+            a.action_type === 'onsite_conversion.messaging_first_reply'
+          );
+          const messagingContacts = parseInt(messagingContactsAction?.value || '0');
 
-            // Get messaging contacts
-            const messagingContactsAction = insights?.actions?.find((a: any) =>
-              a.action_type === 'onsite_conversion.messaging_first_reply'
-            );
-            const messagingContacts = parseInt(messagingContactsAction?.value || '0');
+          // Get cost per result
+          const costPerResult = messages > 0 ? spend / messages : 0;
+          const reach = parseInt(insights?.reach || '0');
+          const impressions = parseInt(insights?.impressions || '0');
+          const clicks = parseInt(insights?.clicks || '0');
 
-            // Get cost per result
-            const costPerResult = messages > 0 ? spend / messages : 0;
-            const reach = parseInt(insights?.reach || '0');
-            const impressions = parseInt(insights?.impressions || '0');
-            const clicks = parseInt(insights?.clicks || '0');
+          return {
+            id: campaign.id,
+            name: campaign.name,
+            status: campaign.status,
+            effectiveStatus: campaign.effective_status,
+            configuredStatus: campaign.configured_status,
+            objective: campaign.objective,
+            adSets: campaign.adsets?.data?.map((a: any) => ({
+              effectiveStatus: a.effective_status,
+              ads: a.ads?.data?.map((ad: any) => ({ effectiveStatus: ad.effective_status })) || []
+            })) || [],
+            dailyBudget: parseFloat(campaign.daily_budget || '0') / 100,
+            lifetimeBudget: parseFloat(campaign.lifetime_budget || '0') / 100,
+            spendCap: parseFloat(campaign.spend_cap || '0') / 100,
+            issuesInfo: campaign.issues_info || [],
+            createdAt: new Date(campaign.created_time),
+            metrics: {
+              spend: spend,
+              messages: messages,
+              costPerMessage: messages > 0 ? spend / messages : 0,
+              results: messages,
+              costPerResult: costPerResult,
+              budget: parseFloat(campaign.daily_budget || campaign.lifetime_budget || '0') / 100,
+              reach: reach,
+              impressions: impressions,
+              postEngagements: postEngagements,
+              clicks: clicks,
+              messagingContacts: messagingContacts,
+              amountSpent: spend,
+            },
+            adsCount: { total: 0, active: 0 },
+            adAccountId: adAccountId,
+            currency: accountCurrency
+          };
+        });
 
-            return {
-              id: campaign.id,
-              name: campaign.name,
-              status: campaign.status,
-              effectiveStatus: campaign.effective_status,
-              configuredStatus: campaign.configured_status,
-              objective: campaign.objective,
-              adSets: campaign.adsets?.data?.map((a: any) => ({
-                effectiveStatus: a.effective_status,
-                ads: a.ads?.data?.map((ad: any) => ({ effectiveStatus: ad.effective_status })) || []
-              })) || [],
-              dailyBudget: parseFloat(campaign.daily_budget || '0') / 100,
-              lifetimeBudget: parseFloat(campaign.lifetime_budget || '0') / 100,
-              spendCap: parseFloat(campaign.spend_cap || '0') / 100,
-              issuesInfo: campaign.issues_info || [],
-              createdAt: new Date(campaign.created_time),
-              metrics: {
-                spend: spend,
-                messages: messages,
-                costPerMessage: messages > 0 ? spend / messages : 0,
-                results: messages,
-                costPerResult: costPerResult,
-                budget: parseFloat(campaign.daily_budget || campaign.lifetime_budget || '0') / 100,
-                reach: reach,
-                impressions: impressions,
-                postEngagements: postEngagements,
-                clicks: clicks,
-                messagingContacts: messagingContacts,
-                amountSpent: spend,
-              },
-              adsCount: { total: 0, active: 0 },
-              adAccountId: adAccountId,
-              currency: accountCurrency
-            };
-          });
+        allCampaigns.push(...formatted);
 
-          allCampaigns.push(...formatted);
-        } else {
-          const errorData = await campaignsResponse.json();
-          errors.push(`Failed to fetch for account ${adAccountId}: ${errorData.error?.message || campaignsResponse.statusText}`);
-        }
       } catch (err: any) {
         errors.push(`Error for account ${adAccountId}: ${err.message}`);
       }

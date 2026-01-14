@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Collect all tokens: MetaAccount + Main User + Team Members
-    const tokens = [];
+    const tokens: { token: string; name: string; isTeamMember?: boolean }[] = [];
 
     // 1. MetaAccount Token (most reliable)
     if ((user as any).metaAccount?.accessToken) {

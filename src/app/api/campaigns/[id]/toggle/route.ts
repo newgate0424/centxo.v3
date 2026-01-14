@@ -34,9 +34,6 @@ export async function POST(
           where: { provider: 'facebook' },
           select: { access_token: true },
         },
-        teamMembers: {
-          select: { accessToken: true },
-        },
       },
     });
 
@@ -48,7 +45,7 @@ export async function POST(
       try {
         tokens.push(decryptToken(user.metaAccount.accessToken));
       } catch (e) {
-        console.error('Failed to decrypt MetaAccount token:', e);
+        console.error('[toggle] Failed to decrypt MetaAccount token:', e);
       }
     }
 
@@ -59,16 +56,77 @@ export async function POST(
       });
     }
 
-    // 3. Team members tokens
-    if (user?.teamMembers) {
-      user.teamMembers.forEach(member => {
-        if (member.accessToken) tokens.push(member.accessToken);
+    // 3. Check if current user is a team member and fetch team owner's tokens
+    const memberRecord = await prisma.teamMember.findFirst({
+      where: { memberEmail: session.user.email },
+    });
+
+    let teamOwnerId = user?.id; // Default to current user
+
+    if (memberRecord?.userId) {
+      // Current user is a team member, use team owner's ID
+      teamOwnerId = memberRecord.userId;
+      console.log('[toggle] User is team member, fetching owner tokens from:', teamOwnerId);
+
+      // Fetch team owner's data
+      const teamOwner = await prisma.user.findUnique({
+        where: { id: teamOwnerId },
+        include: {
+          metaAccount: {
+            select: { accessToken: true },
+          },
+          accounts: {
+            where: { provider: 'facebook' },
+            select: { access_token: true },
+          },
+        },
       });
+
+      // Add team owner's MetaAccount token
+      if (teamOwner?.metaAccount?.accessToken) {
+        try {
+          const decrypted = decryptToken(teamOwner.metaAccount.accessToken);
+          if (!tokens.includes(decrypted)) {
+            tokens.push(decrypted);
+          }
+        } catch (e) {
+          console.error('[toggle] Failed to decrypt team owner MetaAccount token:', e);
+        }
+      }
+
+      // Add team owner's Facebook account tokens
+      if (teamOwner?.accounts) {
+        teamOwner.accounts.forEach(acc => {
+          if (acc.access_token && !tokens.includes(acc.access_token)) {
+            tokens.push(acc.access_token);
+          }
+        });
+      }
     }
 
-    // 4. Session token (fallback)
+    // 4. Fetch team members tokens
+    const teamMembers = await prisma.teamMember.findMany({
+      where: {
+        userId: teamOwnerId,
+        memberType: 'facebook',
+        facebookUserId: { not: null },
+        accessToken: { not: null },
+      },
+    });
+
+    teamMembers.forEach(member => {
+      if (member.accessToken && !tokens.includes(member.accessToken)) {
+        tokens.push(member.accessToken);
+      }
+    });
+
+    // 5. Session token (fallback)
     const sessionToken = (session as any).accessToken;
-    if (sessionToken) tokens.push(sessionToken);
+    if (sessionToken && !tokens.includes(sessionToken)) {
+      tokens.push(sessionToken);
+    }
+
+    console.log('[toggle] Found tokens:', tokens.length);
 
     if (tokens.length === 0) {
       return NextResponse.json(

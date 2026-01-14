@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
                     provider: 'facebook',
                 }
             });
-            accessToken = account?.access_token;
+            accessToken = account?.access_token || undefined;
         }
 
         // 4. Fallback: Try TeamMember table (New "Team" connection model)
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
                         orderBy: { id: 'desc' }, // Account doesn't always have updatedAt
                         select: { access_token: true }
                     });
-                    accessToken = systemAccount?.access_token;
+                    accessToken = systemAccount?.access_token || undefined;
                 }
             }
         }

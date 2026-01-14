@@ -2,20 +2,20 @@
 
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SessionManagement } from './session-management';
-import { ProfileSettings } from './profile-settings';
-import { DeleteAccountSettings } from './delete-account-settings';
+import { ConnectionsSettings } from './connections-settings';
+import { AdAccountsSettings } from './ad-accounts-settings';
+import { TeamSettings } from './team-settings';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-export function AccountSettings() {
+export function ConnectionsPage() {
     const { t } = useLanguage();
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
 
-    // Get default tab from URL or fallback to "account"
-    const defaultTab = searchParams.get('tab') || 'account';
+    // Get default tab from URL or fallback to "connections"
+    const defaultTab = searchParams.get('tab') || 'connections';
     const [activeTab, setActiveTab] = useState(defaultTab);
 
     // Update URL when tab changes
@@ -26,7 +26,7 @@ export function AccountSettings() {
         router.push(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
-    // Sync state if URL changes externally (e.g. back button)
+    // Sync state if URL changes externally
     useEffect(() => {
         const tabFromUrl = searchParams.get('tab');
         if (tabFromUrl && tabFromUrl !== activeTab) {
@@ -40,22 +40,22 @@ export function AccountSettings() {
             <div className="border-b border-r border-border bg-card shadow-sm overflow-x-auto">
                 <TabsList className="flex w-full justify-start bg-transparent p-0 h-auto gap-4 md:gap-6 pt-4 pb-3 transition-all duration-200 pl-4 md:pl-[3.5rem] lg:pl-[4.5rem] min-w-max md:min-w-0">
                     <TabsTrigger
-                        value="account"
+                        value="connections"
                         className="rounded-none border-b-2 border-transparent bg-transparent px-0 py-3 font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
                     >
-                        {t('settings.accountSettings', 'Account Settings')}
+                        {t('settings.connections', 'Connections')}
                     </TabsTrigger>
                     <TabsTrigger
-                        value="sessions"
+                        value="ad-accounts"
                         className="rounded-none border-b-2 border-transparent bg-transparent px-0 py-3 font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
                     >
-                        {t('settings.sessions', 'Session Management')}
+                        {t('settings.adAccounts', 'Ad Accounts')}
                     </TabsTrigger>
                     <TabsTrigger
-                        value="delete"
+                        value="team"
                         className="rounded-none border-b-2 border-transparent bg-transparent px-0 py-3 font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
                     >
-                        {t('settings.deleteAccount', 'Delete Account')}
+                        {t('settings.team', 'Team')}
                     </TabsTrigger>
                 </TabsList>
             </div>
@@ -64,30 +64,37 @@ export function AccountSettings() {
             <div className="flex-1 w-full max-w-5xl mx-auto p-6 md:p-10">
                 <div className="border border-border rounded-xl bg-card shadow-sm overflow-hidden">
                     <div className="h-full overflow-y-auto px-6 md:px-8 lg:px-10 py-6 md:py-8">
-                        <TabsContent value="account" className="space-y-6 mt-0">
-                            <ProfileSettings />
-                        </TabsContent>
-
-                        <TabsContent value="sessions" className="space-y-6 mt-0">
+                        <TabsContent value="connections" className="space-y-6 mt-0">
                             <div className="space-y-0.5">
-                                <h2 className="text-2xl font-bold tracking-tight">{t('settings.sessions', 'Session Management')}</h2>
+                                <h2 className="text-2xl font-bold tracking-tight">{t('settings.connections', 'Connections')}</h2>
                                 <p className="text-muted-foreground">
-                                    {t('settings.sessionsDesc', 'Manage your active sessions and devices.')}
+                                    {t('settings.connectionsDesc', 'Manage your connected accounts and integrations.')}
                                 </p>
                             </div>
                             <div className="my-6 h-[1px] bg-border" />
-                            <SessionManagement />
+                            <ConnectionsSettings />
                         </TabsContent>
 
-                        <TabsContent value="delete" className="space-y-6 mt-0">
+                        <TabsContent value="ad-accounts" className="space-y-6 mt-0">
                             <div className="space-y-0.5">
-                                <h2 className="text-2xl font-bold tracking-tight">{t('settings.deleteAccount', 'Delete Account')}</h2>
+                                <h2 className="text-2xl font-bold tracking-tight">{t('settings.adAccounts', 'Ad Accounts')}</h2>
                                 <p className="text-muted-foreground">
-                                    {t('settings.deleteAccountDesc', 'Permanently delete your account and all associated data.')}
+                                    {t('settings.adAccountsDesc', 'Manage your advertising accounts and permissions.')}
                                 </p>
                             </div>
                             <div className="my-6 h-[1px] bg-border" />
-                            <DeleteAccountSettings />
+                            <AdAccountsSettings />
+                        </TabsContent>
+
+                        <TabsContent value="team" className="space-y-6 mt-0">
+                            <div className="space-y-0.5">
+                                <h2 className="text-2xl font-bold tracking-tight">{t('settings.team', 'Team')}</h2>
+                                <p className="text-muted-foreground">
+                                    {t('settings.teamDesc', 'Manage team members and their permissions.')}
+                                </p>
+                            </div>
+                            <div className="my-6 h-[1px] bg-border" />
+                            <TeamSettings />
                         </TabsContent>
                     </div>
                 </div>

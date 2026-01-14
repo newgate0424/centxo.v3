@@ -174,6 +174,9 @@ export function ConnectionsSettings() {
                         image: imageUrl
                     });
                 }
+            } else if (response.status === 404) {
+                // 404 is expected for users/members who haven't connected their own Facebook account
+                console.log('No personal Facebook profile found (404) - this is normal for email-only members.');
             } else {
                 console.error('Failed to fetch Facebook profile:', response.status);
             }
@@ -216,7 +219,8 @@ export function ConnectionsSettings() {
     const handleAddMember = async () => {
         setIsAdding(true);
         try {
-            const response = await fetch('/api/team/add-member');
+            const returnTo = encodeURIComponent('/settings/connections?tab=connections');
+            const response = await fetch(`/api/team/add-member?returnTo=${returnTo}`);
             if (response.ok) {
                 const data = await response.json();
                 window.location.href = data.authUrl;

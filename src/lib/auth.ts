@@ -128,48 +128,73 @@ export const authOptions: NextAuthOptions = {
                     });
 
                     if (!existingMetaAccount && account.providerAccountId) {
-                        // Import encryption function
-                        const { encryptToken } = await import('@/lib/services/metaClient');
-                        const encryptedToken = encryptToken(account.access_token);
-                        
-                        // Create MetaAccount
-                        const expiresAt = account.expires_at 
-                            ? new Date(account.expires_at * 1000) 
-                            : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days default
+                        try {
+                            // Dynamic import to avoid edge runtime issues if any (though auth.ts is usually safe)
+                            const { encryptToken } = await import('@/lib/services/metaClient');
+                            const encryptedToken = encryptToken(account.access_token);
 
-                        await prisma.metaAccount.create({
-                            data: {
-                                userId: user.id,
-                                metaUserId: account.providerAccountId,
-                                accessToken: encryptedToken,
-                                accessTokenExpires: expiresAt,
-                            },
-                        });
-                        console.log('✅ Auto-created MetaAccount for user:', user.email);
+                            // Create MetaAccount
+                            const expiresAt = account.expires_at
+                                ? new Date(account.expires_at * 1000)
+                                : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days default
+
+                            await prisma.metaAccount.create({
+                                data: {
+                                    userId: user.id,
+                                    metaUserId: account.providerAccountId,
+                                    accessToken: encryptedToken,
+                                    accessTokenExpires: expiresAt,
+                                },
+                            });
+                            console.log('✅ Auto-created MetaAccount for user:', user.email);
+                        } catch (err) {
+                            console.error('Error encrypting/creating meta account', err);
+                        }
                     }
                 } catch (error) {
                     console.error('Failed to auto-create MetaAccount:', error);
-                    // Don't block sign-in if MetaAccount creation fails
                 }
             }
             return true;
         },
 
-        async jwt({ token, user, account, trigger }) {
+        async jwt({ token, user, account, trigger, profile }) {
+            // Initial sign in
             if (user) {
                 token.id = user.id;
-                // Type assertion since user comes from adapter or authorize
                 token.role = (user as any).role || 'USER';
+
+                // Create a database session for tracking
+                // This allows us to list active sessions even when using JWT strategy
+                try {
+                    const sessionId = crypto.randomUUID();
+                    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+                    // Basic info (Device info will be updated by heartbeat)
+                    await prisma.session.create({
+                        data: {
+                            id: sessionId,
+                            sessionToken: sessionId, // Use UUID as token identifier
+                            userId: user.id,
+                            expires,
+                            lastActive: new Date()
+                        }
+                    });
+
+                    token.sessionId = sessionId;
+                } catch (e) {
+                    console.error('Failed to create session record', e);
+                }
             }
 
-            // Store Facebook access token in JWT
+            // Store Facebook access token in JWT (optional, but good for performance if payload is small)
+            // Or rely on DB fetch in session callback. Let's keep it clean and rely on DB/Token if present.
             if (account?.provider === 'facebook' && account?.access_token) {
                 token.accessToken = account.access_token;
             }
 
-            // Handle session update (when linking accounts)
+            // Handle session update
             if (trigger === 'update') {
-                // Fetch fresh user data from database
                 const dbUser = await prisma.user.findUnique({
                     where: { id: token.id as string },
                     select: {
@@ -196,10 +221,40 @@ export const authOptions: NextAuthOptions = {
             if (session.user) {
                 session.user.id = token.id as string;
                 session.user.role = token.role as string;
+                // Pass sessionId to client for identification
+                (session as any).sessionId = token.sessionId;
             }
+
             // Pass access token to session
             if (token.accessToken) {
                 (session as any).accessToken = token.accessToken;
+            } else if (session.user.id) {
+                // Fallback: Try to fetch from DB if not in token (e.g. older sessions or if we decide to stop storing in JWT)
+                try {
+                    // Check TeamMember first
+                    const teamMember = await prisma.teamMember.findFirst({
+                        where: { userId: session.user.id, memberType: 'facebook' },
+                        select: { accessToken: true }
+                    });
+
+                    if (teamMember?.accessToken) {
+                        (session as any).accessToken = teamMember.accessToken;
+                    }
+                    // Then MetaAccount
+                    else {
+                        const metaAccount = await prisma.metaAccount.findUnique({
+                            where: { userId: session.user.id },
+                            select: { accessToken: true }
+                        });
+
+                        if (metaAccount?.accessToken) {
+                            const { decryptToken } = await import('@/lib/services/metaClient');
+                            (session as any).accessToken = decryptToken(metaAccount.accessToken);
+                        }
+                    }
+                } catch (e) {
+                    // Ignore errors fetching extra tokens
+                }
             }
             return session;
         },

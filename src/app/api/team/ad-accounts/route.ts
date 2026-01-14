@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
                 console.log(`[team/ad-accounts] Fetching ad accounts for: ${member.facebookName || member.id}`);
 
                 // Fetch ad accounts from this team member's Facebook account
-                const url = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_id,currency,account_status,disable_reason,spend_cap,amount_spent,timezone_name,timezone_offset,business_country_code,funding_source_details,ads.filtering([{'field':'effective_status','operator':'IN','value':['ACTIVE']}]).limit(0).summary(true)&access_token=${member.accessToken}`;
+                const url = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_id,currency,account_status,disable_reason,spend_cap,amount_spent,timezone_name,timezone_offset,business_country_code,funding_source_details,ads.filtering([{'field':'effective_status','operator':'IN','value':['ACTIVE']}]).limit(0).summary(true)&limit=500&access_token=${member.accessToken}`;
                 const response = await fetch(url);
 
                 if (!response.ok) {
@@ -110,9 +110,9 @@ export async function GET(req: NextRequest) {
                         const currency = account.currency || 'USD';
                         const spendCapInMainUnits = fromBasicUnits(account.spend_cap, currency);
                         const amountSpentInMainUnits = fromBasicUnits(account.amount_spent, currency);
-                        
+
                         console.log(`[team/ad-accounts] Account ${account.name} (${currency}): spend_cap=${account.spend_cap} -> ${spendCapInMainUnits}`);
-                        
+
                         return {
                             ...account,
                             // Convert from basic units (cents/satang/yen) to main units (dollars/baht/yen)

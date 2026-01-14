@@ -23,6 +23,7 @@ import {
     Languages,
     Palette,
     Trash2,
+    PanelLeft,
 } from 'lucide-react';
 import {
     CollapsibleContent,
@@ -101,13 +102,7 @@ const navStructure: NavGroup[] = [
                 children: [
                     { name: "Account", href: "/settings/account", icon: User, translationKey: 'settings.account', isChild: true },
                     { name: "Connections", href: "/settings/connections", icon: Link2, translationKey: 'settings.connections', isChild: true },
-                    { name: "Team", href: "/settings/team", icon: Users, translationKey: 'settings.team', isChild: true },
-                    { name: "Ad Accounts", href: "/settings/ad-accounts", icon: Megaphone, translationKey: 'settings.adAccounts', isChild: true },
-                    { name: "Notifications", href: "/settings/notifications", icon: Bell, translationKey: 'settings.notifications', isChild: true },
-                    { name: "Security", href: "/settings/security", icon: Shield, translationKey: 'settings.security', isChild: true },
-                    { name: "Language", href: "/settings/language", icon: Languages, translationKey: 'settings.language', isChild: true },
                     { name: "Appearance", href: "/settings/appearance", icon: Palette, translationKey: 'settings.appearance', isChild: true },
-                    { name: "Delete Account", href: "/settings/delete-account", icon: Trash2, translationKey: 'settings.deleteAccount', isChild: true },
                 ]
             },
         ]
@@ -158,37 +153,29 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
         <div className={cn(
             "flex flex-col h-full overflow-x-hidden",
             "transition-all duration-300 ease-out",
-            isCollapsed ? "w-[54px]" : "w-[230px]",
-            isMobile ? "bg-background/95 backdrop-blur-xl border-r w-[230px]" : "bg-transparent"
+            isCollapsed ? "w-[88px]" : "w-[260px]",
+            isMobile ? "bg-card/95 backdrop-blur-xl border-r w-[260px]" : "bg-card border-r border-border"
         )}>
-            {/* Logo Area */}
-            <div
-                suppressHydrationWarning
-                className={cn(
-                    "flex items-center h-12 transition-all duration-300",
-                    isCollapsed ? "justify-center px-0" : "px-6"
-                )}>
-                {/* Logo - Text hidden on collapse */}
-                <Link href="/dashboard" className={cn(
-                    "flex items-center gap-4 transition-opacity duration-200",
-                    isCollapsed ? "hidden" : "opacity-100"
-                )}>
-                    <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-xl" />
-                    <span className="font-outfit font-bold text-xl tracking-tight">Centxo</span>
-                </Link>
-
-                {/* Logo Icon Only for Collapsed */}
-                {isCollapsed && (
-                    <Link href="/dashboard" className="flex items-center justify-center w-full">
-                        <img src="/centxo-logo.png" alt="Centxo" className="w-8 h-8 rounded-xl" />
-                    </Link>
+            {/* Sidebar Toggle (Top Right) */}
+            <div className={cn(
+                "flex items-center h-12 px-3",
+                isCollapsed ? "justify-center" : "justify-end"
+            )}>
+                {!isMobile && (
+                    <button
+                        onClick={toggleSidebar}
+                        className="p-2 rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors"
+                        title={isCollapsed ? "Expand" : "Collapse"}
+                    >
+                        <PanelLeft className={cn("h-5 w-5 transition-transform", isCollapsed && "rotate-180")} />
+                    </button>
                 )}
             </div>
 
             {/* Navigation */}
             <div className={cn(
                 "flex-1 overflow-y-auto overflow-x-hidden py-4 space-y-6",
-                isCollapsed ? "px-0 pl-3.5" : "px-3"
+                isCollapsed ? "px-0" : "px-3"
             )}>
                 {navStructure.map((group, groupIndex) => (
                     <div key={groupIndex} className={cn(
@@ -216,9 +203,9 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                             <button
                                                 onClick={() => toggleGroup(item.name)}
                                                 className={cn(
-                                                    "w-full flex items-center justify-between py-2 px-3 text-sm font-medium rounded-lg transition-colors group select-none",
-                                                    isAnyChildActive ? "text-primary bg-primary/5" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                                                    isCollapsed && "justify-center px-0"
+                                                    "w-full flex items-center justify-between py-3 px-4 text-sm font-medium rounded-xl transition-all group select-none",
+                                                    isAnyChildActive ? "bg-secondary text-foreground shadow-md border border-white/5" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                                                    isCollapsed && "justify-center px-0 py-3 mx-auto w-10/12"
                                                 )}
                                                 title={isCollapsed ? item.name : undefined}
                                             >
@@ -248,13 +235,14 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                                                 href={child.href}
                                                                 onClick={onMobileClose}
                                                                 className={cn(
-                                                                    "block py-1.5 px-3 text-sm rounded-md transition-colors whitespace-nowrap",
+                                                                    "flex items-center gap-3 py-1.5 px-3 text-sm rounded-md transition-colors whitespace-nowrap",
                                                                     isActive
-                                                                        ? "text-primary font-medium bg-primary/5"
+                                                                        ? "text-primary font-medium"
                                                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
                                                                 )}
                                                             >
-                                                                {t(child.translationKey, child.name)}
+                                                                {child.icon && <child.icon className="h-4 w-4 shrink-0" />}
+                                                                <span>{t(child.translationKey, child.name)}</span>
                                                             </Link>
                                                         )
                                                     })}
@@ -273,11 +261,11 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                         href={item.href}
                                         onClick={onMobileClose}
                                         className={cn(
-                                            "flex items-center py-2 px-3 text-sm font-medium rounded-lg transition-colors group relative",
+                                            "flex items-center py-3 px-4 text-sm font-medium rounded-xl transition-all group relative",
                                             isActive
-                                                ? "bg-primary text-primary-foreground shadow-sm"
+                                                ? "bg-secondary text-foreground shadow-md border border-white/5" // Floating look: Lighter bg, shadow
                                                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                                            isCollapsed && "justify-center px-0"
+                                            isCollapsed && "justify-center px-0 py-3 mx-auto w-10/12"
                                         )}
                                         title={isCollapsed ? item.name : undefined}
                                     >
@@ -285,7 +273,7 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                                             "flex items-center",
                                             isCollapsed ? "justify-center" : "gap-4"
                                         )}>
-                                            <item.icon className="h-5 w-5" />
+                                            <item.icon className={cn("h-5 w-5", isActive ? "text-primary" : "text-muted-foreground")} />
                                             {!isCollapsed && <span className="whitespace-nowrap">{t(item.translationKey ?? item.name, item.name)}</span>}
                                         </div>
                                     </Link>
@@ -301,19 +289,11 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
                 suppressHydrationWarning
                 className={cn(
                     "mt-auto border-t border-border/30 mb-6",
-                    isCollapsed ? "pb-2 pl-3.5 pr-0" : "p-3"
+                    isCollapsed ? "py-2 px-0" : "p-3"
                 )}>
                 {!isMobile && (
-                    <button
-                        onClick={toggleSidebar}
-                        className={cn(
-                            "flex items-center justify-center w-full py-2 rounded-lg text-muted-foreground hover:bg-muted/50 transition-colors mb-1",
-                            isCollapsed ? "px-0" : "px-3"
-                        )}
-                        title={isCollapsed ? "Expand" : "Collapse"}
-                    >
-                        <Menu size={20} />
-                    </button>
+                    // Toggle button moved to top
+                    null
                 )}
 
                 <AlertDialog>

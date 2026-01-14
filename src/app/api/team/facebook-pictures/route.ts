@@ -27,17 +27,32 @@ export async function GET(req: NextRequest) {
             );
         }
 
+        // Check if user is a team member of another team
+        const membershipTeam = await prisma.teamMember.findFirst({
+            where: {
+                memberEmail: session.user.email,
+                memberType: 'email',
+            },
+        });
+
+        let targetUserId = user.id;
+
+        if (membershipTeam) {
+            // User is a team member, fetch pictures from their host's team
+            targetUserId = membershipTeam.userId;
+        }
+
         // Get all Facebook team members
         const allMembers = await prisma.teamMember.findMany({
             where: {
-                userId: user.id,
+                userId: targetUserId,
             },
         });
-        
+
         console.log('All team members:', allMembers.length, allMembers);
-        
+
         const teamMembers = allMembers.filter(m => m.memberType === 'facebook' && m.facebookUserId);
-        
+
         console.log('Filtered Facebook members:', teamMembers.length);
 
         // Select only needed fields
@@ -55,9 +70,9 @@ export async function GET(req: NextRequest) {
         const membersWithPictures = await Promise.all(
             teamMembersData.map(async (member) => {
                 let pictureUrl = null;
-                
+
                 console.log('Processing member:', member.id, 'facebookUserId:', member.facebookUserId, 'hasToken:', !!member.accessToken);
-                
+
                 if (member.facebookUserId && member.accessToken) {
                     try {
                         const response = await fetch(

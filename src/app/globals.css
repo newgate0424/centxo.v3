@@ -1,5 +1,3 @@
-
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -42,35 +40,36 @@
   }
 
   .dark {
-    --background: 230 25% 10%;
-    /* Deep dark slate */
-    --foreground: 210 40% 98%;
+    --background: 240 10% 3.9%;
+    /* #09090b */
+    --foreground: 0 0% 98%;
 
-    --card: 230 25% 12%;
-    --card-foreground: 210 40% 98%;
+    --card: 240 5.9% 10%;
+    /* #18181b */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 230 25% 12%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 240 5.9% 10%;
+    /* #18181b */
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 215 80% 60%;
-    /* Brighter blue for dark mode */
-    --primary-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
 
-    --secondary: 230 20% 18%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 230 20% 18%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
 
-    --accent: 215 60% 25%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 230 20% 20%;
-    --input: 230 20% 20%;
-    --ring: 215 80% 60%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
   }
 }
 
@@ -88,22 +87,30 @@
     width: 6px;
     height: 6px;
   }
+
   .scrollbar-minimal::-webkit-scrollbar-track {
     background: transparent;
   }
+
   .scrollbar-minimal::-webkit-scrollbar-button {
     display: none;
   }
+
   .scrollbar-minimal::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.1); /* Faint */
+    background-color: rgba(0, 0, 0, 0.1);
+    /* Faint */
     border-radius: 10px;
   }
+
   .dark .scrollbar-minimal::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.1);
   }
+
   .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.2); /* Darker on hover */
+    background-color: rgba(0, 0, 0, 0.2);
+    /* Darker on hover */
   }
+
   .dark .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.2);
   }

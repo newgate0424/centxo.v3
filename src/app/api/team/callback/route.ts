@@ -51,22 +51,46 @@ export async function GET(req: NextRequest) {
 
         const fbUser = await userResponse.json();
 
-        // Check if this Facebook account is already in the team
-        const existing = await prisma.teamMember.findUnique({
-            where: { facebookUserId: fbUser.id },
+        // Resolve correct team owner (Host ID)
+        // If the current user is a member of another team, add the FB account to THAT team.
+        const userRecord = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true }
         });
 
-        if (existing) {
-            const errorUrl = returnTo.includes('?')
-                ? `${returnTo}&error=already_exists`
-                : `${returnTo}?error=already_exists`;
-            return NextResponse.redirect(new URL(errorUrl, req.url));
+        let targetHostId = userId;
+
+        if (userRecord && userRecord.email) {
+            const teamMembership = await prisma.teamMember.findFirst({
+                where: {
+                    memberEmail: userRecord.email,
+                    memberType: 'email'
+                }
+            });
+
+            if (teamMembership) {
+                targetHostId = teamMembership.userId;
+            }
         }
 
-        // Create team member
-        await prisma.teamMember.create({
-            data: {
-                userId,
+        // Create or Update team member (Upsert)
+        // This handles cases where the account was previously added to the wrong team (ghost account)
+        // or just needs token refresh. "Latest login wins" policy.
+        await prisma.teamMember.upsert({
+            where: {
+                facebookUserId: fbUser.id,
+            },
+            update: {
+                userId: targetHostId, // Update owner to correct Host (moves account if needed)
+                facebookName: fbUser.name,
+                facebookEmail: fbUser.email,
+                accessToken,
+                accessTokenExpires: new Date(Date.now() + expiresIn * 1000),
+                role: 'MEMBER',
+                updatedAt: new Date(),
+            },
+            create: {
+                userId: targetHostId,
                 facebookUserId: fbUser.id,
                 facebookName: fbUser.name,
                 facebookEmail: fbUser.email,
