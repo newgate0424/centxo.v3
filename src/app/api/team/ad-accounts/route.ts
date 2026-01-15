@@ -4,6 +4,17 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { fromBasicUnits } from '@/lib/currency-utils';
 
+// Simple in-memory cache using globalThis to survive HMR in dev
+// Key: userId, Value: { data: any, timestamp: number }
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+declare global {
+    var _adAccountCache: Record<string, { data: any, timestamp: number }> | undefined;
+}
+
+const cache = globalThis._adAccountCache ?? {};
+if (process.env.NODE_ENV !== 'production') globalThis._adAccountCache = cache;
+
 export async function GET(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -18,10 +29,10 @@ export async function GET(req: NextRequest) {
         // Get user and their team members
         const user = await prisma.user.findUnique({
             where: { email: session.user.email },
-            select: {
-                id: true,
-            },
-        });
+            include: {
+                teamMembers: true,
+            } as any,
+        }) as any;
 
         if (!user) {
             return NextResponse.json(
@@ -29,6 +40,21 @@ export async function GET(req: NextRequest) {
                 { status: 404 }
             );
         }
+
+        // Check Cache
+        const searchParams = req.nextUrl.searchParams;
+        const forceRefresh = searchParams.get('refresh') === 'true';
+        const cacheKey = user.id;
+
+        if (!forceRefresh && cache[cacheKey]) {
+            const cached = cache[cacheKey];
+            if (Date.now() - cached.timestamp < CACHE_TTL) {
+                console.log(`[team/ad-accounts] Serving from cache for user ${user.id}`);
+                return NextResponse.json(cached.data);
+            }
+        }
+
+        console.log(`[team/ad-accounts-debug] User: ${session.user.email} (ID: ${user.id})`);
 
         // Find ALL team members that belong to the same team
         // This includes finding the host and all members
@@ -41,8 +67,12 @@ export async function GET(req: NextRequest) {
             },
         });
 
+        console.log(`[team/ad-accounts-debug] Host check: Found ${teamMembers.length} members connected to user ${user.id}`);
+
         // If current user is not the host, find the host's team members
         if (teamMembers.length === 0) {
+            console.log(`[team/ad-accounts-debug] User is not a host with facebook connection. Checking if they are a member...`);
+
             // Try to find if this user is a team member themselves
             const memberRecord = await prisma.teamMember.findFirst({
                 where: {
@@ -50,10 +80,14 @@ export async function GET(req: NextRequest) {
                 },
                 select: {
                     userId: true, // This is the host's user ID
+                    id: true,
+                    memberType: true
                 },
             });
 
             if (memberRecord) {
+                console.log(`[team/ad-accounts-debug] Found member record! Host ID: ${memberRecord.userId}, Member Record ID: ${memberRecord.id}, Type: ${memberRecord.memberType}`);
+
                 // Get all team members under this host
                 teamMembers = await prisma.teamMember.findMany({
                     where: {
@@ -63,6 +97,9 @@ export async function GET(req: NextRequest) {
                         accessToken: { not: null },
                     },
                 });
+                console.log(`[team/ad-accounts-debug] Found ${teamMembers.length} facebook connections under host ${memberRecord.userId}`);
+            } else {
+                console.log(`[team/ad-accounts-debug] No member record found for email ${session.user.email}`);
             }
         }
 
@@ -75,6 +112,52 @@ export async function GET(req: NextRequest) {
 
         // Fetch ad accounts from all team members
         const allAccounts: any[] = [];
+
+        // First, fetch all businesses to use for name resolution
+        const allBusinesses: any[] = [];
+        for (const member of teamMembers) {
+            try {
+                if (!member.accessToken || (member.accessTokenExpires && new Date(member.accessTokenExpires) < new Date())) {
+                    continue;
+                }
+
+                // Optimization: Only fetch essential fields for mapping (id, name, account_id)
+                // Removed: account_status, currency, spend_cap, amount_spent to reduce API complexity cost
+                const bizResponse = await fetch(
+                    `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,client_ad_accounts{id,name,account_id}&limit=500&access_token=${member.accessToken}`
+                );
+
+                if (bizResponse.ok) {
+                    const bizData = await bizResponse.json();
+                    if (bizData.data && Array.isArray(bizData.data)) {
+                        allBusinesses.push(...bizData.data);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error fetching businesses for ${member.facebookName}:`, error);
+            }
+        }
+
+        // Create a map of business ID to business name for quick lookup
+        const businessMap = new Map();
+
+        // Also map ad account IDs to the Business that has access to them
+        const adAccountToBusinessMap = new Map();
+
+        allBusinesses.forEach(b => {
+            businessMap.set(b.id, b.name);
+
+            // If this business has client ad accounts (accounts shared to it), map them
+            if (b.client_ad_accounts && b.client_ad_accounts.data) {
+                b.client_ad_accounts.data.forEach((acc: any) => {
+                    adAccountToBusinessMap.set(acc.id, b.name); // Using 'id' which usually starts with 'act_'
+                    adAccountToBusinessMap.set(acc.account_id, b.name); // Also map simple ID just in case
+                });
+            }
+        });
+
+        console.log(`[team/ad-accounts] Business map size: ${businessMap.size}`);
+        console.log(`[team/ad-accounts] Shared accounts map size: ${adAccountToBusinessMap.size}`);
 
         for (const member of teamMembers) {
             try {
@@ -94,7 +177,7 @@ export async function GET(req: NextRequest) {
                 console.log(`[team/ad-accounts] Fetching ad accounts for: ${member.facebookName || member.id}`);
 
                 // Fetch ad accounts from this team member's Facebook account
-                const url = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_id,currency,account_status,disable_reason,spend_cap,amount_spent,timezone_name,timezone_offset,business_country_code,funding_source_details,ads.filtering([{'field':'effective_status','operator':'IN','value':['ACTIVE']}]).limit(0).summary(true)&limit=500&access_token=${member.accessToken}`;
+                const url = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_id,currency,account_status,disable_reason,spend_cap,amount_spent,timezone_name,timezone_offset,business_country_code,business{id,name},owner{id,name},funding_source_details,ads.filtering([{'field':'effective_status','operator':'IN','value':['ACTIVE']}]).limit(0).summary(true)&limit=500&access_token=${member.accessToken}`;
                 const response = await fetch(url);
 
                 if (!response.ok) {
@@ -111,10 +194,43 @@ export async function GET(req: NextRequest) {
                         const spendCapInMainUnits = fromBasicUnits(account.spend_cap, currency);
                         const amountSpentInMainUnits = fromBasicUnits(account.amount_spent, currency);
 
-                        console.log(`[team/ad-accounts] Account ${account.name} (${currency}): spend_cap=${account.spend_cap} -> ${spendCapInMainUnits}`);
+                        // Determine business name or owner name
+                        let businessName = account.business?.name || account.owner?.name;
+
+                        // If business name is missing but we have business ID, look it up
+                        if (!businessName && account.business?.id) {
+                            businessName = businessMap.get(account.business.id);
+                        }
+
+                        // Check if this account is shared to a business (using our map)
+                        if (!businessName) {
+                            // Try matching with id (act_...) or account_id
+                            const businessSharedTo = adAccountToBusinessMap.get(account.id) || adAccountToBusinessMap.get(account.account_id);
+                            if (businessSharedTo) {
+                                businessName = businessSharedTo;
+                            }
+                        }
+
+                        // If still no name, use fallbacks
+                        if (!businessName) {
+                            if (account.owner?.id) {
+                                // businessName = `(Owner ID: ${account.owner.id})`;
+                                businessName = 'Personal Account';
+                            } else if (account.business?.id) {
+                                businessName = `(Biz ID: ${account.business.id})`;
+                            } else if (account.owner) {
+                                // If owner exists but has no name (just an ID string), it's a personal account
+                                businessName = 'Personal Account';
+                            } else {
+                                businessName = 'Personal Account';
+                                // businessName = 'Unknown Source';
+                            }
+                        }
 
                         return {
                             ...account,
+                            // Flatten business name for frontend
+                            business_name: businessName,
                             // Convert from basic units (cents/satang/yen) to main units (dollars/baht/yen)
                             spend_cap: spendCapInMainUnits,
                             amount_spent: amountSpentInMainUnits,
@@ -133,10 +249,19 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        return NextResponse.json({
+        const responseData = {
             accounts: allAccounts,
             teamMembersCount: teamMembers.length,
-        });
+        };
+
+        // Save to cache
+        cache[user.id] = {
+            data: responseData,
+            timestamp: Date.now()
+        };
+
+        return NextResponse.json(responseData);
+
     } catch (error) {
         console.error('Error fetching team ad accounts:', error);
         return NextResponse.json(

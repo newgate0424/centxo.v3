@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useConfig } from '@/contexts/AdAccountContext';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, FileText, Loader2, RefreshCw, Search } from 'lucide-react';
+import { Building2, FileText, Loader2, RefreshCw, Search, Briefcase } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
@@ -22,11 +23,29 @@ export function ConfigForm() {
         pages,
         loading,
         error,
-        refreshData
+        refreshData,
+        selectedBusinesses,
+        setSelectedBusinesses,
+        toggleBusiness,
+        businesses
     } = useConfig();
+
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
+
+    // Get active tab from URL or default to 'accounts'
+    const activeTab = searchParams.get('view') || 'accounts';
+
+    const onTabChange = (val: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('view', val);
+        router.push(`${pathname}?${params.toString()}`);
+    };
 
     const [accountSearch, setAccountSearch] = useState('');
     const [pageSearch, setPageSearch] = useState('');
+    const [businessSearch, setBusinessSearch] = useState('');
 
     if (error) {
         return (
@@ -60,6 +79,12 @@ export function ConfigForm() {
     const filteredPages = pages.filter(page =>
         page.name.toLowerCase().includes(pageSearch.toLowerCase()) ||
         page.id.toLowerCase().includes(pageSearch.toLowerCase())
+    );
+
+    // Filter businesses based on search
+    const filteredBusinesses = businesses.filter(business =>
+        business.name.toLowerCase().includes(businessSearch.toLowerCase()) ||
+        business.id.toLowerCase().includes(businessSearch.toLowerCase())
     );
 
     // Select/Deselect all accounts
@@ -98,16 +123,37 @@ export function ConfigForm() {
         }
     };
 
+    // Select/Deselect all businesses
+    const toggleAllBusinesses = () => {
+        if (selectedBusinesses.length === filteredBusinesses.length) {
+            const remaining = selectedBusinesses.filter(
+                b => !filteredBusinesses.some(fb => fb.id === b.id)
+            );
+            setSelectedBusinesses(remaining);
+        } else {
+            const newSelected = [...selectedBusinesses];
+            filteredBusinesses.forEach(business => {
+                if (!newSelected.some(b => b.id === business.id)) {
+                    newSelected.push(business);
+                }
+            });
+            setSelectedBusinesses(newSelected);
+        }
+    };
+
     const allAccountsSelected = filteredAccounts.length > 0 &&
         filteredAccounts.every(account => selectedAccounts.some(acc => acc.id === account.id));
 
     const allPagesSelected = filteredPages.length > 0 &&
         filteredPages.every(page => selectedPages.some(p => p.id === page.id));
 
+    const allBusinessesSelected = filteredBusinesses.length > 0 &&
+        filteredBusinesses.every(business => selectedBusinesses.some(b => b.id === business.id));
+
     return (
         <div className="space-y-6">
-            <Tabs defaultValue="accounts" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 lg:w-96">
+            <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
+                <TabsList className="w-full h-auto flex flex-wrap lg:grid lg:grid-cols-5">
                     <TabsTrigger value="accounts" className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         Ad Accounts ({adAccounts.length})
@@ -115,6 +161,18 @@ export function ConfigForm() {
                     <TabsTrigger value="pages" className="flex items-center gap-2">
                         <FileText className="h-4 w-4" />
                         Pages ({pages.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="businesses" className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4" />
+                        Business Portfolios ({businesses.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="business-accounts" className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Accounts by Business
+                    </TabsTrigger>
+                    <TabsTrigger value="business-pages" className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Pages by Business
                     </TabsTrigger>
                 </TabsList>
 
@@ -149,16 +207,17 @@ export function ConfigForm() {
                         {/* Table Container with Horizontal Scroll */}
                         <div className="border rounded-md overflow-hidden">
                             <div className="overflow-x-auto">
-                                <div className="min-w-[800px]">
+                                <div className="min-w-[1000px]">
                                     <ScrollArea className="h-[400px]">
                                         {/* Table Header - Sticky */}
-                                        <div className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(150px,1.5fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
                                             <Checkbox
                                                 checked={allAccountsSelected}
                                                 onCheckedChange={toggleAllAccounts}
                                                 className="mt-0.5"
                                             />
                                             <span>Name</span>
+                                            <span>Business Account</span>
                                             <span>ID</span>
                                             <span>Owner</span>
                                             <span>Status</span>
@@ -201,13 +260,14 @@ export function ConfigForm() {
                                                         <div
                                                             key={account.id}
                                                             onClick={() => toggleAccount(account)}
-                                                            className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(150px,1.5fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                                         >
                                                             <Checkbox
                                                                 checked={isSelected}
                                                                 onCheckedChange={() => toggleAccount(account)}
                                                             />
-                                                            <span className="font-medium text-sm truncate">{account.name}</span>
+                                                            <span className="font-medium text-sm truncate" title={account.name}>{account.name}</span>
+                                                            <span className="text-sm text-muted-foreground truncate" title={account.business_name || '-'}>{account.business_name || '-'}</span>
                                                             <span className="text-sm text-muted-foreground truncate">{account.account_id}</span>
                                                             <span className="text-sm text-muted-foreground truncate">{(account as any)._source?.facebookName || 'Unknown'}</span>
                                                             <div className="flex items-center gap-2">
@@ -263,7 +323,7 @@ export function ConfigForm() {
                                 <div className="min-w-[800px]">
                                     <ScrollArea className="h-[400px]">
                                         {/* Table Header - Sticky */}
-                                        <div className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_minmax(140px,1fr)_140px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
                                             <Checkbox
                                                 checked={allPagesSelected}
                                                 onCheckedChange={toggleAllPages}
@@ -303,7 +363,7 @@ export function ConfigForm() {
                                                         <div
                                                             key={page.id}
                                                             onClick={() => togglePage(page)}
-                                                            className="grid grid-cols-[30px_minmax(250px,2fr)_180px_180px_140px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_minmax(140px,1fr)_140px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                                         >
                                                             <Checkbox
                                                                 checked={isSelected}
@@ -334,6 +394,325 @@ export function ConfigForm() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="businesses" className="mt-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                {selectedBusinesses.length} of {businesses.length} selected
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshData(true)}
+                                className="h-8"
+                            >
+                                <RefreshCw className="h-3 w-3 mr-2" />
+                                Refresh
+                            </Button>
+                        </div>
+
+                        {/* Search Input */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search business portfolios..."
+                                value={businessSearch}
+                                onChange={(e) => setBusinessSearch(e.target.value)}
+                                className="pl-9"
+                            />
+                        </div>
+
+                        {/* Table Container with Horizontal Scroll */}
+                        <div className="border rounded-md overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <div className="min-w-[900px]">
+                                    <ScrollArea className="h-[400px]">
+                                        {/* Table Header - Sticky */}
+                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_160px_100px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                            <Checkbox
+                                                checked={allBusinessesSelected}
+                                                onCheckedChange={toggleAllBusinesses}
+                                                className="mt-0.5"
+                                            />
+                                            <span>Name</span>
+                                            <span>ID</span>
+                                            <span>Verification</span>
+                                            <span>Profile</span>
+                                        </div>
+                                        {filteredBusinesses.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-40 text-center">
+                                                <Briefcase className="h-12 w-12 text-muted-foreground mb-2" />
+                                                <p className="text-sm text-muted-foreground">
+                                                    {businessSearch ? 'No matching portfolios found' : 'No business portfolios found'}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="divide-y">
+                                                {filteredBusinesses.map((business) => {
+                                                    const isSelected = selectedBusinesses.some(b => b.id === business.id);
+                                                    const verificationStatus = business.verification_status || 'unknown';
+
+                                                    return (
+                                                        <div
+                                                            key={business.id}
+                                                            onClick={() => toggleBusiness(business)}
+                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_160px_100px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                        >
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => toggleBusiness(business)}
+                                                            />
+                                                            <span className="font-medium text-sm truncate">{business.name}</span>
+                                                            <span className="text-sm text-muted-foreground truncate">{business.id}</span>
+                                                            <span className="text-sm text-muted-foreground truncate">
+                                                                {verificationStatus === 'verified' ? (
+                                                                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Verified</Badge>
+                                                                ) : (
+                                                                    <Badge variant="secondary">{verificationStatus}</Badge>
+                                                                )}
+                                                            </span>
+                                                            <div className="flex items-center">
+                                                                {business.profile_picture_uri ? (
+                                                                    <img
+                                                                        src={business.profile_picture_uri}
+                                                                        alt={business.name}
+                                                                        className="w-8 h-8 rounded-full border"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs">
+                                                                        {business.name.substring(0, 2).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </ScrollArea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="business-accounts" className="mt-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                Ad Accounts grouped by Business Portfolio
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshData(true)}
+                                className="h-8"
+                            >
+                                <RefreshCw className="h-3 w-3 mr-2" />
+                                Refresh
+                            </Button>
+                        </div>
+
+                        {businesses.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-40 text-center border rounded-md">
+                                <Briefcase className="h-12 w-12 text-muted-foreground mb-2" />
+                                <p className="text-sm text-muted-foreground">
+                                    No business portfolios found
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {(() => {
+                                    // Group ad accounts by business_name
+                                    const accountsByBusiness = adAccounts.reduce((acc, account) => {
+                                        const businessName = account.business_name || 'Unknown Business';
+                                        if (!acc[businessName]) {
+                                            acc[businessName] = [];
+                                        }
+                                        acc[businessName].push(account);
+                                        return acc;
+                                    }, {} as Record<string, typeof adAccounts>);
+
+                                    // Convert to array and sort by business name
+                                    const businessGroups = Object.entries(accountsByBusiness)
+                                        .sort(([a], [b]) => a.localeCompare(b));
+
+                                    return businessGroups.map(([businessName, businessAccounts]) => {
+                                        // Find matching business from the businesses list
+                                        const matchingBusiness = businesses.find(b => b.name === businessName);
+
+                                        return (
+                                            <div key={businessName} className="border rounded-md overflow-hidden">
+                                                <div className="bg-muted px-4 py-3 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        {matchingBusiness?.profile_picture_uri ? (
+                                                            <img
+                                                                src={matchingBusiness.profile_picture_uri}
+                                                                alt={businessName}
+                                                                className="w-8 h-8 rounded-full border"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-medium">
+                                                                {businessName.substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <h3 className="font-medium">{businessName}</h3>
+                                                            {matchingBusiness && (
+                                                                <p className="text-xs text-muted-foreground">{matchingBusiness.id}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <Badge variant="secondary">
+                                                        {businessAccounts.length} account{businessAccounts.length !== 1 ? 's' : ''}
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="divide-y">
+                                                    {businessAccounts.map((account) => {
+                                                        const status = account.account_status === 1 ? 'ACTIVE' :
+                                                            account.account_status === 2 ? 'DISABLED' :
+                                                                account.account_status === 3 ? 'UNSETTLED' : 'UNKNOWN';
+
+                                                        return (
+                                                            <div key={account.id} className="px-4 py-3 hover:bg-accent/50 transition-colors">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex-1">
+                                                                        <p className="font-medium text-sm">{account.name}</p>
+                                                                        <p className="text-xs text-muted-foreground">ID: {account.account_id}</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={`w-2 h-2 rounded-full ${status === 'ACTIVE' ? 'bg-green-500' :
+                                                                            status === 'DISABLED' ? 'bg-red-500' :
+                                                                                status === 'UNSETTLED' ? 'bg-yellow-500' : 'bg-gray-500'
+                                                                            }`} />
+                                                                        <span className="text-sm">
+                                                                            {status === 'ACTIVE' ? 'Active' :
+                                                                                status === 'DISABLED' ? 'Disabled' :
+                                                                                    status === 'UNSETTLED' ? 'Unsettled' : status}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )}
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="business-pages" className="mt-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                Pages grouped by Business Portfolio
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => refreshData(true)}
+                                className="h-8"
+                            >
+                                <RefreshCw className="h-3 w-3 mr-2" />
+                                Refresh
+                            </Button>
+                        </div>
+
+                        {pages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-40 text-center border rounded-md">
+                                <FileText className="h-12 w-12 text-muted-foreground mb-2" />
+                                <p className="text-sm text-muted-foreground">
+                                    No pages found
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {(() => {
+                                    // Group pages by business_name
+                                    const pagesByBusiness = pages.reduce((acc, page) => {
+                                        const businessName = page.business_name || 'Unknown Business';
+                                        if (!acc[businessName]) {
+                                            acc[businessName] = [];
+                                        }
+                                        acc[businessName].push(page);
+                                        return acc;
+                                    }, {} as Record<string, typeof pages>);
+
+                                    // Convert to array and sort by business name
+                                    const businessGroups = Object.entries(pagesByBusiness)
+                                        .sort(([a], [b]) => a.localeCompare(b));
+
+                                    return businessGroups.map(([businessName, businessPages]) => {
+                                        // Find matching business from the businesses list
+                                        const matchingBusiness = businesses.find(b => b.name === businessName);
+
+                                        return (
+                                            <div key={businessName} className="border rounded-md overflow-hidden">
+                                                <div className="bg-muted px-4 py-3 flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        {matchingBusiness?.profile_picture_uri ? (
+                                                            <img
+                                                                src={matchingBusiness.profile_picture_uri}
+                                                                alt={businessName}
+                                                                className="w-8 h-8 rounded-full border"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-medium">
+                                                                {businessName.substring(0, 2).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <h3 className="font-medium">{businessName}</h3>
+                                                            {matchingBusiness && (
+                                                                <p className="text-xs text-muted-foreground">{matchingBusiness.id}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <Badge variant="secondary">
+                                                        {businessPages.length} page{businessPages.length !== 1 ? 's' : ''}
+                                                    </Badge>
+                                                </div>
+
+                                                <div className="divide-y">
+                                                    {businessPages.map((page) => (
+                                                        <div key={page.id} className="px-4 py-3 hover:bg-accent/50 transition-colors">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                                                                        {page.picture?.data?.url ? (
+                                                                            <img src={page.picture.data.url} alt={page.name} className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            <FileText className="h-5 w-5 text-muted-foreground" />
+                                                                        )}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-medium text-sm">{page.name}</p>
+                                                                        <p className="text-xs text-muted-foreground">ID: {page.id}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        {page.access_token ? 'Connected' : 'No Access'}
+                                                                    </Badge>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )}
                     </div>
                 </TabsContent>
             </Tabs>

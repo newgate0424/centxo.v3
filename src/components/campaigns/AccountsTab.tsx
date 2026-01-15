@@ -41,6 +41,7 @@ interface AdAccount {
     id: string;
     name: string;
     account_id: string;
+    businessName?: string;
     status: string | number; // Can be string or number from API
     disable_reason?: string;
     activeAds: number;
@@ -265,6 +266,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                         id: acc.id,
                         name: acc.name,
                         account_id: acc.account_id,
+                        businessName: fbAccount?.business_name || '-',
                         status: fbAccount?.account_status ?? 'UNKNOWN',
                         disable_reason: fbAccount?.disable_reason,
                         activeAds: fbAccount?.ads?.summary?.total_count || 0,
@@ -420,6 +422,9 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
         <TableRow className="border-b border-gray-200 dark:border-zinc-800">
 
             <TableCell className="px-4 py-2">
+                <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
+            </TableCell>
+            <TableCell className="px-4 py-2">
                 <div className="space-y-2">
                     <div className="h-4 w-32 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
                     <div className="h-3 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
@@ -461,6 +466,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                     <Table className="min-w-max">
                         <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                             <TableRow>
+                                <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.businessAccount', 'Business Account')}</TableHead>
                                 <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.accountName')}</TableHead>
                                 <TableHead className="px-4 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.status')}</TableHead>
                                 <TableHead className="px-4 py-2 text-center text-sm font-semibold text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-zinc-900">{t('accounts.table.activeAds', 'Active Ads')}</TableHead>
@@ -518,6 +524,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                     <Table className="min-w-max">
                         <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                             <TableRow>
+                                <SortableHeader columnKey="businessName" label={t('accounts.table.businessAccount', 'Business Account')} align="left" className="max-w-[200px]" />
                                 <SortableHeader columnKey="name" label={t('accounts.table.accountName')} align="left" className="max-w-[280px]" />
                                 <SortableHeader columnKey="status" label={t('accounts.table.status')} align="left" className="max-w-[280px]" />
                                 <SortableHeader columnKey="activeAds" label={t('accounts.table.activeAds', 'Active Ads')} align="center" className="max-w-[280px]" />
@@ -537,6 +544,12 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                 a.account_id.includes(searchQuery)
                             )).map((account, index) => (
                                 <TableRow key={account.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleSelectOne(account.id, !selectedIds.has(account.id))}>
+                                    <TableCell className="px-4 py-2">
+                                        <div className="text-sm text-gray-900 dark:text-gray-100 font-medium truncate max-w-[200px]" title={account.businessName}>
+                                            {account.businessName}
+                                        </div>
+                                    </TableCell>
+
 
                                     <TableCell className="px-4 py-2">
                                         <div className="flex items-center gap-2 group">
@@ -699,7 +712,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                             ))}
                             {accounts.length === 0 && !loading && (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-900/50">
+                                    <TableCell colSpan={10} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-zinc-900/50">
                                         {t('accounts.noAccounts', 'No accounts found')}
                                     </TableCell>
                                 </TableRow>

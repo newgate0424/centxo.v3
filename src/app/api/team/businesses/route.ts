@@ -8,11 +8,11 @@ import { prisma } from '@/lib/prisma';
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 declare global {
-    var _pagesCache: Record<string, { data: any, timestamp: number }> | undefined;
+    var _businessCache: Record<string, { data: any, timestamp: number }> | undefined;
 }
 
-const cache = globalThis._pagesCache ?? {};
-if (process.env.NODE_ENV !== 'production') globalThis._pagesCache = cache;
+const cache = globalThis._businessCache ?? {};
+if (process.env.NODE_ENV !== 'production') globalThis._businessCache = cache;
 
 export async function GET(req: NextRequest) {
     try {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
         if (!forceRefresh && cache[cacheKey]) {
             const cached = cache[cacheKey];
             if (Date.now() - cached.timestamp < CACHE_TTL) {
-                console.log(`[team/pages] Serving from cache for user ${user.id}`);
+                console.log(`[team/businesses] Serving from cache for user ${user.id}`);
                 return NextResponse.json(cached.data);
             }
         }
@@ -89,48 +89,11 @@ export async function GET(req: NextRequest) {
 
         // If no team members, return empty
         if (teamMembers.length === 0) {
-            return NextResponse.json({ pages: [] });
+            return NextResponse.json({ businesses: [] });
         }
 
-        // Fetch pages from all team members
-        const allPages: any[] = [];
-
-        // First, fetch all businesses to use for name resolution
-        // Also map page IDs to the Business that has access to them
-        const pageToBusinessMap = new Map();
-        const businessMap = new Map();
-
-        for (const member of teamMembers) {
-            try {
-                if (member.accessTokenExpires && new Date(member.accessTokenExpires) < new Date()) {
-                    continue;
-                }
-
-                const bizResponse = await fetch(
-                    `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,client_pages{id,name}&limit=500&access_token=${member.accessToken}`
-                );
-
-                if (bizResponse.ok) {
-                    const bizData = await bizResponse.json();
-                    if (bizData.data && Array.isArray(bizData.data)) {
-                        bizData.data.forEach((b: any) => {
-                            businessMap.set(b.id, b.name);
-
-                            // If this business has client pages (pages shared to it), map them
-                            if (b.client_pages && b.client_pages.data) {
-                                b.client_pages.data.forEach((p: any) => {
-                                    pageToBusinessMap.set(p.id, b.name);
-                                });
-                            }
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error(`Error fetching businesses for ${member.facebookName}:`, error);
-            }
-        }
-
-        console.log(`[team/pages] Maps size - Business: ${businessMap.size}, Shared Pages: ${pageToBusinessMap.size}`);
+        // Fetch businesses from all team members
+        const allBusinesses: any[] = [];
 
         for (const member of teamMembers) {
             try {
@@ -140,45 +103,24 @@ export async function GET(req: NextRequest) {
                     continue;
                 }
 
-                // Fetch pages from this team member's Facebook account
+                // Fetch businesses from this team member's Facebook account
                 const response = await fetch(
-                    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,picture,access_token,business&limit=500&access_token=${member.accessToken}`
+                    `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,profile_picture_uri,verification_status,permitted_roles,permitted_tasks&limit=500&access_token=${member.accessToken}`
                 );
 
                 if (!response.ok) {
-                    console.error(`Failed to fetch pages for ${member.facebookName}`);
+                    console.error(`Failed to fetch businesses for ${member.facebookName}`);
                     continue;
                 }
 
                 const data = await response.json();
 
                 if (data.data && Array.isArray(data.data)) {
-                    // Add source info and resolve business to each page
-                    const pagesWithSource = data.data.map((page: any) => {
-                        let businessName = page.business?.name;
-
-                        // If no direct business name, try lookup by ID
-                        if (!businessName && page.business?.id) {
-                            businessName = businessMap.get(page.business.id);
-                        }
-
-                        // If still no name, check if shared to a business
-                        if (!businessName) {
-                            businessName = pageToBusinessMap.get(page.id);
-                        }
-
-                        // Fallback
-                        if (!businessName) {
-                            if (page.business?.id) {
-                                businessName = `(Biz ID: ${page.business.id})`;
-                            } else {
-                                businessName = 'Personal Page';
-                            }
-                        }
-
+                    // Add source info to each business
+                    const businessesWithSource = data.data.map((business: any) => {
+                        console.log(`[businesses] ${business.name}: permitted_roles =`, business.permitted_roles, ', permitted_tasks =', business.permitted_tasks);
                         return {
-                            ...page,
-                            business_name: businessName,
+                            ...business,
                             _source: {
                                 teamMemberId: member.id,
                                 facebookName: member.facebookName,
@@ -187,15 +129,15 @@ export async function GET(req: NextRequest) {
                         };
                     });
 
-                    allPages.push(...pagesWithSource);
+                    allBusinesses.push(...businessesWithSource);
                 }
             } catch (error) {
-                console.error(`Error fetching pages for team member ${member.facebookName}:`, error);
+                console.error(`Error fetching businesses for team member ${member.facebookName}:`, error);
             }
         }
 
         const responseData = {
-            pages: allPages,
+            businesses: allBusinesses,
             teamMembersCount: teamMembers.length,
         };
 
@@ -207,9 +149,9 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json(responseData);
     } catch (error) {
-        console.error('Error fetching team pages:', error);
+        console.error('Error fetching team businesses:', error);
         return NextResponse.json(
-            { error: 'Failed to fetch pages' },
+            { error: 'Failed to fetch businesses' },
             { status: 500 }
         );
     }

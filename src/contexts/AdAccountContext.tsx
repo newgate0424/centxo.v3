@@ -24,6 +24,7 @@ interface AdAccount {
   disable_reason?: number;
   spend_cap?: string | number;
   amount_spent?: string | number;
+  business_name?: string;
   _source?: {
     teamMemberId?: string;
     facebookName?: string;
@@ -35,6 +36,26 @@ interface Page {
   id: string;
   name: string;
   access_token?: string;
+  business_name?: string;
+  picture?: {
+    data: {
+      url: string;
+    }
+  };
+  _source?: {
+    teamMemberId?: string;
+    facebookName?: string;
+    facebookUserId?: string;
+  };
+}
+
+interface Business {
+  id: string;
+  name: string;
+  profile_picture_uri?: string;
+  verification_status?: string;
+  permitted_roles?: string[];
+  permitted_tasks?: string[];
   _source?: {
     teamMemberId?: string;
     facebookName?: string;
@@ -56,6 +77,12 @@ interface ConfigContextType {
   setSelectedPages: (pages: Page[]) => void;
   togglePage: (page: Page) => void;
   pages: Page[];
+
+  // Businesses
+  selectedBusinesses: Business[];
+  setSelectedBusinesses: (businesses: Business[]) => void;
+  toggleBusiness: (business: Business) => void;
+  businesses: Business[];
 
   // Loading states
   loading: boolean;
@@ -127,10 +154,20 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     return [];
   });
 
+  const [selectedBusinesses, setSelectedBusinessesState] = useState<Business[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('selectedBusinesses');
+        return saved ? JSON.parse(saved) : [];
+      } catch (e) { return []; }
+    }
+    return [];
+  });
+
   const [adAccounts, setAdAccounts] = useState<AdAccount[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('adPilotCache_v2');
+        const cached = localStorage.getItem('adPilotCache_v4');
         if (cached) {
           return JSON.parse(cached).accounts || [];
         }
@@ -142,9 +179,21 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [pages, setPages] = useState<Page[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('adPilotCache_v2');
+        const cached = localStorage.getItem('adPilotCache_v4');
         if (cached) {
           return JSON.parse(cached).pages || [];
+        }
+      } catch (e) { }
+    }
+    return [];
+  });
+
+  const [businesses, setBusinesses] = useState<Business[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('adPilotCache_v4');
+        if (cached) {
+          return JSON.parse(cached).businesses || [];
         }
       } catch (e) { }
     }
@@ -154,7 +203,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [lastFetched, setLastFetched] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('adPilotCache_v2');
+        const cached = localStorage.getItem('adPilotCache_v4');
         if (cached) {
           return JSON.parse(cached).timestamp || 0;
         }
@@ -184,8 +233,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Persist cache helper
-  const saveToCache = (accounts: AdAccount[], p: Page[], timestamp: number) => {
-    localStorage.setItem('adPilotCache_v2', JSON.stringify({ accounts, pages: p, timestamp }));
+  const saveToCache = (accounts: AdAccount[], p: Page[], b: Business[], timestamp: number) => {
+    localStorage.setItem('adPilotCache_v4', JSON.stringify({ accounts, pages: p, businesses: b, timestamp }));
   };
 
   const handleApiError = async (response: Response) => {
@@ -205,7 +254,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   };
 
   // Fetch ad accounts
-  const fetchAdAccounts = async () => {
+  const fetchAdAccounts = async (force: boolean = false) => {
     if (isRateLimited) {
       console.warn("Request blocked by circuit breaker (Rate Limited)");
       if (adAccounts.length > 0) return adAccounts;
@@ -214,7 +263,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
     try {
       // Use team-based endpoint instead of old MetaAccount endpoint
-      const res = await fetch('/api/team/ad-accounts');
+      const url = force ? '/api/team/ad-accounts?refresh=true' : '/api/team/ad-accounts';
+      const res = await fetch(url);
       if (!res.ok) {
         if (adAccounts.length > 0) {
           try { await handleApiError(res); } catch (e) { console.warn(e); }
@@ -250,7 +300,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         // Some selections were invalid (removed from FB?), update to only valid ones
         // If validSelectedAccounts is empty here, it means all selected accounts are gone.
         // We update to empty list, which is correct behavior (don't force all).
-        console.log('Updating to valid ad accounts only');
+        console.log('Updating selected accounts to valid subset', validSelectedAccounts);
         setSelectedAccounts(validSelectedAccounts);
       }
 
@@ -262,7 +312,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   };
 
   // Fetch pages
-  const fetchPages = async () => {
+  const fetchPages = async (force: boolean = false) => {
     if (isRateLimited) {
       if (pages.length > 0) return pages;
       return [];
@@ -270,7 +320,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
     try {
       // Use team-based endpoint instead of old MetaAccount endpoint
-      const res = await fetch('/api/team/pages');
+      const url = force ? '/api/team/pages?refresh=true' : '/api/team/pages';
+      const res = await fetch(url);
       if (!res.ok) {
         if (pages.length > 0) {
           try { await handleApiError(res); } catch (e) { console.warn(e); }
@@ -282,12 +333,54 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       const p = data.pages || [];
       setPages(p);
 
-      if (selectedPages.length === 0 && p.length > 0) {
+      // Auto-select pages logic similar to accounts...
+      const validSelectedPages = selectedPages.filter(selected =>
+        p.some((page: Page) => page.id === selected.id)
+      );
+
+      const hasSavedSelection = typeof window !== 'undefined' && localStorage.getItem('selectedPages') !== null;
+
+      if (validSelectedPages.length === 0 && p.length > 0 && !hasSavedSelection) {
         setSelectedPages(p);
+      } else if (validSelectedPages.length !== selectedPages.length) {
+        setSelectedPages(validSelectedPages);
       }
       return p;
     } catch (error) {
       console.error("Error fetching pages:", error);
+      throw error;
+    }
+  };
+
+  // Fetch businesses
+  const fetchBusinesses = async (force: boolean = false) => {
+    if (isRateLimited) {
+      if (businesses.length > 0) return businesses;
+      return [];
+    }
+
+    try {
+      const url = force ? '/api/team/businesses?refresh=true' : '/api/team/businesses';
+      const res = await fetch(url);
+      if (!res.ok) {
+        if (businesses.length > 0) {
+          try { await handleApiError(res); } catch (e) { console.warn(e); }
+          return businesses;
+        }
+        await handleApiError(res);
+      }
+      const data = await res.json();
+      const b = data.businesses || [];
+      setBusinesses(b);
+
+      // Auto-select if first load and no selection
+      if (selectedBusinesses.length === 0 && b.length > 0) {
+        // Just an example logic, typically maybe we don't auto-select businesses?
+        // Let's keep it empty by default for now unless user wants otherwise.
+      }
+      return b;
+    } catch (error) {
+      console.error("Error fetching businesses:", error);
       throw error;
     }
   };
@@ -303,18 +396,19 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const [accounts, p] = await Promise.all([
-        fetchAdAccounts(),
-        fetchPages()
+      const [accounts, p, b] = await Promise.all([
+        fetchAdAccounts(force),
+        fetchPages(force),
+        fetchBusinesses(force)
       ]);
 
       const newTime = Date.now();
       setLastFetched(newTime);
 
-      if (accounts && p) {
-        saveToCache(accounts, p, newTime);
+      if (accounts && p && b) {
+        saveToCache(accounts, p, b, newTime);
       } else {
-        saveToCache(adAccounts, pages, newTime);
+        saveToCache(adAccounts, pages, businesses, newTime);
       }
 
     } catch (err) {
@@ -355,6 +449,11 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('selectedPages', JSON.stringify(p));
   };
 
+  const setSelectedBusinesses = (b: Business[]) => {
+    setSelectedBusinessesState(b);
+    localStorage.setItem('selectedBusinesses', JSON.stringify(b));
+  };
+
   const toggleAccount = (account: AdAccount) => {
     const isSelected = selectedAccounts.some(acc => acc.id === account.id);
     let newSelected: AdAccount[];
@@ -386,6 +485,19 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     setSelectedPages(newSelected);
   };
 
+  const toggleBusiness = (business: Business) => {
+    const isSelected = selectedBusinesses.some(b => b.id === business.id);
+    let newSelected: Business[];
+
+    if (isSelected) {
+      newSelected = selectedBusinesses.filter(b => b.id !== business.id);
+    } else {
+      newSelected = [...selectedBusinesses, business];
+    }
+
+    setSelectedBusinesses(newSelected);
+  };
+
   return (
     <ConfigContext.Provider
       value={{
@@ -405,6 +517,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
         setSelectedPages,
         togglePage,
         pages,
+        selectedBusinesses,
+        setSelectedBusinesses,
+        toggleBusiness,
+        businesses,
         loading,
         error,
         refreshData
