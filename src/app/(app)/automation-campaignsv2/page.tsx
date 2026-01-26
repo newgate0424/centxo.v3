@@ -307,6 +307,9 @@ export default function AutomationCampaignsV2Page() {
         setAnalyzing(true);
         const formData = new FormData();
 
+        // Always send video information as fallback/primary
+        // The backend will prioritize thumbnails if they are successfully received,
+        // but needs the video URL if thumbnails fail to upload/fetch.
         if (uploadedVideoUrl) {
             console.log('Using already uploaded video URL:', uploadedVideoUrl);
             formData.append('existingMediaPath', uploadedVideoUrl);

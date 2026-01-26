@@ -98,8 +98,10 @@ export async function POST(request: NextRequest) {
         const productContext = formData.get('productContext') as string || '';
         const adSetCount = parseInt(formData.get('adSetCount') as string) || 3;
 
-        if (!file && !existingMediaPath) {
-            return NextResponse.json({ error: 'No file or existing media path provided' }, { status: 400 });
+        const thumbnailFiles = formData.getAll('thumbnails') as File[]; // Check early
+
+        if (!file && !existingMediaPath && (!thumbnailFiles || thumbnailFiles.length === 0)) {
+            return NextResponse.json({ error: 'No media provided (file, path, or thumbnails required)' }, { status: 400 });
         }
 
         let filePath = '';
@@ -147,7 +149,7 @@ export async function POST(request: NextRequest) {
         let allThumbnailsDataUris: string[] = [];
 
         // PRIORITY 1: Use ALL Client-Provided Thumbnails if available (Best for comprehensive analysis)
-        const thumbnailFiles = formData.getAll('thumbnails') as File[];
+        // thumbnailFiles is already declared above
         if (thumbnailFiles && thumbnailFiles.length > 0) {
             console.log(`📸 Using ${thumbnailFiles.length} client-provided thumbnails for comprehensive analysis`);
 

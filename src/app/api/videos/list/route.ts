@@ -92,9 +92,52 @@ export async function GET(request: NextRequest) {
         });
 
         const data = await s3Client.send(command);
-        debugLogs.push(`R2 Objects found: ${data.Contents?.length || 0}`);
+        console.log(`R2: Found ${data.Contents?.length || 0} videos`);
 
         if (data.Contents) {
+          // OPTIMIZATION: Fetch ALL thumbnails for this user in ONE request
+          // Instead of N request per video
+          const thumbnailPrefix = `thumbnails/${userId}/`;
+          let allUserThumbnails: Record<string, string[]> = {};
+
+          try {
+            console.log('R2: Bulk fetching thumbnails...');
+            const thumbCommand = new ListObjectsV2Command({
+              Bucket: bucketName,
+              Prefix: thumbnailPrefix,
+            });
+            const thumbData = await s3Client.send(thumbCommand);
+
+            if (thumbData.Contents) {
+              console.log(`R2: Found ${thumbData.Contents.length} total thumbnails for user`);
+              // DEBUG: Log first 3 keys to verify structure
+              thumbData.Contents.slice(0, 3).forEach(t => console.log('DEBUG Key:', t.Key));
+
+              thumbData.Contents.forEach(item => {
+                if (!item.Key) return;
+
+                // Handle potential leading slash
+                const key = item.Key.startsWith('/') ? item.Key.slice(1) : item.Key;
+
+                // Key format: thumbnails/userId/videoId/thumb_X.jpg
+                const parts = key.split('/');
+                // parts[0]=thumbnails, parts[1]=userId, parts[2]=videoId, parts[3]=filename
+
+                if (parts.length >= 4 && parts[0] === 'thumbnails') {
+                  const vId = parts[2];
+                  if (!allUserThumbnails[vId]) allUserThumbnails[vId] = [];
+                  allUserThumbnails[vId].push(`/api/r2/${item.Key}`); // Use original key for URL
+                } else {
+                  // DEBUG: Log skipped keys
+                  console.log('Skipped Key (Format mismatch):', key, 'Parts:', parts);
+                }
+              });
+            }
+            console.log(`R2: Mapped thumbnails for ${Object.keys(allUserThumbnails).length} videos. Sample specific videoId: ${Object.keys(allUserThumbnails)[0] || 'none'}`);
+          } catch (e) {
+            console.warn('R2: Failed to bulk list thumbnails', e);
+          }
+
           for (const item of data.Contents) {
             if (item.Key && item.Size && item.LastModified) {
 
@@ -107,27 +150,12 @@ export async function GET(request: NextRequest) {
                 const fileName = item.Key.split('/').pop() || item.Key;
                 const proxyUrl = `/api/r2/${item.Key}`;
 
-                // Check for thumbnails
+                // Check for thumbnails from memory map
                 const videoId = fileName.split('.')[0]; // e.g., "video_123" from "video_123.mp4"
-                const thumbnailPrefix = `thumbnails/${userId}/${videoId}/`;
+                let thumbnailUrls = allUserThumbnails[videoId] || [];
 
-                let thumbnailUrls: string[] = [];
-                try {
-                  const thumbCommand = new ListObjectsV2Command({
-                    Bucket: bucketName,
-                    Prefix: thumbnailPrefix,
-                  });
-                  const thumbData = await s3Client.send(thumbCommand);
-
-                  if (thumbData.Contents && thumbData.Contents.length > 0) {
-                    thumbnailUrls = thumbData.Contents
-                      .filter(thumb => thumb.Key)
-                      .map(thumb => `/api/r2/${thumb.Key}`)
-                      .sort(); // Sort to maintain order (thumb-0, thumb-1, etc.)
-                  }
-                } catch (thumbError) {
-                  console.error('Failed to fetch thumbnails for:', fileName, thumbError);
-                }
+                // Sort thumbnails naturally
+                thumbnailUrls.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
                 mediaFiles.push({
                   name: fileName,
