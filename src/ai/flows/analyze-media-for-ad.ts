@@ -17,6 +17,7 @@ const AnalyzeMediaInputSchema = z.object({
    additionalFrames: z.array(z.string()).optional().describe('List of additional data URIs (frames/thumbnails) for comprehensive analysis'),
    productContext: z.string().optional().describe('Additional context about the product/service (optional)'),
    isVideoFile: z.boolean().optional().describe('Whether the mediaUrl is a local video file path (not data URI)'),
+   mimeType: z.string().optional().describe('MIME type of the file (required if mediaUrl is a file path)'),
    adSetCount: z.number().optional().describe('Number of AdSets requesting unique targets'),
    randomContext: z.string().optional().describe('Random seed string to ensure high entropy/uniqueness'),
    pastSuccessExamples: z.array(z.string()).optional().describe('List of past successful ad copies or analysis notes to learn from')
@@ -60,7 +61,7 @@ const prompt = ai.definePrompt({
    name: 'analyzeMediaPrompt',
    input: { schema: AnalyzeMediaInputSchema },
    output: { schema: AnalyzeMediaOutputSchema },
-   prompt: `{{media url=mediaUrl}}
+   prompt: `{{media url=mediaUrl contentType=mimeType}}
 {{#if additionalFrames}}
 {{#each additionalFrames}}
 {{media url=this}}
@@ -333,13 +334,76 @@ const analyzeMediaFlow = ai.defineFlow(
 
       while (attempt < maxRetries) {
          try {
-            // If it's a video file, use Gemini's native video support
-            if (input.isVideoFile && input.mediaType === 'video') {
-               const { output } = await prompt({
-                  ...input,
-                  mediaUrl: input.mediaUrl, // Pass file path directly to Gemini
-               });
-               return output!;
+            // If it's a video file, we MUST upload it to Google AI File Manager first
+            // Works for local paths and remote URLs (R2/S3) by downloading them
+            if (input.mediaType === 'video' && input.mediaUrl) {
+               try {
+                  const { GoogleAIFileManager } = await import("@google/generative-ai/server");
+                  const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
+                  const fs = await import('fs');
+                  const path = await import('path');
+                  const os = await import('os');
+
+                  if (!apiKey) throw new Error("Missing GOOGLE_GENAI_API_KEY");
+
+                  const fileManager = new GoogleAIFileManager(apiKey);
+                  let uploadPath = input.mediaUrl;
+                  let isTempDownload = false;
+
+                  // If it's a remote URL (http/https), download it first
+                  // (Google AI File Manager requires a local file path)
+                  if (input.mediaUrl.startsWith('http')) {
+                     console.log(`[AI] Downloading remote video from: ${input.mediaUrl}`);
+                     const response = await fetch(input.mediaUrl);
+                     if (!response.ok) throw new Error(`Failed to download video: ${response.statusText}`);
+
+                     const buffer = Buffer.from(await response.arrayBuffer());
+                     const tempDir = os.tmpdir();
+                     const tempFile = path.join(tempDir, `temp_video_${Date.now()}.mp4`);
+                     await fs.promises.writeFile(tempFile, buffer);
+
+                     uploadPath = tempFile;
+                     isTempDownload = true;
+                     console.log(`[AI] Video downloaded to temp: ${uploadPath}`);
+                  }
+
+                  console.log(`[AI] Uploading video to Google AI: ${uploadPath}`);
+                  const uploadResult = await fileManager.uploadFile(uploadPath, {
+                     mimeType: input.mimeType || 'video/mp4',
+                     displayName: "Ad Video Analysis"
+                  });
+
+                  console.log(`[AI] Video uploaded successfully. URI: ${uploadResult.file.uri}`);
+
+                  // Wait for file to be active (processing)
+                  let file = await fileManager.getFile(uploadResult.file.name);
+                  let waitCount = 0;
+                  while (file.state === "PROCESSING" && waitCount < 30) { // Max 60s
+                     console.log('[AI] Processing video...');
+                     await new Promise(resolve => setTimeout(resolve, 2000));
+                     file = await fileManager.getFile(uploadResult.file.name);
+                     waitCount++;
+                  }
+
+                  if (isTempDownload) {
+                     await fs.promises.unlink(uploadPath).catch(() => { });
+                  }
+
+                  if (file.state === "FAILED") {
+                     throw new Error("Video processing failed by Google AI");
+                  }
+
+                  // Use the Google URI
+                  const { output } = await prompt({
+                     ...input,
+                     mediaUrl: uploadResult.file.uri,
+                  });
+                  return output!;
+
+               } catch (uploadError: any) {
+                  console.error("Google AI File Upload Failed:", uploadError);
+                  throw new Error(`Failed to upload video to Google AI: ${uploadError.message}`);
+               }
             }
 
             // For images or video data URIs, use standard flow

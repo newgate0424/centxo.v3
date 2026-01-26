@@ -73,6 +73,8 @@ export default function AutomationCampaignsV2Page() {
     // Video Deletion State
     const [videoToDelete, setVideoToDelete] = useState<any>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    // Track R2 URL to avoid re-uploading
+    const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
 
     // Step 4: Campaign Settings
     const { selectedAccounts: adAccounts, selectedPages: pages } = useAdAccount();
@@ -102,6 +104,7 @@ export default function AutomationCampaignsV2Page() {
             setThumbnailPreview(null);
             setSelectedLibraryVideo(null);
             setAutoThumbnails([]); // Clear BEFORE setting new file
+            setUploadedVideoUrl(null); // Reset URL
 
             setMediaFile(file);
             setMediaPreview(URL.createObjectURL(file));
@@ -120,22 +123,29 @@ export default function AutomationCampaignsV2Page() {
 
                     const data = await response.json();
 
-                    if (data.success && data.thumbnailUrls && data.thumbnailUrls.length > 0) {
-                        console.log(`✅ Video uploaded! Received ${data.thumbnailUrls.length} thumbnails from server`);
-                        setAutoThumbnails(data.thumbnailUrls);
-                        setGeneratingThumbs(false);
+                    if (data.success) {
+                        if (data.url) {
+                            console.log('✅ Video uploaded to Cloud Storage:', data.url);
+                            setUploadedVideoUrl(data.url);
+                        }
 
-                        // Set default thumbnail (middle one)
-                        const defaultThumb = data.thumbnailUrls[Math.floor(data.thumbnailUrls.length / 2)];
-                        setThumbnailPreview(defaultThumb);
+                        if (data.thumbnailUrls && data.thumbnailUrls.length > 0) {
+                            console.log(`✅ Received ${data.thumbnailUrls.length} thumbnails from server`);
+                            setAutoThumbnails(data.thumbnailUrls);
+                            setGeneratingThumbs(false);
 
-                        // Fetch blob for the default thumbnail
-                        fetch(defaultThumb)
-                            .then(r => r.blob())
-                            .then(setThumbnailBlob)
-                            .catch(err => console.error('Failed to fetch thumbnail blob:', err));
-                    } else {
-                        console.log('⚠️ No thumbnails received from server, will generate client-side');
+                            // Set default thumbnail (middle one)
+                            const defaultThumb = data.thumbnailUrls[Math.floor(data.thumbnailUrls.length / 2)];
+                            setThumbnailPreview(defaultThumb);
+
+                            // Fetch blob for the default thumbnail
+                            fetch(defaultThumb)
+                                .then(r => r.blob())
+                                .then(setThumbnailBlob)
+                                .catch(err => console.error('Failed to fetch thumbnail blob:', err));
+                        } else {
+                            console.log('⚠️ No thumbnails received from server, will generate client-side');
+                        }
                     }
                 } catch (error) {
                     console.error('Upload failed:', error);
@@ -297,7 +307,11 @@ export default function AutomationCampaignsV2Page() {
         setAnalyzing(true);
         const formData = new FormData();
 
-        if (mediaFile) {
+        if (uploadedVideoUrl) {
+            console.log('Using already uploaded video URL:', uploadedVideoUrl);
+            formData.append('existingMediaPath', uploadedVideoUrl);
+            formData.append('existingMediaUrl', uploadedVideoUrl);
+        } else if (mediaFile) {
             formData.append('file', mediaFile);
         } else if (selectedLibraryVideo) {
             console.log('Using library video:', selectedLibraryVideo);
@@ -321,9 +335,16 @@ export default function AutomationCampaignsV2Page() {
                     // Check if URL is valid before fetching
                     if (!url) return;
 
+                    // Skip local file paths that aren't http/https/data
+                    if (!url.startsWith('http') && !url.startsWith('data:')) {
+                        console.warn(`Skipping invalid thumbnail URL format: ${url}`);
+                        return;
+                    }
+
+                    console.log(`Fetching thumbnail for analysis: ${url.substring(0, 50)}...`);
                     const response = await fetch(url);
                     if (!response.ok) {
-                        console.warn(`Failed to fetch thumbnail ${i}: ${response.status}`);
+                        console.warn(`Failed to fetch thumbnail ${i}: ${response.status} ${response.statusText}`);
                         return;
                     }
                     const blob = await response.blob();

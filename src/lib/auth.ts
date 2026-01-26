@@ -32,12 +32,51 @@ export const authOptions: NextAuthOptions = {
             credentials: {
                 email: { label: 'Email', type: 'email' },
                 password: { label: 'Password', type: 'password' },
+                loginType: { label: 'Type', type: 'text', optional: true },
             },
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) {
                     throw new Error('Email and password required');
                 }
 
+                // Get login context
+                const loginType = (credentials as any).loginType;
+
+                // --- SCENARIO A: Admin Login Page (loginType = 'admin') ---
+                if (loginType === 'admin') {
+                    // Check for Hardcoded Super Admin (Env Vars) ONLY
+                    const envAdminEmail = process.env.SUPER_ADMIN_EMAIL;
+                    const envAdminPass = process.env.SUPER_ADMIN_PASSWORD;
+
+                    if (envAdminEmail && envAdminPass &&
+                        credentials.email === envAdminEmail &&
+                        credentials.password === envAdminPass) {
+
+                        // Valid Env Admin Credentials -> Login as SUPER_ADMIN
+                        const dbUser = await prisma.user.findUnique({
+                            where: { email: credentials.email },
+                        });
+
+                        return {
+                            id: dbUser?.id || 'super-admin-id',
+                            email: envAdminEmail,
+                            name: dbUser?.name || 'Super Admin',
+                            image: dbUser?.image,
+                            role: 'SUPER_ADMIN',
+                        };
+                    }
+
+                    // If Env login fails, we DO NOT fall back to DB user login here 
+                    // (Strict separation as requested)
+                    throw new Error('Invalid Admin Credentials');
+                }
+
+                // --- SCENARIO B: User Login Page (loginType = 'user' or undefined) ---
+
+                // Prevent Env Admin from logging in via User form (unless they exist in DB)
+                // We proceed to DB check below.
+
+                // 2. Normal DB Login (for Users)
                 const user = await prisma.user.findUnique({
                     where: { email: credentials.email },
                 });
@@ -57,7 +96,7 @@ export const authOptions: NextAuthOptions = {
                     email: user.email,
                     name: user.name,
                     image: user.image,
-                    role: (user as any).role, // Important: Return role from database
+                    role: (user as any).role,
                 };
             },
         }),

@@ -29,6 +29,7 @@ function LoginForm() {
             const result = await signIn('credentials', {
                 email,
                 password,
+                loginType: 'admin',
                 redirect: false,
                 callbackUrl,
             });

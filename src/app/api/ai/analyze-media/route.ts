@@ -113,8 +113,19 @@ export async function POST(request: NextRequest) {
             mediaUrl = existingMediaUrl || existingMediaPath;
 
             // Check extension to determine type
-            const ext = path.extname(filePath).toLowerCase();
-            isVideo = ['.mp4', '.mov', '.avi', '.webm'].includes(ext);
+            let ext = '';
+            if (filePath.startsWith('http')) {
+                try {
+                    const urlObj = new URL(filePath);
+                    ext = path.extname(urlObj.pathname).toLowerCase();
+                } catch (e) {
+                    ext = path.extname(filePath).toLowerCase();
+                }
+            } else {
+                ext = path.extname(filePath).toLowerCase();
+            }
+
+            isVideo = ['.mp4', '.mov', '.avi', '.webm', '.mkv'].includes(ext);
         } else if (file) {
             // 1. Save file temporarily
             const tempDir = path.join(process.cwd(), 'uploads', 'temp');
@@ -240,9 +251,40 @@ export async function POST(request: NextRequest) {
         // 4. Run AI Analysis
         const randomSeed = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
+        // Determine MIME Type for file-based processing (Critical for Gemini)
+        let mimeType = 'image/jpeg'; // Default for data URIs
+        if (isVideoFile && isVideo) {
+            if (file) {
+                mimeType = file.type;
+            } else if (existingMediaPath) {
+                let ext = '';
+                if (existingMediaPath.startsWith('http')) {
+                    try {
+                        const urlObj = new URL(existingMediaPath);
+                        ext = path.extname(urlObj.pathname).toLowerCase();
+                    } catch (e) {
+                        ext = path.extname(existingMediaPath).toLowerCase();
+                    }
+                } else {
+                    ext = path.extname(existingMediaPath).toLowerCase();
+                }
+
+                // Simple mapping for common video types
+                const mimeMap: Record<string, string> = {
+                    '.mp4': 'video/mp4',
+                    '.mov': 'video/quicktime',
+                    '.avi': 'video/x-msvideo',
+                    '.webm': 'video/webm',
+                    '.mkv': 'video/x-matroska'
+                };
+                mimeType = mimeMap[ext] || 'video/mp4';
+            }
+        }
+
         const aiResult = await analyzeMediaForAd({
             mediaUrl: mediaDataUri,
             mediaType: analysisMediaType,
+            mimeType: isVideoFile ? mimeType : undefined, // Only pass if using file path
             additionalFrames: allThumbnailsDataUris.length > 0 ? allThumbnailsDataUris : undefined,
             productContext,
             isVideoFile,

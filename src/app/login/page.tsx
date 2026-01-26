@@ -53,6 +53,7 @@ function LoginPageContent() {
         const result = await signIn('credentials', {
             email,
             password,
+            loginType: 'user',
             redirect: false,
         });
 
