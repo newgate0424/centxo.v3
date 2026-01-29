@@ -114,6 +114,34 @@
   .dark .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.2);
   }
+
+  /* Table scrollbar: same as minimal + gutter so vertical bar sits inside header */
+  .scrollbar-minimal-table {
+    scrollbar-gutter: stable;
+  }
+  .scrollbar-minimal-table::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-minimal-table::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-minimal-table::-webkit-scrollbar-button {
+    display: none;
+  }
+  .scrollbar-minimal-table::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+  }
+  .dark .scrollbar-minimal-table::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  .scrollbar-minimal-table:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+  }
+  .dark .scrollbar-minimal-table:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
 }
 
 @layer base {

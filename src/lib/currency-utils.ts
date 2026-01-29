@@ -54,3 +54,40 @@ export function toBasicUnits(amount: number | string, currency: string): number 
     // Most currencies: multiply by 100 to convert dollars to cents
     return Math.round(numAmount * 100);
 }
+
+/** Common currency symbols for display */
+const CURRENCY_SYMBOLS: Record<string, string> = {
+    USD: '$', THB: '฿', EUR: '€', GBP: '£', JPY: '¥', CNY: '¥', KRW: '₩',
+    SGD: 'S$', MYR: 'RM', PHP: '₱', VND: '₫', IDR: 'Rp', AUD: 'A$',
+};
+
+/**
+ * Get currency symbol for display (e.g. $, ฿)
+ */
+export function getCurrencySymbol(currency: string = 'USD'): string {
+    const curr = (currency || 'USD').toUpperCase();
+    return CURRENCY_SYMBOLS[curr] ?? curr + ' ';
+}
+
+/**
+ * Format amount with currency symbol according to currency code
+ * @param amount Amount to display
+ * @param currency Currency code (e.g., 'USD', 'THB', 'JPY')
+ * @param locale Optional locale (default: 'en-US')
+ * @returns Formatted string e.g. "฿1,234" or "$12.34"
+ */
+export function formatCurrencyByCode(
+    amount: number,
+    currency: string = 'USD',
+    options?: { maximumFractionDigits?: number; minimumFractionDigits?: number }
+): string {
+    const curr = (currency || 'USD').toUpperCase();
+    const maxFrac = options?.maximumFractionDigits ?? (hasDecimalPlaces(curr) ? 2 : 0);
+    const opts: Intl.NumberFormatOptions = {
+        style: 'currency',
+        currency: curr,
+        maximumFractionDigits: maxFrac,
+        minimumFractionDigits: options?.minimumFractionDigits,
+    };
+    return new Intl.NumberFormat('en-US', opts).format(amount);
+}

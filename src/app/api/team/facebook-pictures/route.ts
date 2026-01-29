@@ -3,6 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// Cache to reduce Meta API calls (gr:get:User per member - heavily used)
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+declare global {
+  var _facebookPicturesCache: Record<string, { data: any; timestamp: number }> | undefined;
+}
+const cache = globalThis._facebookPicturesCache ?? {};
+if (process.env.NODE_ENV !== 'production') globalThis._facebookPicturesCache = cache;
+
 export async function GET(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -36,10 +44,15 @@ export async function GET(req: NextRequest) {
         });
 
         let targetUserId = user.id;
-
         if (membershipTeam) {
-            // User is a team member, fetch pictures from their host's team
             targetUserId = membershipTeam.userId;
+        }
+
+        const cacheKey = `pictures_${targetUserId}`;
+        const forceRefresh = req.nextUrl.searchParams.get('refresh') === 'true';
+        const cached = !forceRefresh && cache[cacheKey];
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return NextResponse.json(cached.data);
         }
 
         // Get all Facebook team members
@@ -53,8 +66,6 @@ export async function GET(req: NextRequest) {
 
         const teamMembers = allMembers.filter(m => m.memberType === 'facebook' && m.facebookUserId);
 
-        console.log('Filtered Facebook members:', teamMembers.length);
-
         // Select only needed fields
         const teamMembersData = teamMembers.map(m => ({
             id: m.id,
@@ -63,15 +74,10 @@ export async function GET(req: NextRequest) {
             accessToken: m.accessToken,
         }));
 
-        console.log('Found team members:', teamMembersData.length);
-        console.log('Team members data:', teamMembersData);
-
         // Fetch profile pictures for each member
         const membersWithPictures = await Promise.all(
             teamMembersData.map(async (member) => {
                 let pictureUrl = null;
-
-                console.log('Processing member:', member.id, 'facebookUserId:', member.facebookUserId, 'hasToken:', !!member.accessToken);
 
                 if (member.facebookUserId && member.accessToken) {
                     try {
@@ -79,7 +85,6 @@ export async function GET(req: NextRequest) {
                             `https://graph.facebook.com/${member.facebookUserId}?fields=picture.type(large)&access_token=${member.accessToken}`
                         );
                         const data = await response.json();
-                        console.log('Facebook API response for', member.id, ':', data);
                         pictureUrl = data.picture?.data?.url || null;
                     } catch (error) {
                         console.error(`Error fetching picture for member ${member.id}:`, error);
@@ -95,11 +100,9 @@ export async function GET(req: NextRequest) {
             })
         );
 
-        console.log('Returning members with pictures:', membersWithPictures);
-
-        return NextResponse.json({
-            members: membersWithPictures,
-        });
+        const result = { members: membersWithPictures };
+        cache[cacheKey] = { data: result, timestamp: Date.now() };
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error fetching team member pictures:', error);
         return NextResponse.json(

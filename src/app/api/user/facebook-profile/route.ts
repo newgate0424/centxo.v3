@@ -3,6 +3,14 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+// Cache to reduce Meta API calls (gr:get:User is heavily used)
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+declare global {
+  var _facebookProfileCache: Record<string, { data: any; timestamp: number }> | undefined;
+}
+const cache = globalThis._facebookProfileCache ?? {};
+if (process.env.NODE_ENV !== 'production') globalThis._facebookProfileCache = cache;
+
 export async function GET(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -20,8 +28,6 @@ export async function GET(req: NextRequest) {
             select: { id: true },
         });
 
-        console.log('[facebook-profile] User:', user?.id);
-
         if (!user) {
             return NextResponse.json(
                 { error: 'User not found' },
@@ -38,7 +44,12 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        console.log('[facebook-profile] MetaAccount:', metaAccount ? 'found' : 'not found');
+        const cacheKey = `profile_${user.id}`;
+        const forceRefresh = req.nextUrl.searchParams.get('refresh') === 'true';
+        const cached = !forceRefresh && cache[cacheKey];
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+            return NextResponse.json(cached.data);
+        }
 
         if (metaAccount?.metaUserId && metaAccount?.accessToken) {
             try {
@@ -49,11 +60,9 @@ export async function GET(req: NextRequest) {
                 const fbData = await response.json();
                 
                 if (fbData.name) {
-                    return NextResponse.json({
-                        name: fbData.name,
-                        userId: metaAccount.metaUserId,
-                        pictureUrl: fbData.picture?.data?.url || null,
-                    });
+                    const result = { name: fbData.name, userId: metaAccount.metaUserId, pictureUrl: fbData.picture?.data?.url || null };
+                    cache[cacheKey] = { data: result, timestamp: Date.now() };
+                    return NextResponse.json(result);
                 }
             } catch (error) {
                 console.error('Error fetching from Facebook API:', error);
@@ -72,8 +81,6 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        console.log('[facebook-profile] Account (NextAuth):', account ? 'found' : 'not found');
-
         if (account?.providerAccountId) {
             // Try to get name from Facebook Graph API
             if (account.access_token) {
@@ -84,11 +91,9 @@ export async function GET(req: NextRequest) {
                     const fbData = await response.json();
                     
                     if (fbData.name) {
-                        return NextResponse.json({
-                            name: fbData.name,
-                            userId: account.providerAccountId,
-                            pictureUrl: fbData.picture?.data?.url || null,
-                        });
+                        const result = { name: fbData.name, userId: account.providerAccountId, pictureUrl: fbData.picture?.data?.url || null };
+                        cache[cacheKey] = { data: result, timestamp: Date.now() };
+                        return NextResponse.json(result);
                     }
                 } catch (error) {
                     console.error('Error fetching from Facebook API:', error);
@@ -118,8 +123,6 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        console.log('[facebook-profile] TeamMember:', teamMember ? 'found' : 'not found');
-
         if (teamMember?.facebookUserId) {
             // Try to fetch picture if we have access token
             let pictureUrl = null;
@@ -135,14 +138,10 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            return NextResponse.json({
-                name: teamMember.facebookName || session.user.name || 'Facebook User',
-                userId: teamMember.facebookUserId,
-                pictureUrl,
-            });
+            const result = { name: teamMember.facebookName || session.user.name || 'Facebook User', userId: teamMember.facebookUserId, pictureUrl };
+            cache[cacheKey] = { data: result, timestamp: Date.now() };
+            return NextResponse.json(result);
         }
-
-        console.log('[facebook-profile] No Facebook account found anywhere');
 
         return NextResponse.json(
             { error: 'No Facebook account found' },

@@ -11,6 +11,8 @@
     "start": "node server.js",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
@@ -95,7 +97,8 @@
     "prisma": "^6.2.0",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

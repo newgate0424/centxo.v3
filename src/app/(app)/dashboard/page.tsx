@@ -1,18 +1,20 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   DollarSign, MessageSquare, TrendingUp, Zap, ChevronRight, Activity,
-  Filter, Eye, MousePointer2, BarChart3, ShoppingBag, Target
+  Filter, Eye, MousePointer2, BarChart3, ShoppingBag, Target, AlertCircle, RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useAdAccount } from '@/contexts/AdAccountContext';
 import { useSession } from 'next-auth/react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useToast } from '@/hooks/use-toast';
 import { DatePickerWithRange as DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
 import { subDays, format } from "date-fns";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AreaChart,
   Area,
@@ -35,12 +37,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { formatCurrencyByCode, getCurrencySymbol } from "@/lib/currency-utils";
 
 export default function DashboardPage() {
   const { data: session } = useSession();
   const { selectedAccounts } = useAdAccount();
   const { t, language } = useLanguage();
+  const { toast } = useToast();
   const [mounted, setMounted] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [campaignsError, setCampaignsError] = useState<string | null>(null);
 
   // Date Range State (Default Last 30 Days)
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -88,58 +95,64 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (session?.user && selectedAccounts.length > 0) {
-      fetchStats();
-      fetchCampaigns();
+    if (!session?.user || selectedAccounts.length === 0) {
+      setLoading(false);
+      return;
     }
+    fetchDashboardData();
   }, [session, selectedAccounts, dateRange]);
 
-  const fetchStats = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
+      setStatsError(null);
+      setCampaignsError(null);
 
       if (selectedAccounts.length === 0) return;
 
       const adAccountIds = selectedAccounts.map(a => a.id).join(',');
-
-      // Format dates for API
-      let dateParams = '';
+      let url = `/api/dashboard/data?adAccountId=${encodeURIComponent(adAccountIds)}`;
       if (dateRange?.from && dateRange?.to) {
-        dateParams = `&startDate=${format(dateRange.from, 'yyyy-MM-dd')}&endDate=${format(dateRange.to, 'yyyy-MM-dd')}`;
+        url += `&startDate=${format(dateRange.from, 'yyyy-MM-dd')}&endDate=${format(dateRange.to, 'yyyy-MM-dd')}`;
       }
 
-      const response = await fetch(`/api/dashboard/stats?adAccountId=${adAccountIds}${dateParams}`);
+      const response = await fetch(url);
 
-      if (response.ok) {
-        const data = await response.json();
-        setStats(prev => ({ ...prev, ...data }));
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCampaigns = async () => {
-    try {
-      if (selectedAccounts.length === 0) {
-        setCampaigns([]);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.error || `Failed to load dashboard (${response.status})`;
+        setStatsError(errorMsg);
+        toast({
+          title: t('dashboard.error', 'Error loading dashboard'),
+          description: errorMsg,
+          variant: 'destructive',
+        });
         return;
       }
 
-      const adAccountIds = selectedAccounts.map(a => a.id).join(',');
-      // Fetch specifically for "Top Campaigns" list with summary fields
-      const response = await fetch(`/api/campaigns?adAccountId=${adAccountIds}&mode=lite&limit=10`);
-
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+      if (data.stats && Object.keys(data.stats).length > 0) {
+        setStats(prev => ({ ...prev, ...data.stats }));
+      }
+      if (Array.isArray(data.campaigns)) {
         setCampaigns(data.campaigns);
       }
+      if (data.error) {
+        setCampaignsError(data.error);
+      }
     } catch (error) {
-      console.error('Error fetching campaigns:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Network error';
+      setStatsError(errorMsg);
+      console.error('Error fetching dashboard:', error);
+      toast({
+        title: t('dashboard.error', 'Error loading dashboard'),
+        description: errorMsg,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [selectedAccounts, dateRange, t, toast]);
 
   const formatTrend = (value: number) => {
     const sign = value > 0 ? '+' : '';
@@ -154,9 +167,8 @@ export default function DashboardPage() {
     return value > 0 ? "text-green-500" : "text-red-500";
   };
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', maximumFractionDigits: 0 }).format(val);
-  };
+  const primaryCurrency = selectedAccounts[0]?.currency || 'USD';
+  const formatCurrency = (val: number) => formatCurrencyByCode(val, primaryCurrency, { maximumFractionDigits: 0 });
 
   const formatNumber = (val: number) => {
     return new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(val);
@@ -222,14 +234,37 @@ export default function DashboardPage() {
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <DateRangePicker date={dateRange} setDate={setDateRange} />
-          <Link href="/launch-new">
+          <Link href="/create-ads">
             <Button className="w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow">
-              <Zap className="mr-2 h-4 w-4" />
+              <Zap className="mr-2 h-4 w-4 text-amber-400" />
               {t('campaigns.newCampaign', 'New Campaign')}
             </Button>
           </Link>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {(statsError || campaignsError) && (
+        <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>{statsError || campaignsError}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStatsError(null);
+                setCampaignsError(null);
+                fetchDashboardData();
+              }}
+              className="ml-2"
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              {t('common.retry', 'Retry')}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Selected Accounts Indicator */}
       <div className="flex items-center gap-2">
@@ -246,43 +281,67 @@ export default function DashboardPage() {
 
       {/* 1. Key KPIs - Top Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi, index) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={index} className="glass-card p-5 hover:translate-y-[-2px] transition-all duration-300">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="glass-card p-5 animate-pulse">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-muted-foreground">{kpi.title}</span>
-                <div className={`p-2 rounded-lg ${kpi.color}`}>
-                  <Icon className="h-4 w-4" />
-                </div>
+                <div className="h-4 w-20 rounded bg-muted" />
+                <div className="h-9 w-9 rounded-lg bg-muted" />
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold font-outfit">{kpi.value}</span>
-                <div className={`flex items-center text-xs font-medium ${getTrendColor(kpi.trend)}`}>
-                  {formatTrend(kpi.trend)}
-                </div>
-              </div>
+              <div className="h-8 w-24 rounded bg-muted" />
             </div>
-          );
-        })}
+          ))
+        ) : (
+          kpis.map((kpi, index) => {
+            const Icon = kpi.icon;
+            return (
+              <div key={index} className="glass-card p-5 hover:translate-y-[-2px] transition-all duration-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">{kpi.title}</span>
+                  <div className={`p-2 rounded-lg ${kpi.color}`}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold font-outfit">{kpi.value}</span>
+                  <div className={`flex items-center text-xs font-medium ${getTrendColor(kpi.trend)}`}>
+                    {formatTrend(kpi.trend)}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* 2. Efficiency Metrics - Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: t('dashboard.metrics.cpm', 'CPM'), value: `฿${stats.extendedStats.cpm.toFixed(2)}`, icon: Eye },
-          { label: t('dashboard.metrics.ctr', 'CTR'), value: `${stats.extendedStats.ctr.toFixed(2)}%`, icon: MousePointer2 },
-          { label: t('dashboard.metrics.cpc', 'CPC'), value: `฿${stats.extendedStats.cpc.toFixed(2)}`, icon: Target },
-          { label: t('dashboard.metrics.cpp', 'Cost Per Purchase'), value: `฿${stats.extendedStats.cpp.toFixed(0)}`, icon: ShoppingBag },
-        ].map((metric, i) => (
-          <div key={i} className="glass-card p-4 flex flex-col justify-between hover:bg-muted/30 transition-colors">
-            <div className="flex items-center gap-2 mb-2 text-muted-foreground">
-              <metric.icon className="w-4 h-4" />
-              <span className="text-xs font-semibold uppercase tracking-wider">{metric.label}</span>
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="glass-card p-4 animate-pulse">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-4 w-4 rounded bg-muted" />
+                <div className="h-3 w-16 rounded bg-muted" />
+              </div>
+              <div className="h-6 w-20 rounded bg-muted" />
             </div>
-            <div className="text-xl font-bold font-outfit">{metric.value}</div>
-          </div>
-        ))}
+          ))
+        ) : (
+          [
+            { label: t('dashboard.metrics.cpm', 'CPM'), value: formatCurrency(stats.extendedStats.cpm), icon: Eye, iconClass: 'text-sky-500' },
+            { label: t('dashboard.metrics.ctr', 'CTR'), value: `${stats.extendedStats.ctr.toFixed(2)}%`, icon: MousePointer2, iconClass: 'text-emerald-500' },
+            { label: t('dashboard.metrics.cpc', 'CPC'), value: formatCurrency(stats.extendedStats.cpc), icon: Target, iconClass: 'text-amber-500' },
+            { label: t('dashboard.metrics.cpp', 'Cost Per Purchase'), value: formatCurrency(stats.extendedStats.cpp), icon: ShoppingBag, iconClass: 'text-violet-500' },
+          ].map(({ label, value, icon: Icon, iconClass }, i) => (
+            <div key={i} className="glass-card p-4 flex flex-col justify-between hover:bg-muted/30 transition-colors">
+              <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                <Icon className={cn('w-4 h-4 shrink-0', iconClass)} />
+                <span className="text-xs font-semibold uppercase tracking-wider">{label}</span>
+              </div>
+              <div className="text-xl font-bold font-outfit">{value}</div>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -323,7 +382,7 @@ export default function DashboardPage() {
                   tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                   tickFormatter={(val) => {
                     if (chartMetric === 'messages') return val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val;
-                    return `฿${val}`;
+                    return `${getCurrencySymbol(primaryCurrency)}${val}`;
                   }}
                 />
                 <Tooltip
@@ -331,7 +390,7 @@ export default function DashboardPage() {
                   itemStyle={{ color: 'hsl(var(--foreground))' }}
                   formatter={(value: any, name: any) => {
                     if (name === 'messages') return [value, 'Messages'];
-                    return [`฿${typeof value === 'number' ? value.toFixed(2) : value}`, name.toUpperCase()];
+                    return [formatCurrency(typeof value === 'number' ? value : Number(value) || 0), name.toUpperCase()];
                   }}
                 />
                 <Area
@@ -394,7 +453,7 @@ export default function DashboardPage() {
             {t('dashboard.viewAll', 'View All')}
           </Link>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto scrollbar-minimal">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30">
@@ -414,41 +473,47 @@ export default function DashboardPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                campaigns.map((camp) => (
-                  <TableRow key={camp.id} className="group">
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={`${camp.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
-                      >
-                        {camp.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium group-hover:text-primary transition-colors">
-                      {camp.name}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {/* Placeholder logic for per-campaign stats - relying on API aggregation usually */}
-                      {/* Dashboard API returns simple campaigns list, we might need to enhance Campaign API for this later, 
-                                  but for now we use what we have or placeholders if data isn't in 'lite' mode. 
-                                  Actually 'lite' mode currently only returns basics. 
-                                  Will display Available data or dashes. */}
-                      -
-                    </TableCell>
-                    <TableCell className="text-right">-</TableCell>
-                    <TableCell className="text-right">
-                      {/* If we have spend data attached */}
-                      -
-                    </TableCell>
-                    <TableCell className="text-right">-</TableCell>
-                  </TableRow>
-                ))
+                campaigns.map((camp) => {
+                  const m = camp.metrics || {};
+                  const spend = m.spend ?? m.amountSpent ?? 0;
+                  const results = m.results ?? m.messages ?? 0;
+                  const costPerResult = m.costPerResult ?? m.costPerMessage ?? (results > 0 ? spend / results : 0);
+                  return (
+                    <TableRow key={camp.id} className="group">
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`${camp.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}
+                        >
+                          {camp.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium group-hover:text-primary transition-colors">
+                        <Link href={`/ads-manager/campaigns?campaignId=${camp.id}`} className="hover:underline">
+                          {camp.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {results > 0 ? formatNumber(results) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {results > 0 ? formatCurrency(costPerResult) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {spend > 0 ? formatCurrency(spend) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {m.revenue != null && spend > 0 && m.revenue > 0 ? `${((m.revenue / spend) || 0).toFixed(2)}x` : '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
         </div>
         <div className="bg-muted/20 p-2 text-center text-xs text-muted-foreground">
-          * Campaign-level stats require full Ads Manager view.
+          {t('dashboard.campaignsTable.note', 'Metrics for selected date range. ROAS shown when revenue data available.')}
         </div>
       </div>
     </div>

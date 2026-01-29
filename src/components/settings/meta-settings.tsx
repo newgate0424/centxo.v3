@@ -47,39 +47,25 @@ export function MetaSettings() {
 
     const checkConnection = async () => {
         try {
-            const response = await fetch('/api/launch');
-            const data = await response.json();
+            // Fetch launch, accounts, and pages in parallel for faster load
+            const [launchRes, accountsRes, pagesRes] = await Promise.all([
+                fetch('/api/launch'),
+                fetch('/api/meta/select?type=accounts'),
+                fetch('/api/meta/select?type=pages'),
+            ]);
 
-            setIsConnected(data.checks?.metaConnected || false);
+            const launchData = await launchRes.json().catch(() => ({}));
+            const accountsData = await accountsRes.json().catch(() => ({}));
+            const pagesData = await pagesRes.json().catch(() => ({}));
 
-            if (data.checks?.metaConnected) {
-                loadAccounts();
-                loadPages();
-            }
+            const connected = launchData.checks?.metaConnected || false;
+            setIsConnected(connected);
+            setAccounts(accountsData.accounts || []);
+            setPages(pagesData.pages || []);
         } catch (err) {
             console.error('Error checking connection:', err);
         } finally {
             setLoading(false);
-        }
-    };
-
-    const loadAccounts = async () => {
-        try {
-            const response = await fetch('/api/meta/select?type=accounts');
-            const data = await response.json();
-            setAccounts(data.accounts || []);
-        } catch (err) {
-            console.error('Error loading accounts:', err);
-        }
-    };
-
-    const loadPages = async () => {
-        try {
-            const response = await fetch('/api/meta/select?type=pages');
-            const data = await response.json();
-            setPages(data.pages || []);
-        } catch (err) {
-            console.error('Error loading pages:', err);
         }
     };
 

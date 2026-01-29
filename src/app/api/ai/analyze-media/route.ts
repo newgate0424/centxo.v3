@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,9 +83,21 @@ async function optimizeImageForAI(imagePath: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
     try {
+        // Rate limiting for expensive AI operations
+        const rateLimitResponse = await rateLimit(request, RateLimitPresets.aiAnalysis);
+        if (rateLimitResponse) return rateLimitResponse;
+
         const session = await getServerSession(authOptions);
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const apiKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_API_KEY;
+        if (!apiKey || !apiKey.trim()) {
+            return NextResponse.json(
+                { error: 'AI analysis requires GOOGLE_GENAI_API_KEY (or GOOGLE_API_KEY). Add it in .env.local and restart.' },
+                { status: 400 }
+            );
         }
 
         const formData = await request.formData();
@@ -93,10 +106,13 @@ export async function POST(request: NextRequest) {
         const file = formData.get('file') as File;
         const existingMediaPath = formData.get('existingMediaPath') as string;
         const existingMediaUrl = formData.get('existingMediaUrl') as string;
-        const analysisImage = formData.get('analysisImage') as File; // New input
+        const existingThumbnailUrl = formData.get('existingThumbnailUrl') as string;
+        const analysisImage = formData.get('analysisImage') as File;
 
         const productContext = formData.get('productContext') as string || '';
-        const adSetCount = parseInt(formData.get('adSetCount') as string) || 3;
+        const adSetCount = Math.max(1, parseInt(formData.get('adSetCount') as string) || 3);
+        const adsCount = Math.max(1, parseInt(formData.get('adsCount') as string) || 1);
+        const copyVariationCount = Math.max(adSetCount, adsCount, 3);
 
         const thumbnailFiles = formData.getAll('thumbnails') as File[]; // Check early
 
@@ -182,9 +198,35 @@ export async function POST(request: NextRequest) {
             analysisMediaType = 'image';
             isVideoFile = false;
         }
+        // Library video: prefer thumbnail (fast). Else pass video URL to flow (download + Google AI).
+        else if (isVideo && existingMediaPath && typeof existingMediaPath === 'string' && existingMediaPath.startsWith('http')) {
+            if (existingThumbnailUrl && typeof existingThumbnailUrl === 'string' && existingThumbnailUrl.startsWith('http')) {
+                try {
+                    const res = await fetch(existingThumbnailUrl);
+                    if (!res.ok) throw new Error(`Thumbnail fetch ${res.status}`);
+                    const buf = Buffer.from(await res.arrayBuffer());
+                    const opt = await sharp(buf).resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+                    mediaDataUri = `data:image/jpeg;base64,${opt.toString('base64')}`;
+                    analysisMediaType = 'image';
+                    isVideoFile = false;
+                    console.log('📹 Using library thumbnail for AI analysis (no video download)');
+                } catch (e) {
+                    console.warn('Thumbnail fetch failed, falling back to video URL:', e);
+                    mediaDataUri = existingMediaPath;
+                    analysisMediaType = 'video';
+                    isVideoFile = false;
+                    console.log('📹 Using library video URL for AI analysis');
+                }
+            } else {
+                mediaDataUri = existingMediaPath;
+                analysisMediaType = 'video';
+                isVideoFile = false;
+                console.log('📹 Using library video URL for AI analysis (no frame extraction)');
+            }
+        }
         else if (isVideo) {
             try {
-                // Extract 3 frames for comprehensive analysis
+                // Local video file: extract 3 frames for comprehensive analysis
                 console.log('📹 Extracting 3 frames from video for detailed analysis...');
                 const frameBuffers = await extractVideoFrames(filePath, 3);
 
@@ -253,25 +295,22 @@ export async function POST(request: NextRequest) {
         // 4. Run AI Analysis
         const randomSeed = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-        // Determine MIME Type for file-based processing (Critical for Gemini)
-        let mimeType = 'image/jpeg'; // Default for data URIs
-        if (isVideoFile && isVideo) {
+        // Determine MIME Type for video (file path or URL) — required for Gemini
+        let mimeType = 'image/jpeg';
+        if (isVideo) {
             if (file) {
                 mimeType = file.type;
             } else if (existingMediaPath) {
                 let ext = '';
-                if (existingMediaPath.startsWith('http')) {
+                if (typeof existingMediaPath === 'string' && existingMediaPath.startsWith('http')) {
                     try {
-                        const urlObj = new URL(existingMediaPath);
-                        ext = path.extname(urlObj.pathname).toLowerCase();
-                    } catch (e) {
+                        ext = path.extname(new URL(existingMediaPath).pathname).toLowerCase();
+                    } catch {
                         ext = path.extname(existingMediaPath).toLowerCase();
                     }
                 } else {
-                    ext = path.extname(existingMediaPath).toLowerCase();
+                    ext = path.extname(String(existingMediaPath)).toLowerCase();
                 }
-
-                // Simple mapping for common video types
                 const mimeMap: Record<string, string> = {
                     '.mp4': 'video/mp4',
                     '.mov': 'video/quicktime',
@@ -286,11 +325,13 @@ export async function POST(request: NextRequest) {
         const aiResult = await analyzeMediaForAd({
             mediaUrl: mediaDataUri,
             mediaType: analysisMediaType,
-            mimeType: isVideoFile ? mimeType : undefined, // Only pass if using file path
+            mimeType: analysisMediaType === 'video' ? mimeType : undefined,
             additionalFrames: allThumbnailsDataUris.length > 0 ? allThumbnailsDataUris : undefined,
             productContext,
             isVideoFile,
-            adSetCount: adSetCount,
+            adSetCount,
+            adsCount,
+            copyVariationCount,
             randomContext: randomSeed,
             pastSuccessExamples: pastInterests.length > 0 ? pastInterests : undefined,
         });

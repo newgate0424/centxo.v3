@@ -64,41 +64,43 @@ export function ConnectionsSettings() {
     const facebookMembers = teamData?.members.filter(m => m.memberType === 'facebook') || [];
 
     useEffect(() => {
-        if (session?.user) {
+        // Show content immediately when session is ready (don't block on fetches)
+        if (session !== undefined) {
             setLoading(false);
-            checkFacebookConnection();
-            fetchTeamMembers();
-            fetchFacebookProfile();
-            fetchFacebookMemberPictures();
+        }
+        if (session?.user) {
+            fetchConnectionsData();
         }
 
         // Check for success/error callback from Meta OAuth
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('success') === 'true') {
             setSuccessMessage('Facebook connected successfully!');
-            // Recheck connection after successful OAuth
             setTimeout(() => {
-                checkFacebookConnection();
-                fetchFacebookProfile();
-                fetchFacebookMemberPictures();
+                fetchConnectionsData(true); // Force refresh to show new connection
                 setSuccessMessage('');
             }, 3000);
 
             // Clean up URL
-            window.history.replaceState({}, '', '/settings?section=connections');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('success');
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.pathname + url.search);
         }
 
         // Check for member_added callback
         if (urlParams.get('success') === 'member_added') {
             setSuccessMessage('Facebook account added successfully!');
             setTimeout(() => {
-                fetchTeamMembers();
-                fetchFacebookMemberPictures();
+                fetchConnectionsData(true); // Force refresh to show new member
                 setSuccessMessage('');
             }, 1000);
 
             // Clean up URL
-            window.history.replaceState({}, '', '/settings?section=connections');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('success');
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.pathname + url.search);
         }
 
         const error = urlParams.get('error');
@@ -113,91 +115,50 @@ export function ConnectionsSettings() {
             setTimeout(() => setErrorMessage(''), 5000);
 
             // Clean up URL
-            window.history.replaceState({}, '', '/settings?section=connections');
+            const url = new URL(window.location.href);
+            url.searchParams.delete('success');
+            url.searchParams.delete('error');
+            window.history.replaceState({}, '', url.pathname + url.search);
         }
     }, [session]);
 
-    const checkFacebookConnection = async () => {
+    const fetchConnectionsData = async (forceRefresh = false) => {
         setCheckingConnection(true);
         try {
-            const response = await fetch('/api/launch');
+            const url = forceRefresh ? '/api/connections/data?refresh=true' : '/api/connections/data';
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch');
             const data = await response.json();
-            const isConnected = data.checks?.metaConnected || false;
-            setIsFacebookConnected(isConnected);
-        } catch (error) {
-            console.error('Error checking Facebook connection:', error);
-        } finally {
-            setCheckingConnection(false);
-        }
-    };
 
-    const fetchTeamMembers = async () => {
-        try {
-            const response = await fetch('/api/team/members');
-            if (response.ok) {
-                const data = await response.json();
-                setTeamData(data);
+            const launch = data.launch || {};
+            const team = data.team || {};
+            const profile = data.facebookProfile;
+            const pictures = data.facebookPictures || [];
 
-                // Find current user's Facebook account from team members
-                if (session?.user?.email) {
-                    const userFacebookAccount = data.members.find(
-                        (m: TeamMember) => m.memberType === 'facebook' && m.facebookEmail === session.user.email
-                    );
+            setIsFacebookConnected(launch.checks?.metaConnected || false);
+            setTeamData(team?.host ? team : null);
+            setFacebookMembersWithPictures(pictures);
 
-                    if (userFacebookAccount) {
-                        setMainFacebookProfile({
-                            name: userFacebookAccount.facebookName || 'Facebook User',
-                            image: userFacebookAccount.facebookUserId
-                                ? `https://graph.facebook.com/${userFacebookAccount.facebookUserId}/picture?type=normal`
-                                : ''
-                        });
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching team members:', error);
-        }
-    };
-
-    const fetchFacebookProfile = async () => {
-        try {
-            const response = await fetch('/api/user/facebook-profile');
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Facebook profile data:', data);
-                if (data.name && data.userId) {
-                    // Use pictureUrl from API if available, otherwise construct Graph API URL
-                    const imageUrl = data.pictureUrl || `https://graph.facebook.com/${data.userId}/picture?type=large&width=200&height=200`;
-                    console.log('Facebook profile image URL:', imageUrl);
+            if (profile?.name && profile?.userId) {
+                const imageUrl = profile.pictureUrl || `https://graph.facebook.com/${profile.userId}/picture?type=large&width=200&height=200`;
+                setMainFacebookProfile({ name: profile.name, image: imageUrl });
+            } else if (session?.user?.email && team.members) {
+                const userFacebookAccount = team.members.find(
+                    (m: TeamMember) => m.memberType === 'facebook' && m.facebookEmail === session.user?.email
+                );
+                if (userFacebookAccount) {
                     setMainFacebookProfile({
-                        name: data.name,
-                        image: imageUrl
+                        name: userFacebookAccount.facebookName || 'Facebook User',
+                        image: userFacebookAccount.facebookUserId
+                            ? `https://graph.facebook.com/${userFacebookAccount.facebookUserId}/picture?type=normal`
+                            : ''
                     });
                 }
-            } else if (response.status === 404) {
-                // 404 is expected for users/members who haven't connected their own Facebook account
-                console.log('No personal Facebook profile found (404) - this is normal for email-only members.');
-            } else {
-                console.error('Failed to fetch Facebook profile:', response.status);
             }
         } catch (error) {
-            console.error('Error fetching Facebook profile:', error);
-        }
-    };
-
-    const fetchFacebookMemberPictures = async () => {
-        try {
-            const response = await fetch('/api/team/facebook-pictures');
-            console.log('Facebook member pictures response status:', response.status);
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Facebook member pictures data:', data);
-                setFacebookMembersWithPictures(data.members || []);
-            } else {
-                console.error('Failed to fetch Facebook member pictures:', response.status);
-            }
-        } catch (error) {
-            console.error('Error fetching Facebook member pictures:', error);
+            console.error('Error fetching connections data:', error);
+        } finally {
+            setCheckingConnection(false);
         }
     };
 
@@ -252,8 +213,7 @@ export function ConnectionsSettings() {
                     title: "Success",
                     description: "Team member removed successfully",
                 });
-                await fetchTeamMembers();
-                await fetchFacebookMemberPictures();
+                await fetchConnectionsData();
             } else {
                 throw new Error('Failed to remove member');
             }
@@ -359,8 +319,6 @@ export function ConnectionsSettings() {
                             const displayName = member.facebookName || 'Facebook User';
                             const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
                             const pictureUrl = memberPicture?.pictureUrl;
-
-                            console.log('Member:', member.id, 'Picture:', memberPicture, 'URL:', pictureUrl);
 
                             return (
                                 <div key={member.id} className="group h-[60px] flex items-center gap-3 px-4 py-2 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all">

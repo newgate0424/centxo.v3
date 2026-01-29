@@ -14,9 +14,9 @@ export function ConnectionsPage() {
     const router = useRouter();
     const pathname = usePathname();
 
-    // Get default tab from URL or fallback to "connections"
-    const defaultTab = searchParams.get('tab') || 'connections';
-    const [activeTab, setActiveTab] = useState(defaultTab);
+    // Sync tab from URL - use searchParams directly to avoid hydration mismatch
+    const tabFromUrl = searchParams.get('tab') || 'connections';
+    const [activeTab, setActiveTab] = useState(tabFromUrl);
 
     // Update URL when tab changes
     const handleTabChange = (value: string) => {
@@ -26,13 +26,12 @@ export function ConnectionsPage() {
         router.push(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
-    // Sync state if URL changes externally
+    // Sync state when URL changes (e.g. direct navigation, browser back)
     useEffect(() => {
-        const tabFromUrl = searchParams.get('tab');
-        if (tabFromUrl && tabFromUrl !== activeTab) {
+        if (tabFromUrl !== activeTab) {
             setActiveTab(tabFromUrl);
         }
-    }, [searchParams]);
+    }, [tabFromUrl, activeTab]);
 
     return (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">

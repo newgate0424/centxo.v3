@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     // Rate limiting (User ID priority)
-    const rateLimitResponse = rateLimit(request, RateLimitPresets.standard, session?.user?.id);
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.standard, session?.user?.id);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -157,16 +157,14 @@ export async function GET(request: NextRequest) {
             return;
           }
 
-          // 1. Fetch Daily Insights with Extended Fields
-          // inline_link_clicks is better for CPC/CTR in performance contexts, but 'clicks' (all) is standard for generic CTR.
-          // We'll fetch both.
+          // Fetch insights + campaigns in parallel (reduces latency per account)
           const insightsUrl = `https://graph.facebook.com/v22.0/${adAccountId}/insights?fields=spend,impressions,clicks,inline_link_clicks,actions,action_values,date_start${timeRangeParams}&time_increment=1&access_token=${token}`;
-          const insightsResponse = await fetch(insightsUrl);
+          const campaignsUrl = `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=status&access_token=${token}`;
 
-          // 2. Fetch Active Campaigns (Current Snapshot only)
-          const campaignsResponse = await fetch(
-            `https://graph.facebook.com/v22.0/${adAccountId}/campaigns?fields=status&access_token=${token}`
-          );
+          const [insightsResponse, campaignsResponse] = await Promise.all([
+            fetch(insightsUrl),
+            fetch(campaignsUrl),
+          ]);
 
           if (insightsResponse.ok) {
             const data = await insightsResponse.json();

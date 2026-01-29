@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ export default function LaunchWizard() {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const form = useForm<LaunchFormValues>({
     resolver: zodResolver(launchSchema),
@@ -79,9 +81,15 @@ export default function LaunchWizard() {
                 description: `Campaign "${result.campaignName}" is now active.`,
                 variant: 'default',
             });
-            // Reset form or redirect
             form.reset();
             setStep(1);
+        } else if (result.redirectTo === '/create-ads') {
+            toast({
+                title: "ไปที่ระบบสร้างแอดออโต้",
+                description: result.error || "ใช้ระบบสร้างแอดออโต้สำหรับการสร้างแคมเปญที่สมบูรณ์",
+                variant: 'default',
+            });
+            router.push('/create-ads');
         } else {
             throw new Error(result.error || 'An unknown error occurred.');
         }

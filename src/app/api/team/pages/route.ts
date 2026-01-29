@@ -4,8 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // Simple in-memory cache using globalThis to survive HMR in dev
-// Key: userId, Value: { data: any, timestamp: number }
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes - reduce Meta rate limit usage
 
 declare global {
     var _pagesCache: Record<string, { data: any, timestamp: number }> | undefined;
@@ -132,6 +131,8 @@ export async function GET(req: NextRequest) {
 
         console.log(`[team/pages] Maps size - Business: ${businessMap.size}, Shared Pages: ${pageToBusinessMap.size}`);
 
+        const seenPageIds = new Set<string>();
+
         for (const member of teamMembers) {
             try {
                 // Check if token is still valid
@@ -140,43 +141,30 @@ export async function GET(req: NextRequest) {
                     continue;
                 }
 
-                // Fetch pages from this team member's Facebook account
-                const response = await fetch(
-                    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,picture,access_token,business&limit=500&access_token=${member.accessToken}`
-                );
+                const token = member.accessToken;
 
-                if (!response.ok) {
-                    console.error(`Failed to fetch pages for ${member.facebookName}`);
-                    continue;
-                }
+                // 1. Fetch pages from me/accounts (user's direct pages)
+                const response = await fetch(
+                    `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,picture,access_token,business&limit=500&access_token=${token}`
+                );
 
                 const data = await response.json();
 
+                if (data.error) {
+                    console.warn(`[team/pages] me/accounts error for ${member.facebookName}:`, data.error.message || data.error);
+                }
+
                 if (data.data && Array.isArray(data.data)) {
-                    // Add source info and resolve business to each page
-                    const pagesWithSource = data.data.map((page: any) => {
+                    for (const page of data.data) {
+                        if (seenPageIds.has(page.id)) continue;
+                        seenPageIds.add(page.id);
+
                         let businessName = page.business?.name;
+                        if (!businessName && page.business?.id) businessName = businessMap.get(page.business.id);
+                        if (!businessName) businessName = pageToBusinessMap.get(page.id);
+                        if (!businessName) businessName = page.business?.id ? `(Biz ID: ${page.business.id})` : 'Personal Page';
 
-                        // If no direct business name, try lookup by ID
-                        if (!businessName && page.business?.id) {
-                            businessName = businessMap.get(page.business.id);
-                        }
-
-                        // If still no name, check if shared to a business
-                        if (!businessName) {
-                            businessName = pageToBusinessMap.get(page.id);
-                        }
-
-                        // Fallback
-                        if (!businessName) {
-                            if (page.business?.id) {
-                                businessName = `(Biz ID: ${page.business.id})`;
-                            } else {
-                                businessName = 'Personal Page';
-                            }
-                        }
-
-                        return {
+                        allPages.push({
                             ...page,
                             business_name: businessName,
                             _source: {
@@ -184,15 +172,20 @@ export async function GET(req: NextRequest) {
                                 facebookName: member.facebookName,
                                 facebookUserId: member.facebookUserId,
                             },
-                        };
-                    });
-
-                    allPages.push(...pagesWithSource);
+                        });
+                    }
                 }
+
+                // NOTE: Only use pages from me/accounts - these are the pages the user SELECTED
+                // during the Facebook OAuth permission step. Do NOT add pages from businesses
+                // (owned_pages, client_pages) - those would include all business pages, not
+                // just the ones the user granted during connect.
             } catch (error) {
                 console.error(`Error fetching pages for team member ${member.facebookName}:`, error);
             }
         }
+
+        console.log(`[team/pages] Total pages found: ${allPages.length}`);
 
         const responseData = {
             pages: allPages,

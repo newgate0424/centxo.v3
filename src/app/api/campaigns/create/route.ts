@@ -4,6 +4,8 @@ import { invalidateUserCache } from '@/lib/cache/redis';
 import { authOptions } from '@/lib/auth';
 import { videoStorage } from '@/lib/video-storage';
 import { prisma } from '@/lib/prisma';
+import { decryptToken } from '@/lib/services/metaClient';
+import { type TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-helper';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -11,6 +13,8 @@ import { analyzeMediaForAd } from '@/ai/flows/analyze-media-for-ad';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
 import { promisify } from 'util';
+import { campaignCreateSchema, formDataToObject } from '@/lib/validation';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,41 +71,33 @@ async function optimizeImageForAI(imagePath: string): Promise<string> {
   }
 }
 
-// Helper function to get verified beneficiaries from Ad Account
-async function getVerifiedBeneficiary(adAccountId: string, accessToken: string): Promise<{ id: string; name: string } | null> {
-  console.log('🔍 Fetching verified beneficiaries from Ad Account...');
+// Beneficiary for TH: DSA or agencies only. No Page/Business fallback — Meta often rejects those.
+async function getVerifiedBeneficiary(
+  adAccountId: string,
+  accessToken: string,
+  _pageId?: string | null
+): Promise<{ id: string; name: string } | null> {
+  const actId = adAccountId.replace(/^act_/, '');
+  const pref = `act_${actId}`;
+  const token = `access_token=${accessToken}`;
 
-  // Strip 'act_' prefix if present
-  const cleanAdAccountId = adAccountId.replace(/^act_/, '');
+  const [accountRes, agenciesRes] = await Promise.all([
+    fetch(`https://graph.facebook.com/v22.0/${pref}?fields=default_dsa_beneficiary,dsa_beneficiary,dsa_payor&${token}`),
+    fetch(`https://graph.facebook.com/v22.0/${pref}/agencies?${token}`),
+  ]);
+  const [accountData, agenciesData] = await Promise.all([
+    accountRes.json().catch(() => ({})),
+    agenciesRes.json().catch(() => ({})),
+  ]);
 
-  try {
-    // Try to get DSA beneficiaries from the ad account
-    const beneficiaryResponse = await fetch(
-      `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}?fields=dsa_beneficiary,dsa_payor&access_token=${accessToken}`
-    );
-    const beneficiaryData = await beneficiaryResponse.json();
-
-    if (beneficiaryData.dsa_beneficiary) {
-      console.log(`✓ Found DSA beneficiary: ${beneficiaryData.dsa_beneficiary}`);
-      return { id: beneficiaryData.dsa_beneficiary, name: beneficiaryData.dsa_beneficiary };
-    }
-
-    // Try alternative endpoint for page transparency
-    const transparencyResponse = await fetch(
-      `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/agencies?access_token=${accessToken}`
-    );
-    const transparencyData = await transparencyResponse.json();
-
-    if (transparencyData.data && transparencyData.data.length > 0) {
-      const firstAgency = transparencyData.data[0];
-      console.log(`✓ Found agency/beneficiary: ${firstAgency.name} (${firstAgency.id})`);
-      return { id: firstAgency.id, name: firstAgency.name };
-    }
-  } catch (error) {
-    console.error('Error fetching verified beneficiary:', error);
+  const v = accountData?.default_dsa_beneficiary || accountData?.dsa_beneficiary;
+  if (v && String(v).trim()) {
+    return { id: String(v).trim(), name: String(v) };
   }
-
-  console.log('⚠️ No verified beneficiary found');
+  const first = agenciesData?.data?.[0];
+  if (first?.id) {
+    return { id: String(first.id), name: first.name || String(first.id) };
+  }
   return null;
 }
 
@@ -122,25 +118,28 @@ async function searchInterestId(interestName: string, accessToken: string): Prom
   }
 }
 
-// Helper function to convert interest names to IDs
+// Helper function to convert interest names to IDs (parallel)
 async function getInterestIds(interestNames: string[], accessToken: string): Promise<Array<{ id: string, name: string }>> {
-  const interestObjects: Array<{ id: string, name: string }> = [];
-
-  for (const name of interestNames) {
-    const id = await searchInterestId(name, accessToken);
-    if (id) {
-      interestObjects.push({ id, name });
-      console.log(`✓ Found interest ID for "${name}": ${id}`);
-    } else {
+  const results = await Promise.all(
+    interestNames.map(async (name) => {
+      const id = await searchInterestId(name, accessToken);
+      if (id) {
+        console.log(`✓ Found interest ID for "${name}": ${id}`);
+        return { id, name };
+      }
       console.warn(`✗ Could not find interest ID for "${name}", skipping`);
-    }
-  }
-
-  return interestObjects;
+      return null;
+    })
+  );
+  return results.filter((r): r is { id: string; name: string } => r != null);
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.campaignCreate);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
@@ -151,45 +150,343 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
+
+    // Validate form data with Zod schema
+    const formDataObj = formDataToObject(formData);
+    const validation = campaignCreateSchema.safeParse(formDataObj);
+
+    if (!validation.success) {
+      const errors = validation.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
+      console.warn('[campaigns/create] Validation failed:', errors);
+      return NextResponse.json(
+        { error: 'Validation failed', details: errors },
+        { status: 400 }
+      );
+    }
+
+    const validatedData = validation.data;
+
+    // Extract files (not validated by Zod)
     const videoFile = formData.get('file') as File;
     const thumbnailFile = formData.get('thumbnail') as File;
-    const existingVideo = formData.get('existingVideo') as string;
-    const adAccountId = formData.get('adAccountId') as string;
-    const campaignObjective = formData.get('campaignObjective') as string;
-    const pageId = formData.get('pageId') as string;
-    const mediaType = formData.get('mediaType') as string; // 'video' or 'image'
-    const dailyBudgetInput = formData.get('dailyBudget') as string;
-    const campaignCount = parseInt(formData.get('campaignCount') as string) || 1;
-    const adSetCount = parseInt(formData.get('adSetCount') as string) || 1;
-    const adsCount = parseInt(formData.get('adsCount') as string) || 1;
-    const beneficiaryName = formData.get('beneficiaryName') as string;
-    const targetCountry = formData.get('targetCountry') as string;
-    const placementsRaw = formData.get('placements') as string;
-    const placements = placementsRaw ? placementsRaw.split(',').filter(p => ['facebook', 'instagram', 'messenger'].includes(p)) : ['facebook', 'instagram', 'messenger'];
-    console.log('📍 Placements:', placements);
+
+    // Use validated data
+    const existingVideo = validatedData.existingVideo || null;
+    const existingPostId = validatedData.existingPostId?.trim() || null;
+    const existingFbVideoId = validatedData.existingFbVideoId?.trim() || null;
+    const existingFbVideoUrl = validatedData.existingFbVideoUrl?.trim() || null;
+    const existingFbVideoThumbnailUrl = validatedData.existingFbVideoThumbnailUrl?.trim() || null;
+    const adAccountId = validatedData.adAccountId;
+    const campaignObjective = validatedData.campaignObjective;
+    const pageId = validatedData.pageId;
+    const mediaType = validatedData.mediaType || null;
+    const dailyBudgetInput = validatedData.dailyBudget ? String(validatedData.dailyBudget) : null;
+    const campaignCount = validatedData.campaignCount;
+    const adSetCount = validatedData.adSetCount;
+    const adsCount = validatedData.adsCount;
+    const beneficiaryName = validatedData.beneficiaryName || '';
+    const targetCountry = validatedData.targetCountry;
+    const placements = validatedData.placements;
+    let ageMin = validatedData.ageMin;
+    let ageMax = validatedData.ageMax;
+    if (ageMin > ageMax) [ageMin, ageMax] = [ageMax, ageMin];
+    const primaryTextOverride = validatedData.primaryText?.trim() || null;
+    const headlineOverride = validatedData.headline?.trim() || null;
+    const greetingOverride = validatedData.greeting?.trim() || null;
+    const manualIceBreakersParsed = validatedData.manualIceBreakers;
+    console.log('📍 Placements:', placements, 'Age:', ageMin, '-', ageMax);
 
     // Strip 'act_' prefix if present to avoid 'act_act_' duplication in all API calls
     const cleanAdAccountId = adAccountId.replace(/^act_/, '');
 
-    if (!adAccountId || !campaignObjective || !pageId) {
+    // Check for media source
+    if (!existingPostId && !videoFile && !existingVideo && !existingFbVideoId) {
       return NextResponse.json(
-        { error: 'Missing required fields: adAccountId, campaignObjective, pageId' },
+        { error: 'Either file, existingVideo, existingFbVideoId, or existingPostId must be provided' },
         { status: 400 }
       );
     }
 
-    if (!videoFile && !existingVideo) {
+    const hasExistingFbVideo = !!existingFbVideoId;
+
+    // Resolve Facebook access token (MetaAccount, NextAuth, Team owner/members, Session)
+    const actId = `act_${cleanAdAccountId}`;
+    const tokens: TokenInfo[] = [];
+    const userForTokens = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        metaAccount: { select: { accessToken: true } },
+        accounts: { where: { provider: 'facebook' }, select: { access_token: true } },
+      },
+    });
+    if (userForTokens?.metaAccount?.accessToken) {
+      try {
+        const dec = decryptToken(userForTokens.metaAccount.accessToken);
+        tokens.push({ token: dec, name: 'MetaAccount' });
+      } catch {
+        tokens.push({ token: userForTokens.metaAccount!.accessToken, name: 'MetaAccount (raw)' });
+      }
+    }
+    userForTokens?.accounts?.forEach((acc: { access_token: string | null }) => {
+      if (acc.access_token && !tokens.some((t) => t.token === acc.access_token)) {
+        tokens.push({ token: acc.access_token, name: 'NextAuth Facebook' });
+      }
+    });
+    let teamOwnerId = session.user.id;
+    if (session.user.email) {
+      const memberRec = await prisma.teamMember.findFirst({
+        where: { memberEmail: session.user.email },
+      });
+      if (memberRec?.userId) teamOwnerId = memberRec.userId;
+    }
+    const teamOwner = await prisma.user.findUnique({
+      where: { id: teamOwnerId },
+      include: {
+        metaAccount: { select: { accessToken: true } },
+        accounts: { where: { provider: 'facebook' }, select: { access_token: true } },
+      },
+    });
+    if (teamOwner?.metaAccount?.accessToken && teamOwnerId !== session.user.id) {
+      try {
+        const dec = decryptToken(teamOwner.metaAccount.accessToken);
+        if (!tokens.some((t) => t.token === dec)) tokens.push({ token: dec, name: 'Team Owner' });
+      } catch {
+        if (!tokens.some((t) => t.token === teamOwner.metaAccount!.accessToken)) {
+          tokens.push({ token: teamOwner.metaAccount!.accessToken, name: 'Team Owner (raw)' });
+        }
+      }
+    }
+    teamOwner?.accounts?.forEach((acc: { access_token: string | null }) => {
+      if (acc.access_token && !tokens.some((t) => t.token === acc.access_token)) {
+        tokens.push({ token: acc.access_token, name: 'Team Owner Account' });
+      }
+    });
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { userId: teamOwnerId, memberType: 'facebook', facebookUserId: { not: null }, accessToken: { not: null } },
+    });
+    teamMembers.forEach((m: { accessToken: string | null; facebookName: string | null }) => {
+      if (m.accessToken && !tokens.some((t) => t.token === m.accessToken)) {
+        tokens.push({ token: m.accessToken, name: m.facebookName || 'Team Member' });
+      }
+    });
+    const sessionToken = (session as { accessToken?: string }).accessToken;
+    if (sessionToken && !tokens.some((t) => t.token === sessionToken)) {
+      tokens.push({ token: sessionToken, name: 'Session' });
+    }
+    let accessToken: string | null = null;
+    if (tokens.length > 0) {
+      accessToken = await getValidTokenForAdAccount(actId, tokens);
+    }
+    if (!accessToken) {
       return NextResponse.json(
-        { error: 'Either file or existingVideo must be provided' },
-        { status: 400 }
+        { error: 'Facebook account not connected or access token missing' },
+        { status: 401 }
       );
     }
 
+    // ——— Branch: Create ad from existing Page post ———
+    if (existingPostId) {
+      const accountInfoRes = await fetch(
+        `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}?fields=currency,name,business_country_code&access_token=${accessToken}`
+      );
+      const accountInfo = await accountInfoRes.json();
+      if (!accountInfoRes.ok || accountInfo.error) {
+        return NextResponse.json(
+          { error: `Failed to fetch account info: ${accountInfo.error?.message || 'Unknown error'}` },
+          { status: 400 }
+        );
+      }
+      const currency = accountInfo.currency || 'THB';
+      const countryCode = targetCountry || accountInfo.business_country_code || 'TH';
+
+      const userBudget = dailyBudgetInput ? parseFloat(dailyBudgetInput) : null;
+      let dailyBudget: number;
+      if (userBudget && userBudget > 0) {
+        dailyBudget = Math.round(userBudget * 100);
+      } else {
+        const budgetMap: Record<string, number> = { THB: 40000, USD: 1000 };
+        dailyBudget = budgetMap[currency] || 1000;
+      }
+      if (currency === 'THB' && dailyBudget < 4000) dailyBudget = 4000;
+      if (dailyBudget < 50) dailyBudget = 500;
+
+      let beneficiaryId: string;
+      if (beneficiaryName && beneficiaryName.trim() !== '') {
+        beneficiaryId = beneficiaryName.trim();
+      } else {
+        const beneficiaryInfo = await getVerifiedBeneficiary(adAccountId, accessToken, pageId);
+        beneficiaryId = beneficiaryInfo?.id ?? 'UNKNOWN';
+      }
+
+      if (countryCode === 'TH' && (!beneficiaryId || beneficiaryId === 'UNKNOWN')) {
+        return NextResponse.json(
+          { error: 'เมื่อเป้าหมายเป็นประเทศไทย (TH) ต้องระบุผู้รับผลประโยชน์ที่ตรวจสอบแล้ว: เลือกจากรายการ หรือกรอก ID ในช่อง "หรือระบุ ID ผู้รับผลประโยชน์" แล้วลองใหม่' },
+          { status: 400 }
+        );
+      }
+
+      const validCampaignCount = Math.max(1, campaignCount);
+      const adSetsPerCampaign = Math.ceil(adSetCount / validCampaignCount);
+      const adsPerAdSet = Math.ceil(adsCount / adSetCount);
+      const campaignIds: string[] = [];
+      const adSetIds: string[] = [];
+      const adIds: string[] = [];
+      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+      const getRandomDelay = () => Math.floor(Math.random() * 150) + 150;
+
+      for (let c = 0; c < validCampaignCount; c++) {
+        if (c > 0) await sleep(getRandomDelay());
+
+        const campaignRes = await fetch(
+          `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/campaigns`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: `Boost Post ${c + 1} - ${new Date().toLocaleDateString('th-TH')}`,
+              objective: campaignObjective,
+              status: 'ACTIVE',
+              special_ad_categories: ['NONE'],
+              is_adset_budget_sharing_enabled: false,
+              access_token: accessToken,
+            }),
+          }
+        );
+        const campaignData = await campaignRes.json();
+        if (!campaignRes.ok || campaignData.error) {
+          const err = campaignData.error || {};
+          const detail = [err.error_user_msg, err.message, err.error_user_title].filter(Boolean).join(' — ') || err.message || 'Unknown';
+          console.error('[campaigns/create] Campaign API error:', JSON.stringify(err));
+          throw new Error(`Campaign failed: ${detail} (code ${err.code ?? '?'})`);
+        }
+        campaignIds.push(campaignData.id);
+
+        for (let s = 0; s < adSetsPerCampaign; s++) {
+          if (s > 0) await sleep(getRandomDelay());
+          const targeting: any = {
+            geo_locations: { countries: [countryCode] },
+            age_min: ageMin,
+            age_max: ageMax,
+            publisher_platforms: placements,
+            targeting_automation: { advantage_audience: 0 },
+          };
+
+          const adSetBody: Record<string, unknown> = {
+            name: `AdSet ${s + 1} - Boost Post - ${new Date().toLocaleDateString('en-US')}`,
+            campaign_id: campaignData.id,
+            optimization_goal: 'CONVERSATIONS',
+            billing_event: 'IMPRESSIONS',
+            bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+            daily_budget: dailyBudget,
+            status: 'ACTIVE',
+            destination_type: 'MESSENGER',
+            targeting,
+            promoted_object: { page_id: pageId },
+          };
+
+          if (countryCode === 'TH' && beneficiaryId && beneficiaryId !== 'UNKNOWN') {
+            adSetBody.regional_regulated_categories = ['THAILAND_UNIVERSAL'];
+            adSetBody.regional_regulation_identities = {
+              universal_beneficiary: beneficiaryId,
+              universal_payer: beneficiaryId,
+            };
+          }
+
+          const adSetRes = await fetch(
+            `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adsets?access_token=${accessToken}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(adSetBody),
+            }
+          );
+          const adSetData = await adSetRes.json();
+          if (!adSetRes.ok || adSetData.error) {
+            const err = adSetData.error || {};
+            const msg = err.error_user_msg || err.message || 'Unknown';
+            console.error('[campaigns/create] AdSet API error:', JSON.stringify(err));
+            throw new Error(`AdSet failed: ${msg}`);
+          }
+          const adSetId = adSetData.id;
+          adSetIds.push(adSetId);
+
+          for (let a = 0; a < adsPerAdSet; a++) {
+            if (a > 0) await sleep(getRandomDelay());
+
+            const creativeRes = await fetch(
+              `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adcreatives`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: `Creative - Boost Post - ${Date.now()}`,
+                  object_story_id: existingPostId,
+                  access_token: accessToken,
+                }),
+              }
+            );
+            const creativeData = await creativeRes.json();
+            if (!creativeRes.ok || creativeData.error) {
+              const err = creativeData.error || {};
+              console.error('[campaigns/create] Ad Creative API error:', JSON.stringify(err));
+              throw new Error(`Creative failed: ${err.message || 'Unknown'}`);
+            }
+
+            const adRes = await fetch(
+              `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/ads`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  name: `Ad ${a + 1} - Boost Post`,
+                  adset_id: adSetId,
+                  creative: { creative_id: creativeData.id },
+                  status: 'ACTIVE',
+                  access_token: accessToken,
+                }),
+              }
+            );
+            const adData = await adRes.json();
+            if (!adRes.ok || adData.error) {
+              const err = adData.error || {};
+              console.error('[campaigns/create] Ad API error:', JSON.stringify(err));
+              throw new Error(`Ad failed: ${err.message || 'Unknown'}`);
+            }
+            adIds.push(adData.id);
+          }
+        }
+      }
+
+      await invalidateUserCache(session.user.id);
+      return NextResponse.json({
+        success: true,
+        campaignId: campaignIds[0],
+        message: `✅ โปรโมทโพสต์สำเร็จ!\n📊 โครงสร้าง: ${campaignCount}-${adSetCount}-${adsCount}`,
+        fbCampaignId: campaignIds[0],
+        structure: { campaigns: campaignCount, adSets: adSetCount, ads: adsCount },
+        mediaType: 'existing_post',
+      });
+    }
+
+    // ——— Default flow: new creative from file / existingVideo ———
     let mediaUrl: string;
-    let mediaPath: string;
-    const isVideo = mediaType === 'video' || videoFile?.type.startsWith('video/') || existingVideo?.endsWith('.mp4') || existingVideo?.endsWith('.webm');
+    let mediaPath: string | undefined;
+    const isVideo = hasExistingFbVideo || mediaType === 'video' || videoFile?.type.startsWith('video/') || existingVideo?.endsWith('.mp4') || existingVideo?.endsWith('.webm');
 
-    // Handle media upload or use existing media
+    const pageIdForBeneficiary = formData.get('pageId') as string | null;
+    const accountFetchPromise = fetch(
+      `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}?fields=currency,name,business_country_code&access_token=${accessToken}`
+    );
+    const beneficiaryPromise =
+      beneficiaryName && String(beneficiaryName).trim() !== ''
+        ? Promise.resolve({ id: String(beneficiaryName).trim() })
+        : getVerifiedBeneficiary(adAccountId, accessToken, pageIdForBeneficiary ?? undefined)
+            .catch((e) => {
+              console.warn('Beneficiary lookup failed:', (e as Error)?.message);
+              return null;
+            })
+            .then((b) => (b ? { id: b.id } : { id: 'UNKNOWN' }));
+
     if (existingVideo) {
       // Use existing video - try both possible paths
       console.log(`Using existing media: ${existingVideo}`);
@@ -261,6 +558,10 @@ export async function POST(request: NextRequest) {
       mediaUrl = isInVideosFolder
         ? `/api/uploads/videos/${session.user.id}/${existingVideo}`
         : `/api/uploads/${session.user.id}/${existingVideo}`;
+    } else if (hasExistingFbVideo) {
+      // Existing Facebook Ad Video (no local path)
+      mediaPath = undefined;
+      mediaUrl = existingFbVideoUrl || '';
     } else {
       // Validate file size (1.5GB max)
       const maxSize = 1.5 * 1024 * 1024 * 1024; // 1.5GB
@@ -286,7 +587,7 @@ export async function POST(request: NextRequest) {
       mediaPath = uploadResult.filePath!; // Changed from .path to .filePath
     }
 
-    console.log('Media processed successfully:', { mediaUrl, mediaPath });
+    console.log('Media processed successfully:', { mediaUrl, mediaPath, existingFbVideoId });
 
     // Step 0: AI Analysis of Media
     console.log('🤖 Analyzing media with AI...');
@@ -343,8 +644,8 @@ export async function POST(request: NextRequest) {
           let analysisMediaType: 'video' | 'image' = isVideo ? 'video' : 'image';
           let isVideoFile = false;
 
-          // For local files, optimize before sending to AI
-          if (existsSync(mediaPath)) {
+          // For local files, optimize before sending to AI (skip when mediaPath undefined, e.g. existing FB video)
+          if (mediaPath && existsSync(mediaPath)) {
             if (isVideo) {
               // For videos: Extract frame to speed up analysis (avoid uploading 100MB+ to AI)
               try {
@@ -411,6 +712,8 @@ export async function POST(request: NextRequest) {
             productContext,
             isVideoFile,
             adSetCount: adSetCount + 2,
+            adsCount,
+            copyVariationCount: Math.max(adSetCount, adsCount, 3),
             randomContext: randomSeed,
             pastSuccessExamples: pastInterests.length > 0 ? pastInterests : undefined,
           });
@@ -454,17 +757,15 @@ export async function POST(request: NextRequest) {
       const interestList = smartTargeting.interests;
       const interestGroups = [];
 
-      // Create at least 3 groups or as many as requested
+      // Create at least adSetCount groups (distinct targeting per Ad Set)
       const groupsNeeded = Math.max(adSetCount, 3);
 
       for (let i = 0; i < groupsNeeded; i++) {
-        // Shuffle/Rotate interests for diversity
-        const shuffled = [...interestList].sort(() => Math.random() - 0.5);
-        // Pick 3-5 interests per group
-        const count = 3 + Math.floor(Math.random() * 3);
+        const subset = interestList.filter((_: { id: string; name: string }, j: number) => j % groupsNeeded === i).slice(0, 5);
+        const interests = subset.length > 0 ? subset : interestList.slice(0, Math.min(3, interestList.length));
         interestGroups.push({
           name: `Targeting Group ${String.fromCharCode(65 + i)}`,
-          interests: shuffled.slice(0, count)
+          interests,
         });
       }
 
@@ -489,31 +790,11 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // Get Facebook access token from user's account
-    const userAccounts = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: 'facebook',
-      },
-    });
+    // accessToken already resolved at top (MetaAccount, NextAuth, Team, getValidTokenForAdAccount)
 
-    if (!userAccounts?.access_token) {
-      return NextResponse.json(
-        { error: 'Facebook account not connected or access token missing' },
-        { status: 401 }
-      );
-    }
+    console.log('Using pre-fetched Ad Account info & beneficiary...');
 
-    const accessToken = userAccounts.access_token;
-
-
-    // Get Ad Account info to retrieve currency and country
-    console.log('Fetching Ad Account info for currency & country...');
-
-    const accountInfoResponse = await fetch(
-      `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}?fields=currency,name,business_country_code&access_token=${accessToken}`
-    );
-
+    const [accountInfoResponse, beneficiaryResult] = await Promise.all([accountFetchPromise, beneficiaryPromise]);
     const accountInfo = await accountInfoResponse.json();
 
     if (!accountInfoResponse.ok || accountInfo.error) {
@@ -524,6 +805,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const beneficiaryId = beneficiaryResult?.id ?? 'UNKNOWN';
     const currency = accountInfo.currency || 'THB';
     // Use user-selected country. Fallback to account default.
     const countryCode = targetCountry || accountInfo.business_country_code || 'TH';
@@ -558,156 +840,168 @@ export async function POST(request: NextRequest) {
       dailyBudget = 500;
     }
 
-    // Step 1: Upload Media to Facebook (Restored)
+    // Step 1: Upload Media to Facebook (or reuse existing)
     console.log('📤 Preparing media for Facebook upload...');
     let fbMediaId: string;
     let thumbnailHash: string | undefined;
 
-    // Read file buffer
-    let mediaBuffer: Buffer;
-    let fileName: string;
-
-    // Determine path and read file
-    if (videoFile) {
-      const bytes = await videoFile.arrayBuffer();
-      mediaBuffer = Buffer.from(bytes);
-      fileName = videoFile.name;
-    } else {
-      // Using existing file (mediaPath should be set)
-      if (mediaPath && existsSync(mediaPath)) {
-        mediaBuffer = await fs.readFile(mediaPath);
-        fileName = path.basename(mediaPath);
-      } else {
-        // Fallback to fetch if needed or error
-        throw new Error(`Media file not found for upload: ${mediaPath}`);
-      }
-    }
-
-    if (isVideo) {
-      // Video Upload
-      const videoSizeMB = mediaBuffer.length / (1024 * 1024);
-      console.log(`📤 Uploading video to Facebook (${videoSizeMB.toFixed(2)}MB)...`);
-
-      const formDataVideo = new FormData();
-      formDataVideo.append('file', new Blob([new Uint8Array(mediaBuffer)]), fileName);
-      formDataVideo.append('access_token', accessToken);
-
-      const videoUploadResponse = await fetch(
-        `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/advideos`,
-        { method: 'POST', body: formDataVideo }
-      );
-      const videoUploadData = await videoUploadResponse.json();
-
-      if (!videoUploadResponse.ok || videoUploadData.error) {
-        console.error('Video upload failed:', videoUploadData);
-        throw new Error(`Video upload failed: ${videoUploadData.error?.message}`);
-      }
-      fbMediaId = videoUploadData.id;
-      console.log(`✅ Video uploaded: ${fbMediaId}`);
-
-      // Thumbnail Logic - REQUIRED for video Ads
-      // If user provided thumbnail, use it. Otherwise, create a simple placeholder image.
-      if (thumbnailFile) {
-        console.log('🖼️ Using user-provided thumbnail...');
-
-        // [NEW] Upload Custom Thumbnail to R2 (for persistence/library)
+    let videoCoverImageUrl: string | undefined;
+    if (hasExistingFbVideo) {
+      fbMediaId = existingFbVideoId!;
+      console.log('✅ Using existing Facebook video (no upload):', fbMediaId);
+      videoCoverImageUrl = existingFbVideoThumbnailUrl || undefined;
+      if (!videoCoverImageUrl) {
         try {
-          console.log('☁️ Uploading custom thumbnail to R2 storage...');
-          const thumbUploadRes = await videoStorage.upload(thumbnailFile, session.user.id);
-          if (thumbUploadRes.success) {
-            console.log('✅ Custom thumbnail saved to R2:', thumbUploadRes.url);
+          const picRes = await fetch(
+            `https://graph.facebook.com/v22.0/${existingFbVideoId}?fields=picture,thumbnails&access_token=${accessToken}`
+          );
+          const picData = await picRes.json();
+          if (picData.picture) {
+            videoCoverImageUrl = picData.picture;
+            console.log('✅ Video cover from Graph API picture');
+          } else if (picData.thumbnails?.data?.[0]?.uri) {
+            videoCoverImageUrl = picData.thumbnails.data[0].uri;
+            console.log('✅ Video cover from Graph API thumbnails');
           }
-        } catch (thumbStorageErr) {
-          console.warn('⚠️ Failed to save thumbnail to R2 (continuing):', thumbStorageErr);
-        }
-
-        const thumbBytes = await thumbnailFile.arrayBuffer();
-        const thumbFormData = new FormData();
-        thumbFormData.append('file', new Blob([new Uint8Array(thumbBytes)], { type: 'image/jpeg' }), 'thumbnail.jpg');
-        thumbFormData.append('access_token', accessToken);
-
-        const thumbResponse = await fetch(`https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`, { method: 'POST', body: thumbFormData });
-        const thumbData = await thumbResponse.json();
-        if (thumbData.images) {
-          const key = Object.keys(thumbData.images)[0];
-          thumbnailHash = thumbData.images[key].hash;
-          console.log('✅ User thumbnail uploaded:', thumbnailHash);
+        } catch (e) {
+          console.warn('Could not fetch video picture for cover:', e);
         }
       } else {
-        // Auto-generate a simple placeholder thumbnail (gradient image)
-        console.log('🎨 Generating auto-thumbnail for video ad...');
-        try {
-          const sharp = (await import('sharp')).default;
+        console.log('✅ Video cover from existingFbVideoThumbnailUrl');
+      }
+    } else {
+      videoCoverImageUrl = undefined;
+      // Read file buffer
+      let mediaBuffer: Buffer;
+      let fileName: string;
 
-          // Create a simple 1200x628 gradient image
-          const autoThumbBuffer = await sharp({
-            create: {
-              width: 1200,
-              height: 628,
-              channels: 3,
-              background: { r: 99, g: 102, b: 241 } // Indigo color
+      // Determine path and read file
+      if (videoFile) {
+        const bytes = await videoFile.arrayBuffer();
+        mediaBuffer = Buffer.from(bytes);
+        fileName = videoFile.name;
+      } else {
+        // Using existing file (mediaPath should be set)
+        if (mediaPath && existsSync(mediaPath)) {
+          mediaBuffer = await fs.readFile(mediaPath);
+          fileName = path.basename(mediaPath);
+        } else {
+          // Fallback to fetch if needed or error
+          throw new Error(`Media file not found for upload: ${mediaPath}`);
+        }
+      }
+
+      if (isVideo) {
+        // Video Upload
+        const videoSizeMB = mediaBuffer.length / (1024 * 1024);
+        console.log(`📤 Uploading video to Facebook (${videoSizeMB.toFixed(2)}MB)...`);
+
+        const formDataVideo = new FormData();
+        formDataVideo.append('file', new Blob([new Uint8Array(mediaBuffer)]), fileName);
+        formDataVideo.append('access_token', accessToken);
+
+        const videoUploadResponse = await fetch(
+          `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/advideos`,
+          { method: 'POST', body: formDataVideo }
+        );
+        const videoUploadData = await videoUploadResponse.json();
+
+        if (!videoUploadResponse.ok || videoUploadData.error) {
+          console.error('Video upload failed:', videoUploadData);
+          throw new Error(`Video upload failed: ${videoUploadData.error?.message}`);
+        }
+        fbMediaId = videoUploadData.id;
+        console.log(`✅ Video uploaded: ${fbMediaId}`);
+
+        // Thumbnail Logic - REQUIRED for video Ads
+        // If user provided thumbnail, use it. Otherwise, create a simple placeholder image.
+        if (thumbnailFile) {
+          console.log('🖼️ Using user-provided thumbnail...');
+
+          // [NEW] Upload Custom Thumbnail to R2 (for persistence/library)
+          try {
+            console.log('☁️ Uploading custom thumbnail to R2 storage...');
+            const thumbUploadRes = await videoStorage.upload(thumbnailFile, session.user.id);
+            if (thumbUploadRes.success) {
+              console.log('✅ Custom thumbnail saved to R2:', thumbUploadRes.url);
             }
-          })
-            .jpeg({ quality: 85 })
-            .toBuffer();
-
-          const autoThumbFormData = new FormData();
-          autoThumbFormData.append('file', new Blob([new Uint8Array(autoThumbBuffer)], { type: 'image/jpeg' }), 'auto_thumbnail.jpg');
-          autoThumbFormData.append('access_token', accessToken);
-
-          const autoThumbResponse = await fetch(`https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`, { method: 'POST', body: autoThumbFormData });
-          const autoThumbData = await autoThumbResponse.json();
-          if (autoThumbData.images) {
-            const key = Object.keys(autoThumbData.images)[0];
-            thumbnailHash = autoThumbData.images[key].hash;
-            console.log('✅ Auto-thumbnail generated and uploaded:', thumbnailHash);
+          } catch (thumbStorageErr) {
+            console.warn('⚠️ Failed to save thumbnail to R2 (continuing):', thumbStorageErr);
           }
-        } catch (sharpErr) {
-          console.error('⚠️ Failed to generate auto-thumbnail:', sharpErr);
-          // Will continue without thumbnail - Ad creation might fail
+
+          const thumbBytes = await thumbnailFile.arrayBuffer();
+          const thumbFormData = new FormData();
+          thumbFormData.append('file', new Blob([new Uint8Array(thumbBytes)], { type: 'image/jpeg' }), 'thumbnail.jpg');
+          thumbFormData.append('access_token', accessToken);
+
+          const thumbResponse = await fetch(`https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`, { method: 'POST', body: thumbFormData });
+          const thumbData = await thumbResponse.json();
+          if (thumbData.images) {
+            const key = Object.keys(thumbData.images)[0];
+            thumbnailHash = thumbData.images[key].hash;
+            console.log('✅ User thumbnail uploaded:', thumbnailHash);
+          }
+        } else {
+          // Auto-generate a simple placeholder thumbnail (gradient image)
+          console.log('🎨 Generating auto-thumbnail for video ad...');
+          try {
+            const sharp = (await import('sharp')).default;
+
+            // Create a simple 1200x628 gradient image
+            const autoThumbBuffer = await sharp({
+              create: {
+                width: 1200,
+                height: 628,
+                channels: 3,
+                background: { r: 99, g: 102, b: 241 } // Indigo color
+              }
+            })
+              .jpeg({ quality: 85 })
+              .toBuffer();
+
+            const autoThumbFormData = new FormData();
+            autoThumbFormData.append('file', new Blob([new Uint8Array(autoThumbBuffer)], { type: 'image/jpeg' }), 'auto_thumbnail.jpg');
+            autoThumbFormData.append('access_token', accessToken);
+
+            const autoThumbResponse = await fetch(`https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`, { method: 'POST', body: autoThumbFormData });
+            const autoThumbData = await autoThumbResponse.json();
+            if (autoThumbData.images) {
+              const key = Object.keys(autoThumbData.images)[0];
+              thumbnailHash = autoThumbData.images[key].hash;
+              console.log('✅ Auto-thumbnail generated and uploaded:', thumbnailHash);
+            }
+          } catch (sharpErr) {
+            console.error('⚠️ Failed to generate auto-thumbnail:', sharpErr);
+            // Will continue without thumbnail - Ad creation might fail
+          }
         }
+      } else {
+        // Image Upload
+        const formDataImage = new FormData();
+        formDataImage.append('file', new Blob([new Uint8Array(mediaBuffer)], { type: 'image/jpeg' }), fileName);
+        formDataImage.append('access_token', accessToken);
+
+        const imageUploadResponse = await fetch(
+          `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`,
+          { method: 'POST', body: formDataImage }
+        );
+        const imageUploadData = await imageUploadResponse.json();
+
+        if (!imageUploadResponse.ok || imageUploadData.error) {
+          throw new Error(`Image upload failed: ${imageUploadData.error?.message}`);
+        }
+
+        const imageHash = Object.keys(imageUploadData.images || {})[0];
+        fbMediaId = imageUploadData.images[imageHash].hash;
+        console.log(`✅ Image uploaded: ${fbMediaId}`);
       }
-    } else {
-      // Image Upload
-      const formDataImage = new FormData();
-      formDataImage.append('file', new Blob([new Uint8Array(mediaBuffer)], { type: 'image/jpeg' }), fileName);
-      formDataImage.append('access_token', accessToken);
-
-      const imageUploadResponse = await fetch(
-        `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`,
-        { method: 'POST', body: formDataImage }
-      );
-      const imageUploadData = await imageUploadResponse.json();
-
-      if (!imageUploadResponse.ok || imageUploadData.error) {
-        throw new Error(`Image upload failed: ${imageUploadData.error?.message}`);
-      }
-
-      const imageHash = Object.keys(imageUploadData.images || {})[0];
-      fbMediaId = imageUploadData.images[imageHash].hash;
-      console.log(`✅ Image uploaded: ${fbMediaId}`);
     }
 
-    // Step 2: Get verified beneficiary
-    let beneficiaryId: string;
-    if (beneficiaryName && beneficiaryName.trim() !== '') {
-      beneficiaryId = beneficiaryName.trim();
-    } else {
-      // Simple fallback if function not imported, or assume imported
-      // Ideally we should import getVerifiedBeneficiary.
-      // For now, if missing, we might skip or error.
-      // Assuming getVerifiedBeneficiary is available in file (it was used in previous code)
-      try {
-        // @ts-ignore
-        const beneficiaryInfo = await getVerifiedBeneficiary(adAccountId, accessToken);
-        if (beneficiaryInfo?.id) beneficiaryId = beneficiaryInfo.id;
-        else throw new Error("No beneficiary found");
-      } catch (e) {
-        console.warn("Beneficiary lookup failed, using page name as fallback if possible or error");
-        // Non-critical if we don't enforce regulation, but TH usually needs it.
-        // Let's allow empty if we aren't strict on TH_UNIVERSAL
-        beneficiaryId = 'UNKNOWN';
-      }
+    if (countryCode === 'TH' && (!beneficiaryId || beneficiaryId === 'UNKNOWN')) {
+      return NextResponse.json(
+        { error: 'เมื่อเป้าหมายเป็นประเทศไทย (TH) ต้องระบุผู้รับผลประโยชน์ที่ตรวจสอบแล้ว: เลือกจากรายการ หรือกรอก ID ในช่อง "หรือระบุ ID ผู้รับผลประโยชน์" แล้วลองใหม่' },
+        { status: 400 }
+      );
     }
 
     // Prepare loops
@@ -725,38 +1019,44 @@ export async function POST(request: NextRequest) {
     const adSetIds: string[] = [];
     const adIds: string[] = [];
 
-    // ANTI-BOT: Sleep Helper
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-    const getRandomDelay = () => Math.floor(Math.random() * 3000) + 2000; // 2-5 sec
+    const getRandomDelay = () => Math.floor(Math.random() * 150) + 150;
 
     // Step 3: Campaign Loop
     for (let c = 0; c < validCampaignCount; c++) {
       if (c > 0) {
         const delay = getRandomDelay();
-        console.log(`⏳ Anti-Bot: Waiting ${delay}ms before next campaign...`);
+        console.log(`⏳ Waiting ${delay}ms before next campaign...`);
         await sleep(delay);
       }
 
       console.log(`\n--- Processing Campaign ${c + 1}/${validCampaignCount} ---`);
+
+      const campaignBody = {
+        name: `Auto Campaign ${c + 1} - ${new Date().toLocaleDateString('th-TH')}`,
+        objective: campaignObjective,
+        status: 'ACTIVE' as const,
+        special_ad_categories: ['NONE'] as const,
+        is_adset_budget_sharing_enabled: false,
+        access_token: accessToken,
+      };
 
       const campaignResponse = await fetch(
         `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/campaigns`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: `Auto Campaign ${c + 1} - ${new Date().toLocaleDateString('th-TH')}`,
-            objective: campaignObjective,
-            status: 'ACTIVE',
-            special_ad_categories: [],
-            access_token: accessToken,
-          }),
+          body: JSON.stringify(campaignBody),
         }
       );
 
       const campaignData = await campaignResponse.json();
       if (!campaignResponse.ok || campaignData.error) {
-        throw new Error(`Facebook Campaign Error: ${campaignData.error?.message}`);
+        const err = campaignData.error || {};
+        const detail = [err.error_user_msg, err.message, err.error_user_title].filter(Boolean).join(' — ') || err.message || 'Invalid parameter';
+        console.error('[campaigns/create] Campaign API error:', JSON.stringify(err));
+        console.error('[campaigns/create] Request body (token redacted):', JSON.stringify({ ...campaignBody, access_token: '[REDACTED]' }));
+        throw new Error(`Facebook Campaign Error: ${detail}${err.code != null ? ` (code ${err.code})` : ''}`);
       }
 
       const campaignId = campaignData.id;
@@ -767,26 +1067,30 @@ export async function POST(request: NextRequest) {
       const currentCampaignAdSetIds: string[] = [];
 
       for (let s = 0; s < adSetsPerCampaign; s++) {
-        // Anti-Bot Delay between Ad Sets
-        const delay = getRandomDelay();
-        console.log(`⏳ Anti-Bot: Waiting ${delay}ms before creating Ad Set ${s + 1}...`);
-        await sleep(delay);
+        if (s > 0) {
+          const delay = getRandomDelay();
+          console.log(`⏳ Waiting ${delay}ms before Ad Set ${s + 1}...`);
+          await sleep(delay);
+        }
 
         // Global AdSet Index
         const globalAdSetIndex = (c * adSetsPerCampaign) + s;
 
-        // Use different interest group
-        const interestGroup = aiAnalysis.interestGroups?.[globalAdSetIndex % (aiAnalysis.interestGroups?.length || 1)] || {
+        // Use distinct interest group per Ad Set (cycle only if more Ad Sets than groups)
+        const igLen = aiAnalysis.interestGroups?.length || 0;
+        const igIdx = igLen > 0 ? (globalAdSetIndex < igLen ? globalAdSetIndex : globalAdSetIndex % igLen) : 0;
+        const interestGroup = aiAnalysis.interestGroups?.[igIdx] ?? {
           name: 'General',
           interests: aiAnalysis.interests || []
         };
 
-        // Start with BROAD targeting (no interests) - especially for cross-country targeting
+        // Start with BROAD targeting. Age from form (default 20–50).
         const loopTargeting: any = {
           geo_locations: { countries: [countryCode] },
-          age_min: Math.max(Number(aiAnalysis.ageMin) || 18, 18), // Wider age range
-          age_max: Number(aiAnalysis.ageMax) || 65,
-          publisher_platforms: placements, // Dynamic from UI selection
+          age_min: ageMin,
+          age_max: ageMax,
+          publisher_platforms: placements,
+          targeting_automation: { advantage_audience: 0 },
         };
 
         // NOTE: Skipping interests for now to avoid "audience too narrow" errors
@@ -843,6 +1147,14 @@ export async function POST(request: NextRequest) {
           promoted_object: { page_id: pageId },
         };
 
+        if (countryCode === 'TH' && beneficiaryId && beneficiaryId !== 'UNKNOWN') {
+          adSetPayload.regional_regulated_categories = ['THAILAND_UNIVERSAL'];
+          adSetPayload.regional_regulation_identities = {
+            universal_beneficiary: beneficiaryId,
+            universal_payer: beneficiaryId,
+          };
+        }
+
         console.log('📦 AdSet Payload:', JSON.stringify(adSetPayload, null, 2));
 
         const adSetResponse = await fetch(
@@ -868,16 +1180,26 @@ export async function POST(request: NextRequest) {
 
         // Step 5: Ads Loop
         for (let a = 0; a < adsPerAdSet; a++) {
-          // Anti-Bot Delay between Ads
-          const adDelay = getRandomDelay();
-          console.log(`⏳ Anti-Bot: Waiting ${adDelay}ms before creating Ad ${a + 1}...`);
-          await sleep(adDelay);
+          if (a > 0) {
+            const adDelay = getRandomDelay();
+            console.log(`⏳ Waiting ${adDelay}ms before Ad ${a + 1}...`);
+            await sleep(adDelay);
+          }
 
-          // Rotate ad copy variations if available
+          // Rotate ad copy variations; when Ads > 1 use only variations (each ad different)
           const copyIndex = (c * adSetsPerCampaign * adsPerAdSet + s * adsPerAdSet + a) % (aiAnalysis.adCopyVariations?.length || 1);
-          const adCopyVariation = aiAnalysis.adCopyVariations?.[copyIndex] || {
-            primaryText: aiAnalysis.primaryText,
-            headline: aiAnalysis.headline,
+          const baseCopy = aiAnalysis.adCopyVariations?.[copyIndex] ?? { primaryText: aiAnalysis.primaryText, headline: aiAnalysis.headline };
+          const useOverrides = adsCount <= 1;
+          const rawPrimary = (primaryTextOverride && primaryTextOverride.trim())
+            ? primaryTextOverride.trim()
+            : useOverrides ? (baseCopy.primaryText || aiAnalysis.primaryText) : baseCopy.primaryText;
+          const rawHeadline = (headlineOverride && headlineOverride.trim())
+            ? headlineOverride.trim()
+            : useOverrides ? (baseCopy.headline || aiAnalysis.headline) : baseCopy.headline;
+          const fallbackHeadline = '✨ คลิกดูสินค้าและทักแชทเลย!';
+          const adCopyVariation = {
+            primaryText: (rawPrimary && String(rawPrimary).trim()) ? String(rawPrimary).trim() : (aiAnalysis.primaryText || ''),
+            headline: (rawHeadline && String(rawHeadline).trim()) ? String(rawHeadline).trim() : (baseCopy.headline || aiAnalysis.headline || fallbackHeadline),
           };
 
           console.log(`Creating Ad ${a + 1}/${adsPerAdSet} for AdSet ${adSetId}...`);
@@ -896,7 +1218,13 @@ export async function POST(request: NextRequest) {
               video_id: fbMediaId,
               call_to_action: { type: 'MESSAGE_PAGE', value: { link: `https://facebook.com/${pageId}` } },
             };
-            if (thumbnailHash) creativePayload.object_story_spec.video_data.image_hash = thumbnailHash;
+            if (thumbnailHash) {
+              creativePayload.object_story_spec.video_data.image_hash = thumbnailHash;
+            } else if (videoCoverImageUrl) {
+              creativePayload.object_story_spec.video_data.image_url = videoCoverImageUrl;
+            } else {
+              throw new Error('Video creative requires image_hash or image_url. Provide a thumbnail for the video or use a library video with a thumbnail.');
+            }
           } else {
             creativePayload.object_story_spec.link_data = {
               image_hash: fbMediaId,
@@ -907,14 +1235,51 @@ export async function POST(request: NextRequest) {
             };
           }
 
+          const effectiveIceBreakers = (manualIceBreakersParsed && manualIceBreakersParsed.length > 0
+            ? manualIceBreakersParsed
+            : (aiAnalysis.iceBreakers || [])
+          ).filter((x: { question?: string }) => typeof x?.question === 'string' && x.question.trim());
+          const greetingText = greetingOverride || (typeof (aiAnalysis as { greeting?: string }).greeting === 'string' ? (aiAnalysis as { greeting?: string }).greeting : null) || null;
+          let pageWelcomeMessage: string | object | null = null;
+          if (effectiveIceBreakers.length > 0) {
+            const text = (greetingText || 'สวัสดีครับ มีอะไรให้ช่วยไหม?').slice(0, 300);
+            const iceBreakersMeta = effectiveIceBreakers.slice(0, 4).map((x: { question: string; payload: string }) => ({
+              title: String(x.question).slice(0, 80),
+              response: String(x.payload || '').slice(0, 300),
+            }));
+            pageWelcomeMessage = {
+              type: 'VISUAL_EDITOR',
+              version: 2,
+              landing_screen_type: 'welcome_message',
+              media_type: 'text',
+              text_format: {
+                customer_action_type: 'ice_breakers',
+                message: {
+                  ice_breakers: iceBreakersMeta,
+                  quick_replies: [] as unknown[],
+                  text,
+                },
+              },
+              user_edit: false,
+              surface: 'visual_editor_new',
+            };
+          } else if (greetingText) {
+            pageWelcomeMessage = greetingText;
+          }
+          const creativeDataObj = isVideo ? creativePayload.object_story_spec.video_data : creativePayload.object_story_spec.link_data;
+          if (pageWelcomeMessage) creativeDataObj.page_welcome_message = pageWelcomeMessage;
+
           const creativeResponse = await fetch(
             `https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adcreatives`,
             { method: 'POST', body: JSON.stringify(creativePayload), headers: { 'Content-Type': 'application/json' } }
           );
           const creativeData = await creativeResponse.json();
-          if (creativeData.error) {
-            console.error('Creative failed', creativeData);
-            continue;
+          if (!creativeResponse.ok || creativeData.error || !creativeData.id) {
+            const err = creativeData.error || {};
+            const msg = err.error_user_msg || err.message || err.error_user_title || 'Unknown';
+            console.error('[campaigns/create] Creative failed:', JSON.stringify(creativeData));
+            console.error('[campaigns/create] Creative payload (token redacted):', JSON.stringify({ ...creativePayload, access_token: '[REDACTED]' }));
+            throw new Error(`Failed to create Ad Creative ${a + 1}: ${msg}${err.code != null ? ` (code ${err.code})` : ''}`);
           }
 
           const adResponse = await fetch(
@@ -936,8 +1301,8 @@ export async function POST(request: NextRequest) {
             adIds.push(adData.id);
             console.log(`✓ Ad ${a + 1} created: ${adData.id}`);
           } else {
-            console.error(`✗ Ad ${a + 1} creation FAILED:`, adData.error || adData);
-            // Throw to make failure visible
+            const err = adData.error || adData;
+            console.error('[campaigns/create] Ad API error:', JSON.stringify(err));
             throw new Error(`Failed to create Ad ${a + 1}: ${adData.error?.message || JSON.stringify(adData)}`);
           }
         }
@@ -964,7 +1329,7 @@ export async function POST(request: NextRequest) {
             pageId,
             accessToken,
             productCategory: aiAnalysis.productCategory,
-            iceBreakers: aiAnalysis.iceBreakers, // Pass AI-generated ice breakers
+            iceBreakers: manualIceBreakersParsed && manualIceBreakersParsed.length > 0 ? manualIceBreakersParsed : aiAnalysis.iceBreakers,
           }),
         }
       );
@@ -985,7 +1350,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       campaignId: campaignIds[0],
-      message: `✅ สร้างแคมเปญสำเร็จ!\n📊 โครงสร้าง: ${campaignCount}-${adSetCount}-${adsCount}\n🎯 ${aiAnalysis.productCategory} | อายุ ${aiAnalysis.ageMin}-${aiAnalysis.ageMax} ปี`,
+      message: `✅ สร้างแคมเปญสำเร็จ!\n📊 โครงสร้าง: ${campaignCount}-${adSetCount}-${adsCount}\n🎯 ${aiAnalysis.productCategory} | อายุ ${ageMin}-${ageMax} ปี`,
       fbCampaignId: campaignIds[0],
       structure: {
         campaigns: campaignCount,
@@ -998,14 +1363,18 @@ export async function POST(request: NextRequest) {
         headline: aiAnalysis.headline,
         primaryText: aiAnalysis.primaryText,
         interests: aiAnalysis.interests,
-        ageRange: `${aiAnalysis.ageMin}-${aiAnalysis.ageMax}`,
+        ageRange: `${ageMin}-${ageMax}`,
         confidence: aiAnalysis.confidence,
       },
     });
   } catch (error) {
-    console.error('Campaign creation error:', error);
+    const msg = error instanceof Error ? error.message : 'Failed to create campaign';
+    console.error('[campaigns/create] Error:', msg);
+    if (error instanceof Error && process.env.NODE_ENV === 'development' && error.stack) {
+      console.error('[campaigns/create] Stack:', error.stack);
+    }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create campaign' },
+      { error: msg },
       { status: 500 }
     );
   }

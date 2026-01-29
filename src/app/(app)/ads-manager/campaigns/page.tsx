@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { Edit2, Trash2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, FileImage, LayoutGrid, Briefcase, Folder } from "lucide-react";
+import { Edit2, Trash2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, FileImage, LayoutGrid, Briefcase, Folder, Columns2 } from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import { showCustomToast, showErrorToast, showWarningToast } from "@/utils/custo
 import { toast } from "sonner";
 import { ExportDialog } from "@/components/ExportDialog";
 import { cn } from "@/lib/utils";
+import { formatCurrencyByCode } from "@/lib/currency-utils";
 
 
 interface Campaign {
@@ -109,6 +110,8 @@ interface Ad {
   status: string;
   adsetId: string;
   campaignId: string;
+  campaignName?: string | null;
+  adSetName?: string | null;
   creativeId: string;
   creativeName: string;
   title: string;
@@ -118,7 +121,8 @@ interface Ad {
   createdAt: string;
   adAccountId?: string;
   pageId?: string | null;
-  pageName?: string;
+  pageName?: string | null;
+  pageUsername?: string | null;
   results?: number;
   costPerResult?: number;
   budget?: number;
@@ -128,11 +132,74 @@ interface Ad {
   clicks?: number;
   messagingContacts?: number;
   amountSpent?: number;
+  currency?: string;
   postLink?: string | null;
   effectiveStatus?: string;
   configuredStatus?: string;
   issuesInfo?: any[];
 }
+
+type TabKey = 'campaigns' | 'adsets' | 'ads';
+
+const COLUMN_CONFIG: Record<TabKey, { id: string; labelKey: string }[]> = {
+  campaigns: [
+    { id: 'adAccount', labelKey: 'campaigns.columns.adAccount' },
+    { id: 'name', labelKey: 'campaigns.columns.name' },
+    { id: 'status', labelKey: 'campaigns.columns.status' },
+    { id: 'results', labelKey: 'campaigns.columns.results' },
+    { id: 'costPerResult', labelKey: 'campaigns.columns.costPerResult' },
+    { id: 'budget', labelKey: 'campaigns.columns.budget' },
+    { id: 'reach', labelKey: 'campaigns.columns.reach' },
+    { id: 'impressions', labelKey: 'campaigns.columns.impressions' },
+    { id: 'postEngagements', labelKey: 'campaigns.columns.postEngagements' },
+    { id: 'clicks', labelKey: 'campaigns.columns.clicks' },
+    { id: 'messagingContacts', labelKey: 'campaigns.columns.messagingContacts' },
+    { id: 'amountSpent', labelKey: 'campaigns.columns.amountSpent' },
+    { id: 'createdAt', labelKey: 'campaigns.columns.created' },
+  ],
+  adsets: [
+    { id: 'adAccount', labelKey: 'campaigns.columns.adAccount' },
+    { id: 'name', labelKey: 'campaigns.columns.adSetName' },
+    { id: 'target', labelKey: 'campaigns.columns.target' },
+    { id: 'status', labelKey: 'campaigns.columns.status' },
+    { id: 'results', labelKey: 'campaigns.columns.results' },
+    { id: 'costPerResult', labelKey: 'campaigns.columns.costPerResult' },
+    { id: 'budget', labelKey: 'campaigns.columns.budget' },
+    { id: 'reach', labelKey: 'campaigns.columns.reach' },
+    { id: 'impressions', labelKey: 'campaigns.columns.impressions' },
+    { id: 'postEngagements', labelKey: 'campaigns.columns.postEngagements' },
+    { id: 'clicks', labelKey: 'campaigns.columns.clicks' },
+    { id: 'messagingContacts', labelKey: 'campaigns.columns.messagingContacts' },
+    { id: 'amountSpent', labelKey: 'campaigns.columns.amountSpent' },
+    { id: 'dailyBudget', labelKey: 'launch.dailyBudget' },
+    { id: 'optimization', labelKey: 'campaigns.columns.optimization' },
+    { id: 'bidAmount', labelKey: 'campaigns.columns.bidAmount' },
+    { id: 'createdAt', labelKey: 'campaigns.columns.created' },
+  ],
+  ads: [
+    { id: 'adAccount', labelKey: 'campaigns.columns.adAccount' },
+    { id: 'page', labelKey: 'campaigns.columns.page' },
+    { id: 'campaignName', labelKey: 'campaigns.columns.campaign' },
+    { id: 'adSetName', labelKey: 'campaigns.columns.adSet' },
+    { id: 'name', labelKey: 'campaigns.columns.adName' },
+    { id: 'target', labelKey: 'campaigns.columns.target' },
+    { id: 'status', labelKey: 'campaigns.columns.status' },
+    { id: 'results', labelKey: 'campaigns.columns.results' },
+    { id: 'costPerResult', labelKey: 'campaigns.columns.costPerResult' },
+    { id: 'budget', labelKey: 'campaigns.columns.budget' },
+    { id: 'reach', labelKey: 'campaigns.columns.reach' },
+    { id: 'impressions', labelKey: 'campaigns.columns.impressions' },
+    { id: 'postEngagements', labelKey: 'campaigns.columns.postEngagements' },
+    { id: 'clicks', labelKey: 'campaigns.columns.clicks' },
+    { id: 'messagingContacts', labelKey: 'campaigns.columns.messagingContacts' },
+    { id: 'amountSpent', labelKey: 'campaigns.columns.amountSpent' },
+    { id: 'title', labelKey: 'campaigns.columns.title' },
+    { id: 'body', labelKey: 'campaigns.columns.body' },
+    { id: 'createdAt', labelKey: 'campaigns.columns.created' },
+  ],
+};
+
+const defaultVisibleSet = (tab: TabKey) => new Set(COLUMN_CONFIG[tab].map(c => c.id));
 
 export default function CampaignsPage() {
   const { data: session } = useSession();
@@ -199,7 +266,7 @@ export default function CampaignsPage() {
     }
   }, [viewSelectedAccountIds, isMounted]);
 
-  // 2. UI State (will load from localStorage after mount)
+  // 2. UI State — always init to 'campaigns' to avoid hydration mismatch; sync from URL after mount
   const [activeTab, setActiveTab] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'completed' | 'rejected' | 'with_issues' | 'in_review'>('all');
@@ -237,13 +304,71 @@ export default function CampaignsPage() {
   }, [dateRange]);
   const [expandedCell, setExpandedCell] = useState<string | null>(null);
 
-  // Load active tab from localStorage after mount (avoid hydration mismatch)
+  const [visibleColumns, setVisibleColumns] = useState<Record<TabKey, Set<string>>>({
+    campaigns: defaultVisibleSet('campaigns'),
+    adsets: defaultVisibleSet('adsets'),
+    ads: defaultVisibleSet('ads'),
+  });
+  const [columnsPopoverOpen, setColumnsPopoverOpen] = useState(false);
+
   useEffect(() => {
-    const saved = localStorage.getItem('campaigns_active_tab');
-    if (saved && ['campaigns', 'adsets', 'ads'].includes(saved)) {
-      setActiveTab(saved as 'campaigns' | 'adsets' | 'ads');
+    if (!isMounted) return;
+    try {
+      const raw = localStorage.getItem('campaigns_visible_columns');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<TabKey, string[]>;
+      const next: Record<TabKey, Set<string>> = {
+        campaigns: new Set(parsed.campaigns ?? COLUMN_CONFIG.campaigns.map(c => c.id)),
+        adsets: new Set(parsed.adsets ?? COLUMN_CONFIG.adsets.map(c => c.id)),
+        ads: new Set(parsed.ads ?? COLUMN_CONFIG.ads.map(c => c.id)),
+      };
+      setVisibleColumns(next);
+    } catch {
+      /* ignore */
     }
+  }, [isMounted]);
+
+  const toggleColumn = useCallback((tab: TabKey, id: string) => {
+    setVisibleColumns(prev => {
+      const set = new Set(prev[tab]);
+      if (set.has(id)) set.delete(id);
+      else set.add(id);
+      const next = { ...prev, [tab]: set };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('campaigns_visible_columns', JSON.stringify({
+            campaigns: Array.from(next.campaigns),
+            adsets: Array.from(next.adsets),
+            ads: Array.from(next.ads),
+          }));
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
   }, []);
+
+  const resetColumns = useCallback((tab: TabKey) => {
+    const def = defaultVisibleSet(tab);
+    setVisibleColumns(prev => {
+      const next = { ...prev, [tab]: def };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('campaigns_visible_columns', JSON.stringify({
+            campaigns: Array.from(next.campaigns),
+            adsets: Array.from(next.adsets),
+            ads: Array.from(next.ads),
+          }));
+        } catch {
+          /* ignore */
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const visible = useCallback((tab: TabKey, id: string) => visibleColumns[tab].has(id), [visibleColumns]);
 
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
@@ -288,12 +413,16 @@ export default function CampaignsPage() {
       setStatusFilter(statusParam as any);
     }
 
-    // Tab
+    // Tab — sync from URL on mount (avoids hydration mismatch; init is always 'campaigns')
     const tabParam = params.get('tab');
     if (tabParam && ['campaigns', 'adsets', 'ads'].includes(tabParam)) {
-      setActiveTab(tabParam as any);
+      setActiveTab(tabParam as 'campaigns' | 'adsets' | 'ads');
+    } else {
+      const saved = localStorage.getItem('campaigns_active_tab');
+      if (saved && ['campaigns', 'adsets', 'ads'].includes(saved)) {
+        setActiveTab(saved as 'campaigns' | 'adsets' | 'ads');
+      }
     }
-
   }, []);
 
   // 2. Sync State to URL (Write)
@@ -387,240 +516,211 @@ export default function CampaignsPage() {
     type: 'active' | 'paused' | 'completed' | 'rejected' | 'with_issues' | 'in_review' | 'other';
   };
 
-  // Helper functions for detailed status
+  // Helper functions for detailed status (Campaigns tab)
   const getCampaignStatus = (campaign: Campaign, accountMap: Record<string, DetailedAdAccount>): StatusResult => {
     // 1. Account Level Checks
     const account = campaign.adAccountId ? accountMap[campaign.adAccountId] : undefined;
     if (account) {
-      // Account Disabled
       if (account.account_status === 2) {
-        return { label: 'Account Disabled', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+        return { label: t('status.campaigns.accountDisabled'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       }
-      // Account Spending Limit
       const spendCap = Number(account.spend_cap);
       const amountSpent = Number(account.amount_spent);
-
       if (spendCap && spendCap > 0 && amountSpent >= spendCap) {
-        return { label: 'Spending Limit Reached', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+        return { label: t('status.campaigns.spendingLimitReached'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       }
     }
 
-    // 2. Campaign Level Checks
-    // Spending Limit Logic (Campaign specific)
     if (campaign.spendCap && campaign.spendCap > 0 && (campaign.amountSpent || 0) >= campaign.spendCap) {
-      return { label: 'Spending Limit Reached', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+      return { label: t('status.campaigns.spendingLimitReached'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
     }
 
-    // Status Logic
     const status = campaign.effectiveStatus || campaign.status;
 
-    // BUBBLE UP STATUS: Check nested Ads for Critical Issues (Rejected / With Issues)
-    // Priority: Rejected > With Issues > Ads Off > Active
     if (status === 'ACTIVE' && campaign.adSets) {
       const allAds = campaign.adSets.flatMap(adSet => adSet.ads || []);
-
-      // Check for Rejected Ads
-      const hasRejectedAds = allAds.some(ad =>
-        ad.effectiveStatus === 'DISAPPROVED'
-      );
-      if (hasRejectedAds) {
-        return { label: 'Rejected', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+      if (allAds.some(ad => ad.effectiveStatus === 'DISAPPROVED')) {
+        return { label: t('status.campaigns.rejected'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       }
-
-      // Check for With Issues Ads
-      const hasIssuesAds = allAds.some(ad =>
-        ad.effectiveStatus === 'WITH_ISSUES'
-      );
-      if (hasIssuesAds) {
-        return { label: 'With Issues', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+      if (allAds.some(ad => ad.effectiveStatus === 'WITH_ISSUES')) {
+        return { label: t('status.campaigns.withIssues'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       }
     }
 
-    // Check hierarchy status for Active campaigns
     if (status === 'ACTIVE' && campaign.adSets && campaign.adSets.length > 0) {
-      // Inverted Logic: Check if there is ANY active entity. If not, it's Off.
-
-      const activeStatuses = ['ACTIVE', 'IN_PROCESS', 'WITH_ISSUES', 'PENDING_REVIEW', 'PREAPPROVAL', 'ADSET_PAUSED'];
-      // Note: ADSET_PAUSED means the ad set is paused, but the ad itself might be enabled. 
-      // If we strictly want "Ads Off" meaning the user turned off the ADS, we should look for PAUSED.
-
-      // 1. Check Ad Sets
-      // If all ad sets are manually paused by user/system
       const allAdSetsManuallyOff = campaign.adSets.every(a => ['PAUSED', 'ARCHIVED', 'DELETED'].includes(a.effectiveStatus));
       if (allAdSetsManuallyOff) {
-        return { label: 'Ad Sets Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.campaigns.adSetsOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       }
 
-      // 2. Check Ads
-      // We want to detect if the user PAUSED all ads, even if Ad Sets are Active.
-      // But usually "Ads Off" means NO active ads running.
       const allAds = campaign.adSets.flatMap(adSet => adSet.ads || []);
-
       if (allAds.length > 0) {
-        // Strict check: Are ALL ads explicitly paused/archived/deleted?
         const allAdsOff = allAds.every(ad =>
           ['PAUSED', 'ARCHIVED', 'DELETED'].includes(ad.effectiveStatus) ||
           (ad.effectiveStatus === 'CAMPAIGN_PAUSED' && status === 'ACTIVE')
         );
-
         if (allAdsOff) {
-          return { label: 'Ads Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+          return { label: t('status.campaigns.adsOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
         }
-
-        // Also check if they are all paused within ACTIVE ad sets
         const activeAdSets = campaign.adSets.filter(as => !['PAUSED', 'ARCHIVED', 'DELETED'].includes(as.effectiveStatus));
         if (activeAdSets.length > 0) {
           const adsInActiveSets = activeAdSets.flatMap(as => as.ads || []);
-          // If there are ads in active sets, and ALL of them are paused -> Ads Off
           if (adsInActiveSets.length > 0 && adsInActiveSets.every(ad => ['PAUSED', 'ARCHIVED', 'DELETED'].includes(ad.effectiveStatus))) {
-            return { label: 'Ads Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+            return { label: t('status.campaigns.adsOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
           }
         }
+      } else {
+        return { label: t('status.campaigns.noAds'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       }
     }
 
     switch (status) {
       case 'ACTIVE':
-        return { label: 'Active', color: 'bg-green-500', textColor: 'text-green-600', type: 'active' };
+        return { label: t('status.campaigns.active'), color: 'bg-green-500', textColor: 'text-green-600', type: 'active' };
       case 'PAUSED':
-        return { label: 'Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.campaigns.off'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       case 'DELETED':
       case 'ARCHIVED':
-        return { label: 'Completed', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'completed' };
+        return { label: t('status.campaigns.completed'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'completed' };
       case 'Pending Settlement':
-        return { label: 'Pending Settlement', color: 'bg-orange-500', textColor: 'text-orange-600', type: 'in_review' };
+        return { label: t('status.campaigns.pendingSettlement'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'in_review' };
       case 'WITH_ISSUES':
-        return { label: 'With Issues', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+        return { label: t('status.campaigns.withIssues'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       case 'DISAPPROVED':
-        return { label: 'Rejected', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+        return { label: t('status.campaigns.rejected'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       case 'PENDING_REVIEW':
       case 'IN_PROCESS':
       case 'PREAPPROVAL':
-        return { label: 'In Review', color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
+        return { label: t('status.campaigns.inReview'), color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
+      case 'CREDIT_CARD_NEEDED':
+        return { label: t('status.creditCardNeeded'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
+      case 'PENDING_BILLING_INFO':
+        return { label: t('status.pendingBillingInfo'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
+      case 'DISABLED':
+      case 'PENDING_PROCESS':
+        return { label: t('status.pendingProcess'), color: 'bg-amber-500', textColor: 'text-amber-600', type: 'in_review' };
       default:
-        // Check configured status
         if (campaign.configuredStatus === 'PAUSED') {
-          return { label: 'Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+          return { label: t('status.campaigns.off'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
         }
         return { label: status.charAt(0).toUpperCase() + status.slice(1).toLowerCase().replace(/_/g, ' '), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'other' };
     }
   };
 
 
+  // AdSets tab status
   const getAdSetStatus = (adSet: AdSet, accountMap: Record<string, DetailedAdAccount>): StatusResult => {
-    // 1. Account Level Checks
     const account = adSet.adAccountId ? accountMap[adSet.adAccountId] : undefined;
     if (account) {
-      // Account Disabled
       if (account.account_status === 2) {
-        return { label: 'Account Disabled', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+        return { label: t('status.adsets.accountDisabled'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       }
-      // Account Spending Limit
       const spendCap = Number(account.spend_cap);
       const amountSpent = Number(account.amount_spent);
-
       if (spendCap && spendCap > 0 && amountSpent >= spendCap) {
-        return { label: 'Spending Limit Reached', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+        return { label: t('status.adsets.spendingLimitReached'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       }
     }
 
     const status = adSet.effectiveStatus || adSet.status;
 
-    // BUBBLE UP STATUS: Check nested Ads for Critical Issues (Rejected / With Issues)
     if (status === 'ACTIVE' && adSet.ads) {
-      // Check for Rejected Ads
-      const hasRejectedAds = adSet.ads.some(ad =>
-        ad.effectiveStatus === 'DISAPPROVED'
-      );
-      if (hasRejectedAds) {
-        return { label: 'Rejected', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+      if (adSet.ads.some(ad => ad.effectiveStatus === 'DISAPPROVED')) {
+        return { label: t('status.adsets.rejected'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       }
-
-      // Check for With Issues Ads
-      const hasIssuesAds = adSet.ads.some(ad =>
-        ad.effectiveStatus === 'WITH_ISSUES'
-      );
-      if (hasIssuesAds) {
-        return { label: 'With Issues', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+      if (adSet.ads.some(ad => ad.effectiveStatus === 'WITH_ISSUES')) {
+        return { label: t('status.adsets.withIssues'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       }
     }
 
-    // Check hierarchy status for Active ad sets
     if (status === 'ACTIVE' && adSet.ads && adSet.ads.length > 0) {
-      const allAdsOff = adSet.ads.every(a =>
-        ['PAUSED', 'ARCHIVED', 'DELETED'].includes(a.effectiveStatus)
-      );
+      const allAdsOff = adSet.ads.every(a => ['PAUSED', 'ARCHIVED', 'DELETED'].includes(a.effectiveStatus));
       if (allAdsOff) {
-        return { label: 'Ads Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.adsets.adsOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       }
     }
 
-    // Check for No Ads (Active but no ads)
     if (status === 'ACTIVE' && (!adSet.ads || adSet.ads.length === 0)) {
-      return { label: 'No Ads', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+      return { label: t('status.adsets.noAds'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
     }
 
     switch (status) {
       case 'ACTIVE':
-        return { label: 'Active', color: 'bg-green-500', textColor: 'text-green-600', type: 'active' };
+        return { label: t('status.adsets.active'), color: 'bg-green-500', textColor: 'text-green-600', type: 'active' };
       case 'PAUSED':
-        return { label: 'Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.adsets.off'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       case 'CAMPAIGN_PAUSED':
-        return { label: 'Campaign Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.adsets.campaignOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       case 'DELETED':
       case 'ARCHIVED':
-        return { label: 'Completed', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'completed' };
+        return { label: t('status.adsets.completed'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'completed' };
       case 'WITH_ISSUES':
-        return { label: 'With Issues', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+        return { label: t('status.adsets.withIssues'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       case 'DISAPPROVED':
-        return { label: 'Rejected', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+        return { label: t('status.adsets.rejected'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       case 'PENDING_REVIEW':
       case 'IN_PROCESS':
       case 'PREAPPROVAL':
-        return { label: 'In Review', color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
+        return { label: t('status.adsets.inReview'), color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
+      case 'CREDIT_CARD_NEEDED':
+        return { label: t('status.creditCardNeeded'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
+      case 'PENDING_BILLING_INFO':
+        return { label: t('status.pendingBillingInfo'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
+      case 'DISABLED':
+      case 'PENDING_PROCESS':
+        return { label: t('status.pendingProcess'), color: 'bg-amber-500', textColor: 'text-amber-600', type: 'in_review' };
       default:
         if (adSet.configuredStatus === 'PAUSED') {
-          return { label: 'Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+          return { label: t('status.adsets.off'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
         }
         return { label: status.charAt(0).toUpperCase() + status.slice(1).toLowerCase().replace(/_/g, ' '), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'other' };
     }
   };
 
+  // Ads tab status
   const getAdStatus = (ad: Ad, account?: DetailedAdAccount): StatusResult => {
-    // 1. Check Account Status first using the passed account object
     if (account) {
       if (account.account_status === 2 || account.disable_reason) {
-        return { label: 'Account Disabled', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+        return { label: t('status.ads.accountDisabled'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       }
-      if (account.spend_cap && account.amount_spent && account.amount_spent >= account.spend_cap) {
-        return { label: 'Spending Limit Reached', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+      const spendCap = Number(account.spend_cap);
+      const amountSpent = Number(account.amount_spent);
+      if (spendCap && spendCap > 0 && amountSpent >= spendCap) {
+        return { label: t('status.ads.spendingLimitReached'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       }
     }
     const status = ad.effectiveStatus || ad.status;
 
     switch (status) {
       case 'ACTIVE':
-        return { label: 'Active', color: 'bg-green-500', textColor: 'text-green-600', type: 'active' };
+        return { label: t('status.ads.active'), color: 'bg-green-500', textColor: 'text-green-600', type: 'active' };
       case 'PAUSED':
-        return { label: 'Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.ads.off'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       case 'ADSET_PAUSED':
-        return { label: 'Ad Set: Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.ads.adSetOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       case 'CAMPAIGN_PAUSED':
-        return { label: 'Campaign Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+        return { label: t('status.ads.campaignOff'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
       case 'DISAPPROVED':
-        return { label: 'Rejected', color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
+        return { label: t('status.ads.rejected'), color: 'bg-red-500', textColor: 'text-red-600', type: 'rejected' };
       case 'WITH_ISSUES':
-        return { label: 'With Issues', color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
+        return { label: t('status.ads.withIssues'), color: 'bg-red-500', textColor: 'text-red-600', type: 'with_issues' };
       case 'DELETED':
       case 'ARCHIVED':
-        return { label: 'Completed', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'completed' };
+        return { label: t('status.ads.completed'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'completed' };
       case 'PENDING_REVIEW':
       case 'IN_PROCESS':
       case 'PREAPPROVAL':
-        return { label: 'In Review', color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
+        return { label: t('status.ads.inReview'), color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
+      case 'CREDIT_CARD_NEEDED':
+        return { label: t('status.creditCardNeeded'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
+      case 'PENDING_BILLING_INFO':
+        return { label: t('status.pendingBillingInfo'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
+      case 'DISABLED':
+      case 'PENDING_PROCESS':
+        return { label: t('status.pendingProcess'), color: 'bg-amber-500', textColor: 'text-amber-600', type: 'in_review' };
       default:
         if (ad.configuredStatus === 'PAUSED') {
-          return { label: 'Off', color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
+          return { label: t('status.ads.off'), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'paused' };
         }
         return { label: status.charAt(0).toUpperCase() + status.slice(1).toLowerCase().replace(/_/g, ' '), color: 'bg-gray-400', textColor: 'text-gray-600', type: 'other' };
     }
@@ -799,10 +899,10 @@ export default function CampaignsPage() {
 
     return (
       <TableHead
-        className={`${textAlignClass} cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors ${className}`}
+        className={cn(textAlignClass, 'cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors', className)}
         onClick={() => handleSort(columnKey)}
       >
-        <div className={`flex items-center gap-1 ${justifyClass}`}>
+        <div className={cn('flex items-center gap-1', justifyClass)}>
           {label}
           {sortConfig.key === columnKey && sortConfig.direction === 'asc' && <ArrowUp className="h-3 w-3" />}
           {sortConfig.key === columnKey && sortConfig.direction === 'desc' && <ArrowDown className="h-3 w-3" />}
@@ -875,14 +975,131 @@ export default function CampaignsPage() {
     }
   };
 
-  // Track last fetched accounts to prevent unnecessary API calls
+  // Track last fetched accounts/date to prevent unnecessary API calls
   const lastFetchedAccountsRef = useRef<string>('');
-  const lastFetchedTabRef = useRef<string>('');
   const lastFetchedDateRangeRef = useRef<string>('');
   const isFetchingRef = useRef(false);
 
+  // Prefetch all tabs in parallel for instant tab switching (must be defined before useEffects that use it)
+  const fetchAllTabsInParallel = useCallback(async (forceRefresh = false, silent = false) => {
+    const targetIds = Array.from(viewSelectedAccountIds);
+    if (targetIds.length === 0) return;
+
+    const adAccountIds = targetIds.join(',');
+    const baseParams = (path: string) => {
+      let url = `${path}?adAccountId=${adAccountIds}`;
+      if (dateRange?.from && dateRange?.to) {
+        url += `&dateFrom=${dateRange.from.toISOString()}&dateTo=${dateRange.to.toISOString()}`;
+      }
+      if (statusFilter && statusFilter !== 'all') url += `&status=${statusFilter}`;
+      if (forceRefresh) url += '&refresh=true';
+      return url;
+    };
+
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
+
+    try {
+      const [campRes, adSetRes, adRes] = await Promise.all([
+        fetch(baseParams('/api/campaigns')),
+        fetch(baseParams('/api/adsets')),
+        fetch(baseParams('/api/ads')),
+      ]);
+
+      const campData = await campRes.json().catch(() => ({}));
+      const adSetData = await adSetRes.json().catch(() => ({}));
+      const adData = await adRes.json().catch(() => ({}));
+
+      if (campRes.ok) {
+        const formatted = (campData.campaigns || []).map((c: any) => ({
+          ...c,
+          createdAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '-',
+          spend: c.metrics?.spend || 0,
+          messages: c.metrics?.messages || 0,
+          costPerMessage: c.metrics?.costPerMessage || 0,
+          results: c.metrics?.results || 0,
+          costPerResult: c.metrics?.costPerResult || 0,
+          budget: c.metrics?.budget || 0,
+          reach: c.metrics?.reach || 0,
+          impressions: c.metrics?.impressions || 0,
+          postEngagements: c.metrics?.postEngagements || 0,
+          clicks: c.metrics?.clicks || 0,
+          messagingContacts: c.metrics?.messagingContacts || 0,
+          amountSpent: c.metrics?.amountSpent || 0,
+          effectiveStatus: c.effectiveStatus,
+          configuredStatus: c.configuredStatus,
+          spendCap: c.spendCap,
+          issuesInfo: c.issuesInfo,
+          adSets: c.adSets || [],
+        }));
+        setCampaigns(formatted);
+      }
+
+      if (adSetRes.ok) {
+        const formatted = (adSetData.adsets || []).map((a: any) => ({
+          ...a,
+          createdAt: a.createdAt ? new Date(a.createdAt).toLocaleDateString() : '-',
+          spend: a.metrics?.spend || 0,
+          messages: a.metrics?.messages || 0,
+          costPerMessage: a.metrics?.costPerMessage || 0,
+          results: a.metrics?.results || 0,
+          costPerResult: a.metrics?.costPerResult || 0,
+          budget: a.metrics?.budget || 0,
+          reach: a.metrics?.reach || 0,
+          impressions: a.metrics?.impressions || 0,
+          postEngagements: a.metrics?.postEngagements || 0,
+          clicks: a.metrics?.clicks || 0,
+          messagingContacts: a.metrics?.messagingContacts || 0,
+          amountSpent: a.metrics?.amountSpent || 0,
+          effectiveStatus: a.effectiveStatus,
+          configuredStatus: a.configuredStatus,
+          issuesInfo: a.issuesInfo,
+          ads: a.ads || [],
+        }));
+        setAdSets(formatted);
+      }
+
+      if (adRes.ok) {
+        const formatted = (adData.ads || []).map((ad: any) => ({
+          ...ad,
+          createdAt: new Date(ad.createdAt).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }),
+          postLink: ad.postLink,
+          amountSpent: ad.metrics?.amountSpent || 0,
+          results: ad.metrics?.results || 0,
+          costPerResult: ad.metrics?.costPerResult || 0,
+          budget: ad.budget || 0,
+          reach: ad.metrics?.reach || 0,
+          impressions: ad.metrics?.impressions || 0,
+          postEngagements: ad.metrics?.postEngagements || 0,
+          clicks: ad.metrics?.clicks || 0,
+          messagingContacts: ad.metrics?.messagingContacts || 0,
+          effectiveStatus: ad.effectiveStatus,
+          configuredStatus: ad.configuredStatus,
+          issuesInfo: ad.issuesInfo,
+        }));
+        setAds(formatted);
+      }
+
+      if (!silent) {
+        if (!campRes.ok) setError(campData.error || 'Failed to fetch campaigns');
+        else if (!adSetRes.ok) setError(adSetData.error || 'Failed to fetch ad sets');
+        else if (!adRes.ok) setError(adData.error || 'Failed to fetch ads');
+      }
+    } catch (err) {
+      console.error('Error fetching campaigns data:', err);
+      if (!silent) setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [viewSelectedAccountIds, dateRange, statusFilter]);
+
   // Check for refresh param on mount
-  // Check for refresh param
   const shouldForceRefresh = searchParams?.get('refresh') === 'true';
 
   useEffect(() => {
@@ -913,43 +1130,29 @@ export default function CampaignsPage() {
       return;
     }
 
-    // Check if accounts OR tab OR date range actually changed
+    // Check if accounts OR date range changed (tab change doesn't refetch - we prefetch all)
     const currentAccountIds = Array.from(viewSelectedAccountIds).sort().join(',');
-    const currentTab = activeTab;
     const currentDateRangeString = dateRange?.from && dateRange?.to
       ? `${dateRange.from.toISOString()}_${dateRange.to.toISOString()}`
       : 'all';
 
     const accountsChanged = lastFetchedAccountsRef.current !== currentAccountIds;
-    const tabChanged = lastFetchedTabRef.current !== currentTab;
     const dateChanged = lastFetchedDateRangeRef.current !== currentDateRangeString;
 
-    const hasChanged = accountsChanged || tabChanged || dateChanged;
+    const hasChanged = accountsChanged || dateChanged;
 
     if (!hasChanged && !shouldForceRefresh) {
-      // Neither accounts nor tab nor date changed, and no forced refresh requested
       return;
     }
 
-    // Update last fetched accounts, tab, and date
     lastFetchedAccountsRef.current = currentAccountIds;
-    lastFetchedTabRef.current = currentTab;
     lastFetchedDateRangeRef.current = currentDateRangeString;
 
-    // Fetch data based on active tab
+    // Prefetch all tabs in parallel for instant tab switching
     const fetchData = async () => {
-      // If forced refresh OR date changed, pass refresh=true to API (to clear cache)
       const refreshParam = shouldForceRefresh || dateChanged;
+      await fetchAllTabsInParallel(refreshParam);
 
-      if (activeTab === 'campaigns') {
-        await fetchCampaigns(refreshParam);
-      } else if (activeTab === 'adsets') {
-        await fetchAdSets(refreshParam);
-      } else if (activeTab === 'ads') {
-        await fetchAds(refreshParam);
-      }
-
-      // Clean up URL if refresh param exists
       if (shouldForceRefresh) {
         const url = new URL(window.location.href);
         url.searchParams.delete('refresh');
@@ -958,7 +1161,7 @@ export default function CampaignsPage() {
     };
 
     fetchData();
-  }, [session, viewSelectedAccountIds, activeTab, dateRange, shouldForceRefresh]);
+  }, [session, viewSelectedAccountIds, dateRange, shouldForceRefresh, fetchAllTabsInParallel]);
 
 
 
@@ -969,19 +1172,12 @@ export default function CampaignsPage() {
     if (!session?.user || selectedAccounts.length === 0) return;
 
     const pollInterval = setInterval(() => {
-      if (document.hidden) return; // Don't poll if tab is hidden
-
-      if (activeTab === 'campaigns') {
-        fetchCampaigns(false, true); // silent refresh
-      } else if (activeTab === 'adsets') {
-        fetchAdSets(false, true); // silent refresh
-      } else if (activeTab === 'ads') {
-        fetchAds(false, true); // silent refresh
-      }
+      if (document.hidden) return;
+      fetchAllTabsInParallel(false, true);
     }, 15000);
 
     return () => clearInterval(pollInterval);
-  }, [session, selectedAccounts, activeTab, dateRange]);
+  }, [session, selectedAccounts, dateRange, fetchAllTabsInParallel]);
 
   const fetchCampaigns = async (forceRefresh = false, silent = false) => {
     if (isFetchingRef.current) return; // Prevent concurrent requests
@@ -1204,9 +1400,6 @@ export default function CampaignsPage() {
     }
   };
 
-
-
-
   const handleToggleCampaign = async (campaignId: string, currentStatus: string) => {
     // Optimistic update
     const newStatus = currentStatus === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
@@ -1317,26 +1510,9 @@ export default function CampaignsPage() {
     return account ? account.account_id : adAccountId;
   };
 
-  // Helper function to format currency
+  // Helper function to format currency (uses formatCurrencyByCode for correct symbol & decimal places per currency)
   const formatCurrency = (amount: number, currency?: string) => {
-    const curr = currency || 'USD';
-    const currencySymbols: Record<string, string> = {
-      'USD': '$',
-      'THB': '฿',
-      'EUR': '€',
-      'GBP': '£',
-      'JPY': '¥',
-      'CNY': '¥',
-      'KRW': '₩',
-      'SGD': 'S$',
-      'MYR': 'RM',
-      'PHP': '₱',
-      'VND': '₫',
-      'IDR': 'Rp',
-    };
-
-    const symbol = currencySymbols[curr] || curr + ' ';
-    return `${symbol}${amount.toFixed(2)}`;
+    return formatCurrencyByCode(amount, currency || 'USD');
   };
 
   // Helper function to format targeting data
@@ -1419,8 +1595,8 @@ export default function CampaignsPage() {
   };
 
   return (
-    <div className="h-full p-4 md:p-6 lg:p-8 flex flex-col overflow-hidden">
-      <div className="w-full flex flex-col h-full">
+    <div className="h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] p-4 md:p-6 lg:p-8 flex flex-col overflow-hidden">
+      <div className="w-full flex-1 flex flex-col min-h-0">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between flex-shrink-0">
           <div>
@@ -1598,9 +1774,7 @@ export default function CampaignsPage() {
           {/* Refresh Button */}
           <Button
             onClick={() => {
-              if (activeTab === 'campaigns') fetchCampaigns();
-              else if (activeTab === 'adsets') fetchAdSets();
-              else if (activeTab === 'ads') fetchAds();
+              fetchAllTabsInParallel(true);
             }}
             variant="outline"
             size="sm"
@@ -1621,6 +1795,59 @@ export default function CampaignsPage() {
             <Download className="h-4 w-4 mr-1" />
             {t('common.export', 'Export')}
           </Button>
+
+          {/* Customize Columns */}
+          <Popover open={columnsPopoverOpen} onOpenChange={setColumnsPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-900"
+              >
+                <Columns2 className="h-4 w-4" />
+                {t('campaigns.toolbar.columns', 'Columns')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0 rounded-xl" align="end">
+              <div className="p-3 border-b border-gray-200 dark:border-zinc-800">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t('campaigns.toolbar.customizeColumns', 'Show / hide columns')}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {activeTab === 'campaigns' && t('campaigns.tabs.campaigns', 'Campaigns')}
+                  {activeTab === 'adsets' && t('campaigns.tabs.adsets', 'Ad sets')}
+                  {activeTab === 'ads' && t('campaigns.tabs.ads', 'Ads')}
+                </p>
+              </div>
+              <ScrollArea className="max-h-64">
+                <div className="p-2 space-y-1">
+                  {COLUMN_CONFIG[activeTab].map(({ id, labelKey }) => (
+                    <label
+                      key={id}
+                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-800/50 cursor-pointer text-sm"
+                    >
+                      <Checkbox
+                        checked={visible(activeTab, id)}
+                        onCheckedChange={() => toggleColumn(activeTab, id)}
+                        className="rounded"
+                      />
+                      <span className="text-gray-700 dark:text-gray-300">{t(labelKey)}</span>
+                    </label>
+                  ))}
+                </div>
+              </ScrollArea>
+              <div className="p-2 border-t border-gray-200 dark:border-zinc-800">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => resetColumns(activeTab)}
+                >
+                  {t('campaigns.toolbar.resetColumns', 'Reset to default')}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Export Dialog */}
@@ -1643,7 +1870,7 @@ export default function CampaignsPage() {
                   : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
                   } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
-                <Folder className="h-4 w-4" />
+                <Folder className="h-4 w-4 text-blue-500" />
                 <span>{t('campaigns.tabs.campaigns', 'Campaigns')}</span>
                 {selectedCampaignIds.size > 0 && (
                   <>
@@ -1668,7 +1895,7 @@ export default function CampaignsPage() {
                   : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
                   } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
-                <LayoutGrid className="h-4 w-4" />
+                <LayoutGrid className="h-4 w-4 text-violet-500" />
                 <span>{t('campaigns.tabs.adSets', 'Ad sets')}</span>
                 {selectedAdSetIds.size > 0 && (
                   <>
@@ -1693,7 +1920,7 @@ export default function CampaignsPage() {
                   : 'border-gray-200 dark:border-zinc-800 border-b-gray-200 dark:border-b-zinc-800 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50/50 dark:hover:bg-zinc-800/30'
                   } w-[250px] py-3 px-4 border border-b font-medium text-sm transition-all flex items-center gap-2 rounded-t-xl -mb-px`}
               >
-                <Briefcase className="h-4 w-4" />
+                <Briefcase className="h-4 w-4 text-amber-500" />
                 <span>{t('campaigns.tabs.ads', 'Ads')}</span>
                 {selectedAdIds.size > 0 && (
                   <>
@@ -1722,12 +1949,12 @@ export default function CampaignsPage() {
           activeTab === 'campaigns' && (
             <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
-                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
-                  <Table className="w-full min-w-max">
+                <div className="overflow-auto flex-1 min-h-0 scrollbar-minimal-table [&>div]:overflow-visible">
+                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0">
                     <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                       <TableRow>
-                        <TableHead className="px-3 py-2 text-center w-12">
-                          <div className="flex justify-center">
+                        <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle">
+                          <div className="flex justify-center items-center w-full">
                             <Checkbox
                               checked={campaigns.length > 0 && selectedCampaignIds.size === campaigns.length}
                               onCheckedChange={handleToggleAllCampaigns}
@@ -1737,7 +1964,8 @@ export default function CampaignsPage() {
                           </div>
                         </TableHead>
                         <TableHead className="text-center w-20">{t('campaigns.columns.toggle', 'Active')}</TableHead>
-                        <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>
+                        {visible('campaigns', 'adAccount') && <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>}
+                        {visible('campaigns', 'name') && (
                         <TableHead
                           className="max-w-[280px] cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                           onClick={() => handleSort('name')}
@@ -1749,6 +1977,8 @@ export default function CampaignsPage() {
                             {sortConfig.key !== 'name' && <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
+                        )}
+                        {visible('campaigns', 'status') && (
                         <TableHead
                           className="max-w-[280px] cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                           onClick={() => handleSort('status')}
@@ -1760,6 +1990,8 @@ export default function CampaignsPage() {
                             {sortConfig.key !== 'status' && <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
+                        )}
+                        {visible('campaigns', 'results') && (
                         <TableHead
                           className="text-right max-w-[280px] cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                           onClick={() => handleSort('results')}
@@ -1771,13 +2003,15 @@ export default function CampaignsPage() {
                             {sortConfig.key !== 'results' && <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
-                        <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="budget" label={t('campaigns.columns.budget', 'Budget')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="reach" label={t('campaigns.columns.reach', 'Reach')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="impressions" label={t('campaigns.columns.impressions', 'Impressions')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="postEngagements" label={t('campaigns.columns.postEngagements', 'Post engagements')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="clicks" label={t('campaigns.columns.clicks', 'Clicks (all)')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="messagingContacts" label={t('campaigns.columns.messagingContacts', 'Messaging contacts')} align="right" className="max-w-[280px]" />
+                        )}
+                        {visible('campaigns', 'costPerResult') && <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'budget') && <SortableHeader columnKey="budget" label={t('campaigns.columns.budget', 'Budget')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'reach') && <SortableHeader columnKey="reach" label={t('campaigns.columns.reach', 'Reach')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'impressions') && <SortableHeader columnKey="impressions" label={t('campaigns.columns.impressions', 'Impressions')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'postEngagements') && <SortableHeader columnKey="postEngagements" label={t('campaigns.columns.postEngagements', 'Post engagements')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'clicks') && <SortableHeader columnKey="clicks" label={t('campaigns.columns.clicks', 'Clicks (all)')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'messagingContacts') && <SortableHeader columnKey="messagingContacts" label={t('campaigns.columns.messagingContacts', 'Messaging contacts')} align="right" className="max-w-[280px]" />}
+                        {visible('campaigns', 'amountSpent') && (
                         <TableHead
                           className="text-right max-w-[280px] cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
                           onClick={() => handleSort('amountSpent')}
@@ -1789,53 +2023,57 @@ export default function CampaignsPage() {
                             {sortConfig.key !== 'amountSpent' && <ArrowUpDown className="h-3 w-3 opacity-30" />}
                           </div>
                         </TableHead>
-                        <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />
+                        )}
+                        {visible('campaigns', 'createdAt') && <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />}
                         <TableHead className="text-right max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800">
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                           <TableRow key={i} className="animate-pulse">
-                            <TableCell className="px-3 py-2 text-center w-12"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px] mx-auto"></div></TableCell>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
                             <TableCell><div className="h-4 w-8 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></TableCell>
-                            <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>
+                            {visible('campaigns', 'adAccount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('campaigns', 'name') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></TableCell>}
+                            {visible('campaigns', 'status') && <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>}
+                            {visible('campaigns', 'results') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'costPerResult') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'budget') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'reach') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'impressions') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'postEngagements') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'clicks') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'messagingContacts') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'amountSpent') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('campaigns', 'createdAt') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
                             <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></TableCell>
                           </TableRow>
                         ))
                       ) : filteredCampaigns.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={16} className="text-center py-16">
-                            <p className="text-gray-600 dark:text-gray-400 mb-4">{campaigns.length === 0 ? t('campaigns.noCampaigns', 'No campaigns yet') : t('campaigns.noMatch', 'No campaigns match your filters')}</p>
-                            {campaigns.length === 0 && (
-                              <Link href="/launch">
-                                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                                  {t('campaigns.createFirst', 'Create Your First Campaign')}
-                                </Button>
-                              </Link>
-                            )}
+                          <TableCell colSpan={3 + visibleColumns.campaigns.size} className="text-center py-16">
+                            <div className="flex flex-col items-center gap-4">
+                              <Folder className="h-12 w-12 text-blue-400 dark:text-blue-500" aria-hidden />
+                              <p className="text-gray-600 dark:text-gray-400">{campaigns.length === 0 ? t('campaigns.noCampaigns', 'No campaigns yet') : t('campaigns.noMatch', 'No campaigns match your filters')}</p>
+                              {campaigns.length === 0 && (
+                                <Link href="/create-ads">
+                                  <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white">
+                                    {t('campaigns.createFirst', 'Create Your First Campaign')}
+                                  </Button>
+                                </Link>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredCampaigns.map((campaign, index) => (
                           <TableRow key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleToggleCampaignSelection(campaign.id, !selectedCampaignIds.has(campaign.id))}>
                             <TableCell
-                              className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400"
+                              className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle text-sm text-gray-600 dark:text-gray-400"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <div className="flex justify-center">
+                              <div className="flex justify-center items-center w-full">
                                 <Checkbox
                                   checked={selectedCampaignIds.has(campaign.id)}
                                   onCheckedChange={(checked) => handleToggleCampaignSelection(campaign.id, checked as boolean)}
@@ -1860,6 +2098,7 @@ export default function CampaignsPage() {
                                 />
                               </button>
                             </TableCell>
+                            {visible('campaigns', 'adAccount') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -1878,6 +2117,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'name') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -1895,11 +2136,10 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-
+                            )}
+                            {visible('campaigns', 'status') && (
                             <TableCell className="px-4 py-2 text-sm">
                               {(() => {
-
-
                                 const status = getCampaignStatus(campaign, accountMap);
                                 return (
                                   <div className="flex items-center gap-2">
@@ -1911,6 +2151,8 @@ export default function CampaignsPage() {
                                 );
                               })()}
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'results') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -1924,19 +2166,23 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'costPerResult') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {campaign.costPerResult ? `$${campaign.costPerResult.toFixed(2)}` : '-'}
+                                    {campaign.costPerResult ? formatCurrency(campaign.costPerResult, campaign.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Cost per result</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.costPerResult ? `$${campaign.costPerResult.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.costPerResult ? formatCurrency(campaign.costPerResult, campaign.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'budget') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -1986,6 +2232,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'reach') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -1999,6 +2247,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'impressions') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2012,6 +2262,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'postEngagements') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2025,6 +2277,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'clicks') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2038,6 +2292,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'messagingContacts') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2051,19 +2307,23 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'amountSpent') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {campaign.amountSpent ? `$${campaign.amountSpent.toFixed(2)}` : '-'}
+                                    {campaign.amountSpent ? formatCurrency(campaign.amountSpent, campaign.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Amount spent</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.amountSpent ? `$${campaign.amountSpent.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{campaign.amountSpent ? formatCurrency(campaign.amountSpent, campaign.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('campaigns', 'createdAt') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2077,6 +2337,7 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
                             <TableCell className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <button
@@ -2117,12 +2378,12 @@ export default function CampaignsPage() {
           activeTab === 'adsets' && (
             <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
-                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
-                  <Table className="w-full min-w-max">
+                <div className="overflow-auto flex-1 min-h-0 scrollbar-minimal-table [&>div]:overflow-visible">
+                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0">
                     <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
                       <TableRow>
-                        <TableHead className="px-3 py-2 text-center w-12">
-                          <div className="flex justify-center">
+                        <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle">
+                          <div className="flex justify-center items-center w-full">
                             <Checkbox
                               checked={
                                 filteredAdSets.length > 0 &&
@@ -2135,49 +2396,49 @@ export default function CampaignsPage() {
                           </div>
                         </TableHead>
                         <TableHead className="text-center w-20">{t('campaigns.columns.toggle', 'Active')}</TableHead>
-                        <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>
-                        <SortableHeader columnKey="name" label={t('campaigns.columns.adSetName', 'Ad Set Name')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="status" label={t('campaigns.columns.status', 'Status')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="results" label={t('campaigns.columns.results', 'Results')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="budget" label={t('campaigns.columns.budget', 'Budget')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="reach" label={t('campaigns.columns.reach', 'Reach')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="impressions" label={t('campaigns.columns.impressions', 'Impressions')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="postEngagements" label={t('campaigns.columns.postEngagements', 'Post engagements')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="clicks" label={t('campaigns.columns.clicks', 'Clicks (all)')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="messagingContacts" label={t('campaigns.columns.messagingContacts', 'Messaging contacts')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="amountSpent" label={t('campaigns.columns.amountSpent', 'Amount spent')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="dailyBudget" label={t('launch.dailyBudget', 'Daily Budget')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="optimization" label={t('campaigns.columns.optimization', 'Optimization')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="bidAmount" label={t('campaigns.columns.bidAmount', 'Bid Amount')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />
+                        {visible('adsets', 'adAccount') && <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>}
+                        {visible('adsets', 'name') && <SortableHeader columnKey="name" label={t('campaigns.columns.adSetName', 'Ad Set Name')} align="left" className="max-w-[280px]" />}
+                        {visible('adsets', 'target') && <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[280px]" />}
+                        {visible('adsets', 'status') && <SortableHeader columnKey="status" label={t('campaigns.columns.status', 'Status')} align="left" className="max-w-[280px]" />}
+                        {visible('adsets', 'results') && <SortableHeader columnKey="results" label={t('campaigns.columns.results', 'Results')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'costPerResult') && <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'budget') && <SortableHeader columnKey="budget" label={t('campaigns.columns.budget', 'Budget')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'reach') && <SortableHeader columnKey="reach" label={t('campaigns.columns.reach', 'Reach')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'impressions') && <SortableHeader columnKey="impressions" label={t('campaigns.columns.impressions', 'Impressions')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'postEngagements') && <SortableHeader columnKey="postEngagements" label={t('campaigns.columns.postEngagements', 'Post engagements')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'clicks') && <SortableHeader columnKey="clicks" label={t('campaigns.columns.clicks', 'Clicks (all)')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'messagingContacts') && <SortableHeader columnKey="messagingContacts" label={t('campaigns.columns.messagingContacts', 'Messaging contacts')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'amountSpent') && <SortableHeader columnKey="amountSpent" label={t('campaigns.columns.amountSpent', 'Amount spent')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'dailyBudget') && <SortableHeader columnKey="dailyBudget" label={t('launch.dailyBudget', 'Daily Budget')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'optimization') && <SortableHeader columnKey="optimization" label={t('campaigns.columns.optimization', 'Optimization')} align="left" className="max-w-[280px]" />}
+                        {visible('adsets', 'bidAmount') && <SortableHeader columnKey="bidAmount" label={t('campaigns.columns.bidAmount', 'Bid Amount')} align="right" className="max-w-[280px]" />}
+                        {visible('adsets', 'createdAt') && <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />}
                         <TableHead className="text-right max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800">
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                           <TableRow key={i} className="animate-pulse">
-                            <TableCell className="px-3 py-2 text-center w-12"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px] mx-auto"></div></TableCell>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
                             <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-11 mx-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-40"></div></TableCell>
-                            <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-20 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>
+                            {visible('adsets', 'adAccount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('adsets', 'name') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></TableCell>}
+                            {visible('adsets', 'target') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-40"></div></TableCell>}
+                            {visible('adsets', 'status') && <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>}
+                            {visible('adsets', 'results') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'costPerResult') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'budget') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'reach') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'impressions') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'postEngagements') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'clicks') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'messagingContacts') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'amountSpent') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'dailyBudget') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-20 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'optimization') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('adsets', 'bidAmount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('adsets', 'createdAt') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
                             <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></TableCell>
                           </TableRow>
                         ))
@@ -2189,8 +2450,18 @@ export default function CampaignsPage() {
                         return matchesSearch && matchesStatus;
                       }).length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={20} className="text-center py-16">
-                            <p className="text-gray-600 dark:text-gray-400 mb-4">{filteredAdSets.length === 0 ? 'No ad sets found' : 'No ad sets match your filters'}</p>
+                          <TableCell colSpan={3 + visibleColumns.adsets.size} className="text-center py-16">
+                            <div className="flex flex-col items-center gap-4">
+                              <LayoutGrid className="h-12 w-12 text-violet-400 dark:text-violet-500" aria-hidden />
+                              <p className="text-gray-600 dark:text-gray-400">{adSets.length === 0 ? t('campaigns.noAdSets', 'No ad sets yet') : t('campaigns.noAdSetsMatch', 'No ad sets match your filters')}</p>
+                              {adSets.length === 0 && (
+                                <Link href="/create-ads">
+                                  <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white">
+                                    {t('campaigns.createToGetStarted', 'Create a campaign to get started')}
+                                  </Button>
+                                </Link>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -2203,10 +2474,10 @@ export default function CampaignsPage() {
                         }).map((adSet, index) => (
                           <TableRow key={adSet.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => handleToggleAdSetSelection(adSet.id, !selectedAdSetIds.has(adSet.id))}>
                             <TableCell
-                              className="px-3 py-2 text-center text-sm text-gray-600 dark:text-gray-400"
+                              className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle text-sm text-gray-600 dark:text-gray-400"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <div className="flex justify-center">
+                              <div className="flex justify-center items-center w-full">
                                 <Checkbox
                                   checked={selectedAdSetIds.has(adSet.id)}
                                   onCheckedChange={(checked) => handleToggleAdSetSelection(adSet.id, checked as boolean)}
@@ -2230,6 +2501,7 @@ export default function CampaignsPage() {
                                 />
                               </button>
                             </TableCell>
+                            {visible('adsets', 'adAccount') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2248,6 +2520,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'name') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2265,6 +2539,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'target') && (
                             <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2282,6 +2558,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'status') && (
                             <TableCell className="px-4 py-2 text-sm">
                               {(() => {
                                 const status = getAdSetStatus(adSet, accountMap);
@@ -2295,6 +2573,8 @@ export default function CampaignsPage() {
                                 );
                               })()}
                             </TableCell>
+                            )}
+                            {visible('adsets', 'results') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2308,32 +2588,38 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'costPerResult') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {adSet.costPerResult ? `$${adSet.costPerResult.toFixed(2)}` : '-'}
+                                    {adSet.costPerResult ? formatCurrency(adSet.costPerResult, adSet.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Cost per result</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.costPerResult ? `$${adSet.costPerResult.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.costPerResult ? formatCurrency(adSet.costPerResult, adSet.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'budget') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {adSet.budget ? `$${adSet.budget.toFixed(2)}` : '-'}
+                                    {adSet.budget ? formatCurrency(adSet.budget, adSet.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Budget</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.budget ? `$${adSet.budget.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.budget ? formatCurrency(adSet.budget, adSet.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'reach') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2347,6 +2633,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'impressions') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2360,6 +2648,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'postEngagements') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2373,6 +2663,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'clicks') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2386,6 +2678,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'messagingContacts') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2399,32 +2693,38 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'amountSpent') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {adSet.amountSpent ? `$${adSet.amountSpent.toFixed(2)}` : '-'}
+                                    {adSet.amountSpent ? formatCurrency(adSet.amountSpent, adSet.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Amount spent</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.amountSpent ? `$${adSet.amountSpent.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.amountSpent ? formatCurrency(adSet.amountSpent, adSet.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'dailyBudget') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    ${adSet.dailyBudget > 0 ? adSet.dailyBudget.toFixed(2) : adSet.lifetimeBudget.toFixed(2)}
+                                    {formatCurrency(adSet.dailyBudget > 0 ? adSet.dailyBudget : adSet.lifetimeBudget, adSet.currency)}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">{adSet.dailyBudget > 0 ? t('launch.dailyBudget', 'Daily Budget') : t('launch.lifetimeBudget', 'Lifetime Budget')}</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">${adSet.dailyBudget > 0 ? adSet.dailyBudget.toFixed(2) : adSet.lifetimeBudget.toFixed(2)}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(adSet.dailyBudget > 0 ? adSet.dailyBudget : adSet.lifetimeBudget, adSet.currency)}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'optimization') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2438,19 +2738,23 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'bidAmount') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    ${adSet.bidAmount.toFixed(2)}
+                                    {formatCurrency(adSet.bidAmount, adSet.currency)}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Bid Amount</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">${adSet.bidAmount.toFixed(2)}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{formatCurrency(adSet.bidAmount, adSet.currency)}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
+                            {visible('adsets', 'createdAt') && (
                             <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
@@ -2464,6 +2768,7 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
+                            )}
                             <TableCell className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <button
@@ -2502,12 +2807,12 @@ export default function CampaignsPage() {
           activeTab === 'ads' && (
             <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
-                <div className="overflow-auto flex-1 [&>div]:overflow-visible">
-                  <Table className="w-full min-w-max">
-                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
+                <div className="overflow-auto flex-1 min-h-0 scrollbar-minimal-table [&>div]:overflow-visible">
+                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0">
+                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 [&_th]:!py-1.5 [&_th]:!h-auto">
                       <TableRow>
-                        <TableHead className="px-3 py-2 text-center w-12">
-                          <div className="flex justify-center">
+                        <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1.5 !pr-3 !pl-3 text-center align-middle">
+                          <div className="flex justify-center items-center w-full">
                             <Checkbox
                               checked={ads.length > 0 && selectedAdIds.size === ads.length}
                               onCheckedChange={handleToggleAllAds}
@@ -2517,95 +2822,96 @@ export default function CampaignsPage() {
                           </div>
                         </TableHead>
                         <TableHead className="text-center w-20">{t('campaigns.columns.toggle', 'Active')}</TableHead>
-                        <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>
-                        <SortableHeader columnKey="page" label={t('campaigns.columns.page', 'Page')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="name" label={t('campaigns.columns.adName', 'Ad Name')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="status" label={t('campaigns.columns.status', 'Status')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="results" label={t('campaigns.columns.results', 'Results')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="budget" label={t('campaigns.columns.budget', 'Budget')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="reach" label={t('campaigns.columns.reach', 'Reach')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="impressions" label={t('campaigns.columns.impressions', 'Impressions')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="postEngagements" label={t('campaigns.columns.postEngagements', 'Post engagements')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="clicks" label={t('campaigns.columns.clicks', 'Clicks (all)')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="messagingContacts" label={t('campaigns.columns.messagingContacts', 'Messaging contacts')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="amountSpent" label={t('campaigns.columns.amountSpent', 'Amount spent')} align="right" className="max-w-[280px]" />
-                        <SortableHeader columnKey="title" label={t('campaigns.columns.title', 'Title')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="body" label={t('campaigns.columns.body', 'Body')} align="left" className="max-w-[280px]" />
-                        <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />
+                        {visible('ads', 'adAccount') && <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>}
+                        {visible('ads', 'page') && <SortableHeader columnKey="page" label={t('campaigns.columns.page', 'Page')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'campaignName') && <SortableHeader columnKey="campaignName" label={t('campaigns.columns.campaign', 'Campaign')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'adSetName') && <SortableHeader columnKey="adSetName" label={t('campaigns.columns.adSet', 'Ad set')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'name') && <SortableHeader columnKey="name" label={t('campaigns.columns.adName', 'Ad Name')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'target') && <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'status') && <SortableHeader columnKey="status" label={t('campaigns.columns.status', 'Status')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'results') && <SortableHeader columnKey="results" label={t('campaigns.columns.results', 'Results')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'costPerResult') && <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'budget') && <SortableHeader columnKey="budget" label={t('campaigns.columns.budget', 'Budget')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'reach') && <SortableHeader columnKey="reach" label={t('campaigns.columns.reach', 'Reach')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'impressions') && <SortableHeader columnKey="impressions" label={t('campaigns.columns.impressions', 'Impressions')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'postEngagements') && <SortableHeader columnKey="postEngagements" label={t('campaigns.columns.postEngagements', 'Post engagements')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'clicks') && <SortableHeader columnKey="clicks" label={t('campaigns.columns.clicks', 'Clicks (all)')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'messagingContacts') && <SortableHeader columnKey="messagingContacts" label={t('campaigns.columns.messagingContacts', 'Messaging contacts')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'amountSpent') && <SortableHeader columnKey="amountSpent" label={t('campaigns.columns.amountSpent', 'Amount spent')} align="right" className="max-w-[280px]" />}
+                        {visible('ads', 'title') && <SortableHeader columnKey="title" label={t('campaigns.columns.title', 'Title')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'body') && <SortableHeader columnKey="body" label={t('campaigns.columns.body', 'Body')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'createdAt') && <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />}
                         <TableHead className="text-right max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
+                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800 [&_td]:!py-1.5">
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                           <TableRow key={i} className="animate-pulse">
-                            <TableCell className="px-3 py-2 text-center w-12"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px] mx-auto"></div></TableCell>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1.5 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
                             <TableCell><div className="h-4 w-8 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell className="px-4 py-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 bg-gray-200 dark:bg-zinc-800 rounded"></div>
+                            {visible('ads', 'adAccount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('ads', 'page') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('ads', 'campaignName') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('ads', 'adSetName') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('ads', 'name') && (
+                            <TableCell className="px-4 py-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-9 h-9 bg-gray-200 dark:bg-zinc-800 rounded"></div>
                                 <div className="flex-1 space-y-2">
                                   <div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div>
                                   <div className="h-3 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>
-                            <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>
+                            )}
+                            {visible('ads', 'target') && <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>}
+                            {visible('ads', 'status') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'results') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'costPerResult') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'budget') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'reach') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'impressions') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'postEngagements') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'clicks') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'messagingContacts') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'amountSpent') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
+                            {visible('ads', 'title') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
+                            {visible('ads', 'body') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
+                            {visible('ads', 'createdAt') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
                             <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></TableCell>
                           </TableRow>
                         ))
-                      ) : ads.filter(a => {
-                        const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          a.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          a.body?.toLowerCase().includes(searchQuery.toLowerCase());
-                        const matchesStatus = statusFilter === 'all' ||
-                          (statusFilter === 'active' && a.status === 'ACTIVE') ||
-                          (statusFilter === 'paused' && a.status === 'PAUSED');
-                        return matchesSearch && matchesStatus;
-                      }).length === 0 ? (
+                      ) : filteredAds.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={20} className="text-center py-16">
-                            <p className="text-gray-600 dark:text-gray-400 mb-4">{ads.length === 0 ? 'No ads found' : 'No ads match your filters'}</p>
+                          <TableCell colSpan={3 + visibleColumns.ads.size} className="text-center py-16">
+                            <div className="flex flex-col items-center gap-4">
+                              <Briefcase className="h-12 w-12 text-amber-400 dark:text-amber-500" aria-hidden />
+                              <p className="text-gray-600 dark:text-gray-400">{ads.length === 0 ? t('campaigns.noAds', 'No ads yet') : t('campaigns.noAdsMatch', 'No ads match your filters')}</p>
+                              {ads.length === 0 && (
+                                <Link href="/create-ads">
+                                  <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white">
+                                    {t('campaigns.createToGetStarted', 'Create a campaign to get started')}
+                                  </Button>
+                                </Link>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredAds.filter(a => {
-                          const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            a.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            a.body?.toLowerCase().includes(searchQuery.toLowerCase());
-                          const matchesStatus = statusFilter === 'all' ||
-                            (statusFilter === 'active' && a.status === 'ACTIVE') ||
-                            (statusFilter === 'paused' && a.status === 'PAUSED');
-                          return matchesSearch && matchesStatus;
-                        }).map((ad, index) => (
+                        filteredAds.map((ad, index) => (
                           <TableRow key={ad.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => handleToggleAdSelection(ad.id, !selectedAdIds.has(ad.id))}>
-                            <TableCell className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex justify-center">
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1.5 !pr-3 !pl-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex justify-center items-center w-full">
                                 <Checkbox
                                   checked={selectedAdIds.has(ad.id)}
                                   onCheckedChange={(checked) => handleToggleAdSelection(ad.id, checked as boolean)}
                                   aria-label={`Select ${ad.name}`}
+                                  className="rounded-md"
                                 />
                               </div>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="px-4 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleAd(ad.id, ad.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${ad.status === 'ACTIVE'
@@ -2621,7 +2927,8 @@ export default function CampaignsPage() {
                               </button>
                             </TableCell>
 
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            {visible('ads', 'adAccount') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
@@ -2639,36 +2946,51 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
-                              <div style={{ maxWidth: '280px' }}>
-                                <div
-                                  className="truncate cursor-pointer hover:text-blue-600 hover:underline"
-                                  title={ad.pageName}
-                                  onClick={() => ad.pageId && window.open(`https://www.facebook.com/${ad.pageId}`, '_blank')}
-                                >
+                            )}
+                            {visible('ads', 'page') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
+                              <div
+                                className="flex flex-col gap-0 cursor-pointer hover:text-blue-600 min-w-0"
+                                title={[ad.pageName || '-', ad.pageUsername ? `@${ad.pageUsername}` : '-', ad.pageId ? `ID: ${ad.pageId}` : '-'].join('\n')}
+                                onClick={() => { const url = ad.pageUsername ? `https://www.facebook.com/${ad.pageUsername}` : ad.pageId ? `https://www.facebook.com/${ad.pageId}` : null; if (url) window.open(url, '_blank'); }}
+                              >
+                                <div className="truncate font-medium text-gray-900 dark:text-gray-100 hover:underline" title={ad.pageName ?? undefined}>
                                   {ad.pageName || '-'}
                                 </div>
-                                {ad.pageId && (
-                                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={ad.pageId}>
-                                    ID: {ad.pageId}
-                                  </div>
-                                )}
+                                <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={ad.pageUsername ?? undefined}>
+                                  {ad.pageUsername ? `@${ad.pageUsername}` : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 truncate" title={ad.pageId ?? undefined}>
+                                  {ad.pageId ? `ID: ${ad.pageId}` : '-'}
+                                </div>
                               </div>
                             </TableCell>
-                            <TableCell className="px-4 py-2">
-                              <div className="flex items-center gap-3">
+                            )}
+                            {visible('ads', 'campaignName') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
+                              <div className="truncate" title={ad.campaignName || undefined}>{ad.campaignName || '-'}</div>
+                            </TableCell>
+                            )}
+                            {visible('ads', 'adSetName') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
+                              <div className="truncate" title={ad.adSetName || undefined}>{ad.adSetName || '-'}</div>
+                            </TableCell>
+                            )}
+                            {visible('ads', 'name') && (
+                            <TableCell className="px-4 py-1.5">
+                              <div className="flex items-center gap-2">
                                 {ad.imageUrl ? (
                                   <img
                                     src={ad.imageUrl}
                                     alt={ad.name}
-                                    className="w-12 h-12 object-cover rounded border border-gray-200 dark:border-zinc-800"
+                                    className="w-9 h-9 object-cover rounded border border-gray-200 dark:border-zinc-800"
                                     onError={(e) => {
                                       (e.target as HTMLImageElement).style.display = 'none';
                                     }}
                                   />
                                 ) : (
-                                  <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 dark:border-zinc-800 flex items-center justify-center">
-                                    <span className="text-xs text-gray-400">No Image</span>
+                                  <div className="w-9 h-9 bg-gray-100 rounded border border-gray-200 dark:border-zinc-800 flex items-center justify-center">
+                                    <span className="text-[10px] text-gray-400">No</span>
                                   </div>
                                 )}
                                 <Popover>
@@ -2707,11 +3029,13 @@ export default function CampaignsPage() {
                                 </Popover>
                               </div>
                             </TableCell>
-                            <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400">
+                            )}
+                            {visible('ads', 'target') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
-                                    className="whitespace-pre-line text-xs line-clamp-3 cursor-pointer hover:text-blue-600"
+                                    className="whitespace-pre-line text-xs line-clamp-2 cursor-pointer hover:text-blue-600"
                                     style={{ maxWidth: '280px' }}
                                     title={formatTargeting(ad.targeting)}
                                   >
@@ -2724,7 +3048,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm">
+                            )}
+                            {visible('ads', 'status') && (
+                            <TableCell className="px-4 py-1.5 text-sm">
                               {(() => {
                                 const status = getAdStatus(ad, accountMap && ad.adAccountId ? accountMap[ad.adAccountId] : undefined);
                                 return (
@@ -2737,7 +3063,9 @@ export default function CampaignsPage() {
                                 );
                               })()}
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'results') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2750,33 +3078,39 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'costPerResult') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {ad.costPerResult ? `$${ad.costPerResult.toFixed(2)}` : '-'}
+                                    {ad.costPerResult ? formatCurrency(ad.costPerResult, ad.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Cost per result</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.costPerResult ? `$${ad.costPerResult.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.costPerResult ? formatCurrency(ad.costPerResult, ad.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'budget') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {ad.budget ? `$${ad.budget.toFixed(2)}` : '-'}
+                                    {ad.budget ? formatCurrency(ad.budget, ad.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Budget</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.budget ? `$${ad.budget.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.budget ? formatCurrency(ad.budget, ad.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'reach') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2789,7 +3123,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'impressions') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2802,7 +3138,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'postEngagements') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2815,7 +3153,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'clicks') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2828,7 +3168,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'messagingContacts') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2841,20 +3183,24 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            )}
+                            {visible('ads', 'amountSpent') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {ad.amountSpent ? `$${ad.amountSpent.toFixed(2)}` : '-'}
+                                    {ad.amountSpent ? formatCurrency(ad.amountSpent, ad.currency) : '-'}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-64" align="start">
                                   <div className="text-sm font-medium mb-2">Amount spent</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.amountSpent ? `$${ad.amountSpent.toFixed(2)}` : '-'}</div>
+                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.amountSpent ? formatCurrency(ad.amountSpent, ad.currency) : '-'}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            )}
+                            {visible('ads', 'title') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="truncate cursor-pointer hover:text-blue-600" title={ad.title}>
@@ -2867,8 +3213,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            )}
+                            {visible('ads', 'body') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="truncate cursor-pointer hover:text-blue-600" style={{ maxWidth: '280px' }} title={ad.body}>
@@ -2881,7 +3228,9 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            )}
+                            {visible('ads', 'createdAt') && (
+                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2894,7 +3243,8 @@ export default function CampaignsPage() {
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
-                            <TableCell className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                            )}
+                            <TableCell className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-end gap-1">
                                 <button
                                   className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"

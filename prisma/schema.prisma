@@ -32,7 +32,27 @@ model User {
   subscriptionId     String?
   currentPeriodEnd   DateTime?
 
-  sessions Session[]
+  sessions           Session[]
+  iceBreakerTemplates IceBreakerTemplate[]
+  automationRules    AutomationRule[]
+}
+
+model AutomationRule {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  enabled      Boolean  @default(true)
+  scope        String   // "campaign" | "adset" | "ad"
+  adAccountIds String   @db.Text // JSON array of act_ IDs; empty "[]" = all connected
+  condition    Json     // { metric, op, value } e.g. { "metric": "roas", "op": "lt", "value": 1.5 }
+  action       Json     // { "type": "pause" | "reduce_budget", "value"?: number }
+  lastRunAt    DateTime?
+  lastResult   String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Session {
@@ -319,4 +339,16 @@ model TeamMember {
   @@index([facebookUserId])
   @@index([memberEmail])
   @@unique([userId, memberEmail])
+}
+
+model IceBreakerTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String   // e.g. "แฟชั่น", "ความงาม"
+  items     Json     // [{ question: string, payload: string }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

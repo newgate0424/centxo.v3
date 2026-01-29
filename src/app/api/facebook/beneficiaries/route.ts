@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { type TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-helper';
+import { decryptToken } from '@/lib/services/metaClient';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,250 +15,263 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const adAccountId = searchParams.get('adAccountId');
-    const pageId = searchParams.get('pageId'); // Optional: if page is selected
+    const adAccountIdParam = searchParams.get('adAccountId');
+    const pageId = searchParams.get('pageId');
 
-    if (!adAccountId) {
+    if (!adAccountIdParam) {
       return NextResponse.json({ error: 'Ad Account ID is required' }, { status: 400 });
     }
 
-    console.log(`🔍 Fetching beneficiaries for ad account: ${adAccountId}`);
-    if (pageId) {
-      console.log(`📄 Page ID provided: ${pageId}`);
-    }
+    const cleanId = adAccountIdParam.replace(/^act_/, '');
+    const actId = `act_${cleanId}`;
 
-    // Get access token - try multiple sources
-    let accessToken: string | null = null;
-    const metaAccount = await prisma.metaAccount.findUnique({
-      where: { userId: session.user.id },
-      select: { accessToken: true },
+    console.log(`🔍 Fetching beneficiaries for ad account: ${actId}`);
+    if (pageId) console.log(`📄 Page ID provided: ${pageId}`);
+
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        metaAccount: { select: { accessToken: true } },
+        accounts: { where: { provider: 'facebook' }, select: { access_token: true } },
+      },
     });
-    accessToken = metaAccount?.accessToken || null;
-
-    if (!accessToken) {
-      const facebookAccount = await prisma.account.findFirst({
-        where: { userId: session.user.id, provider: 'facebook' },
-        select: { access_token: true },
-      });
-      accessToken = facebookAccount?.access_token || null;
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (!accessToken) {
-      accessToken = (session as any).accessToken || null;
+    const tokens: TokenInfo[] = [];
+    if ((user as any).metaAccount?.accessToken) {
+      try {
+        const decrypted = decryptToken((user as any).metaAccount.accessToken);
+        tokens.push({ token: decrypted, name: user.name || 'Main Account' });
+      } catch {
+        tokens.push({ token: (user as any).metaAccount.accessToken, name: user.name || 'Main Account (raw)' });
+      }
+    }
+    (user as any).accounts?.forEach((acc: { access_token: string | null }) => {
+      if (acc.access_token && !tokens.some((t) => t.token === acc.access_token)) {
+        tokens.push({ token: acc.access_token, name: user.name || 'Account' });
+      }
+    });
+
+    const memberRecord = await prisma.teamMember.findFirst({
+      where: { memberEmail: session.user.email },
+    });
+    let teamOwnerId = user.id;
+    if (memberRecord?.userId) teamOwnerId = memberRecord.userId;
+
+    const teamOwner = await prisma.user.findUnique({
+      where: { id: teamOwnerId },
+      include: {
+        metaAccount: { select: { accessToken: true } },
+        accounts: { where: { provider: 'facebook' }, select: { access_token: true } },
+      },
+    });
+    if (teamOwner?.metaAccount?.accessToken && teamOwnerId !== user.id) {
+      try {
+        const decrypted = decryptToken(teamOwner.metaAccount.accessToken);
+        if (!tokens.some((t) => t.token === decrypted)) {
+          tokens.push({ token: decrypted, name: teamOwner.name || 'Team Owner' });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    teamOwner?.accounts?.forEach((acc: { access_token: string | null }) => {
+      if (acc.access_token && !tokens.some((t) => t.token === acc.access_token)) {
+        tokens.push({ token: acc.access_token, name: (teamOwner?.name ?? 'Team Owner') + ' Account' });
+      }
+    });
+
+    const teamMembers = await prisma.teamMember.findMany({
+      where: { userId: teamOwnerId, memberType: 'facebook', facebookUserId: { not: null }, accessToken: { not: null } },
+    });
+    teamMembers.forEach((m: { accessToken: string | null; facebookName: string | null }) => {
+      if (m.accessToken && !tokens.some((t) => t.token === m.accessToken)) {
+        tokens.push({ token: m.accessToken, name: m.facebookName || 'Team Member' });
+      }
+    });
+
+    const sessionToken = (session as { accessToken?: string }).accessToken;
+    if (sessionToken && !tokens.some((t) => t.token === sessionToken)) {
+      tokens.push({ token: sessionToken, name: 'Session' });
     }
 
-    if (!accessToken) {
-      return NextResponse.json({ error: 'Facebook not connected' }, { status: 400 });
+    if (tokens.length === 0) {
+      return NextResponse.json({ error: 'Facebook not connected', beneficiaries: [] }, { status: 400 });
     }
+
+    const accessToken = await getValidTokenForAdAccount(actId, tokens);
+    if (!accessToken) {
+      return NextResponse.json({
+        error: 'No valid token for this ad account. Check Settings > Connections.',
+        beneficiaries: [],
+      }, { status: 400 });
+    }
+
     const beneficiaries: Array<{ id: string; name: string }> = [];
+    let adAccountData: { business?: { id: string }; default_dsa_beneficiary?: string; dsa_beneficiary?: string } | null = null;
 
     try {
-      // ========== METHOD 1: Check Page Transparency (if pageId provided) ==========
-      if (pageId) {
-        console.log('🔍 Method 1: Checking Page Transparency...');
-        try {
-          const pageTransparencyResponse = await fetch(
-            `https://graph.facebook.com/v22.0/${pageId}?fields=id,name,page_transparency_label,legal_entity_name,about,category,verification_status&access_token=${accessToken}`
-          );
-          const pageTransparency = await pageTransparencyResponse.json();
-          console.log('📄 Page Transparency Data:', JSON.stringify(pageTransparency, null, 2));
+      // Fetch ad account + ad sets + dsa_recommendations in parallel (all independent)
+      const [adAccountResponse, adSetsRes, recRes] = await Promise.all([
+        fetch(`https://graph.facebook.com/v22.0/${actId}?fields=id,name,account_id,business,funding_source_details,default_dsa_beneficiary,default_dsa_payor,dsa_beneficiary,dsa_payor&access_token=${accessToken}`),
+        fetch(`https://graph.facebook.com/v22.0/${actId}/adsets?fields=id,name,regional_regulation_identities&limit=100&access_token=${accessToken}`),
+        fetch(`https://graph.facebook.com/v22.0/${actId}/dsa_recommendations?fields=recommendations&access_token=${accessToken}`),
+      ]);
 
-          if (pageTransparency.legal_entity_name) {
-            beneficiaries.push({
-              id: pageTransparency.legal_entity_name,
-              name: `${pageTransparency.legal_entity_name} (Page Legal Entity)`
-            });
-            console.log(`✅ Found legal_entity_name: ${pageTransparency.legal_entity_name}`);
-          }
-        } catch (error: any) {
-          console.log('❌ Page transparency check failed:', error.message);
-        }
-
-        // Check Page Settings endpoint
-        console.log('🔍 Method 1b: Checking Page Settings...');
-        try {
-          const pageSettingsResponse = await fetch(
-            `https://graph.facebook.com/v22.0/${pageId}/settings?access_token=${accessToken}`
-          );
-          const pageSettings = await pageSettingsResponse.json();
-          console.log('⚙️ Page Settings:', JSON.stringify(pageSettings, null, 2));
-        } catch (error: any) {
-          console.log('❌ Page settings check failed:', error.message);
-        }
-      }
-
-      // ========== METHOD 2: Check all accessible Pages ==========
-      console.log('🔍 Method 2: Checking all accessible Pages...');
+      // ========== METHOD 3: Ad Account Settings (DSA beneficiary/payor) ==========
       try {
-        const pagesResponse = await fetch(
-          `https://graph.facebook.com/v22.0/me/accounts?fields=id,name,page_transparency_label,legal_entity_name&limit=50&access_token=${accessToken}`
-        );
-        const pagesData = await pagesResponse.json();
-        console.log(`📄 Found ${pagesData.data?.length || 0} pages`);
-
-        if (pagesData.data) {
-          for (const page of pagesData.data) {
-            console.log(`\n📄 Page: ${page.name} (${page.id})`);
-            if (page.legal_entity_name) {
-              beneficiaries.push({
-                id: page.legal_entity_name,
-                name: `${page.legal_entity_name} (${page.name})`
-              });
-              console.log(`  ✅ Legal entity: ${page.legal_entity_name}`);
-            }
-            if (page.page_transparency_label) {
-              console.log(`  📋 Transparency label:`, JSON.stringify(page.page_transparency_label, null, 2));
-            }
-          }
-        }
-      } catch (error: any) {
-        console.log('❌ Pages check failed:', error.message);
-      }
-
-      // ========== METHOD 3: Check Ad Account Settings ==========
-      console.log('\n🔍 Method 3: Checking Ad Account Settings...');
-      try {
-        const adAccountResponse = await fetch(
-          `https://graph.facebook.com/v22.0/act_${adAccountId}?fields=id,name,account_id,business,funding_source_details,default_dsa_beneficiary,default_dsa_payor,dsa_beneficiary,dsa_payor&access_token=${accessToken}`
-        );
-        const adAccountData = await adAccountResponse.json();
+        adAccountData = await adAccountResponse.json();
         console.log('💼 Ad Account Data:', JSON.stringify(adAccountData, null, 2));
 
-        if (adAccountData.default_dsa_beneficiary) {
-          beneficiaries.push({
-            id: adAccountData.default_dsa_beneficiary,
-            name: `${adAccountData.default_dsa_beneficiary} (Default DSA)`
-          });
-          console.log(`✅ default_dsa_beneficiary: ${adAccountData.default_dsa_beneficiary}`);
+        if (adAccountData?.default_dsa_beneficiary) {
+          const v = String(adAccountData.default_dsa_beneficiary);
+          beneficiaries.push({ id: v, name: /^\d+$/.test(v) ? `ID ${v}` : v });
+          console.log(`✅ Method 3: default_dsa_beneficiary ${v}`);
         }
 
-        if (adAccountData.dsa_beneficiary) {
-          beneficiaries.push({
-            id: adAccountData.dsa_beneficiary,
-            name: `${adAccountData.dsa_beneficiary} (DSA)`
-          });
-          console.log(`✅ dsa_beneficiary: ${adAccountData.dsa_beneficiary}`);
-        }
-
-        // Check Business if available
-        if (adAccountData.business?.id) {
-          console.log('\n🔍 Method 3b: Checking Business Info...');
-          try {
-            const businessResponse = await fetch(
-              `https://graph.facebook.com/v22.0/${adAccountData.business.id}?fields=id,name,legal_entity_name,verification_status,verified_business_info,primary_page&access_token=${accessToken}`
-            );
-            const businessData = await businessResponse.json();
-            console.log('🏢 Business Data:', JSON.stringify(businessData, null, 2));
-
-            if (businessData.legal_entity_name) {
-              beneficiaries.push({
-                id: businessData.legal_entity_name,
-                name: `${businessData.legal_entity_name} (Business)`
-              });
-              console.log(`✅ Business legal_entity_name: ${businessData.legal_entity_name}`);
-            }
-          } catch (error: any) {
-            console.log('❌ Business check failed:', error.message);
+        if (adAccountData?.dsa_beneficiary) {
+          const v = String(adAccountData.dsa_beneficiary);
+          if (!beneficiaries.some((b) => b.id === v)) {
+            beneficiaries.push({ id: v, name: /^\d+$/.test(v) ? `ID ${v}` : v });
+            console.log(`✅ Method 3: dsa_beneficiary ${v}`);
           }
         }
+
+        // ========== METHOD 3c: DSA Recommendations (already fetched in parallel above) ==========
+        try {
+          const recData = await recRes.json();
+          if (recData.error) {
+            console.log('❌ dsa_recommendations error:', recData.error?.message);
+          } else {
+            const list: string[] = [];
+            if (Array.isArray(recData.recommendations)) {
+              list.push(...recData.recommendations);
+            }
+            if (Array.isArray(recData.data)) {
+              for (const node of recData.data) {
+                const arr = node?.recommendations;
+                if (Array.isArray(arr)) list.push(...arr);
+                else if (typeof node === 'string') list.push(node);
+                else if (node?.beneficiary != null) list.push(String(node.beneficiary));
+                else if (node?.id != null) list.push(String(node.id));
+              }
+            }
+            for (const raw of list) {
+              const s = (typeof raw === 'string' ? raw : String(raw ?? '')).trim();
+              if (!s || beneficiaries.some((b) => b.id === s)) continue;
+              beneficiaries.push({
+                id: s,
+                name: /^\d+$/.test(s) ? `ID ${s}` : s
+              });
+              console.log(`✅ Method 3c: dsa_recommendation ${s}`);
+            }
+          }
+        } catch (e: any) {
+          console.log('❌ dsa_recommendations failed:', e?.message);
+        }
+
+        // Method 3b (Business / primary_page) skipped – those are portfolio names, not verified-identity list.
       } catch (error: any) {
         console.log('❌ Ad Account check failed:', error.message);
       }
 
-      // ========== METHOD 4: Check existing Campaigns/AdSets ==========
-      console.log('\n🔍 Method 4: Checking existing Campaigns/AdSets...');
+      // ========== METHOD 4: Ad Sets (already fetched in parallel above) ==========
+      const seenIds = new Set(beneficiaries.map((b) => b.id));
       try {
-        const campaignsResponse = await fetch(
-          `https://graph.facebook.com/v22.0/act_${adAccountId}/campaigns?fields=id,name&limit=5&access_token=${accessToken}`
-        );
-        const campaignsData = await campaignsResponse.json();
-        console.log(`📊 Found ${campaignsData.data?.length || 0} campaigns`);
+        const adSetsJson = await adSetsRes.json();
+        const adSets = adSetsJson.data ?? [];
+        console.log(`📊 Found ${adSets.length} ad sets`);
 
-        if (campaignsData.data && campaignsData.data.length > 0) {
-          for (const campaign of campaignsData.data) {
-            console.log(`\n📊 Campaign: ${campaign.name}`);
-
-            const adSetsResponse = await fetch(
-              `https://graph.facebook.com/v22.0/${campaign.id}/adsets?fields=id,name,regional_regulation_identities,regional_regulated_categories&limit=1&access_token=${accessToken}`
-            );
-            const adSetsData = await adSetsResponse.json();
-
-            if (adSetsData.data && adSetsData.data[0]) {
-              const adSet = adSetsData.data[0];
-              console.log(`  📋 AdSet:`, JSON.stringify(adSet, null, 2));
-
-              if (adSet.regional_regulation_identities?.universal_beneficiary) {
-                let beneficiaryValue = adSet.regional_regulation_identities.universal_beneficiary;
-                let displayName = `${beneficiaryValue} (From Existing AdSet)`;
-
-                // If value looks like an ID (all numbers), try to fetch the real name
-                if (/^\d+$/.test(beneficiaryValue)) {
-                  try {
-                    console.log(`🔍 Resolving Beneficiary ID: ${beneficiaryValue}...`);
-                    const nameRes = await fetch(`https://graph.facebook.com/v22.0/${beneficiaryValue}?fields=name&access_token=${accessToken}`);
-                    const nameData = await nameRes.json();
-                    if (nameData.name) {
-                      displayName = `${nameData.name} (Source: ${beneficiaryValue})`;
-                      console.log(`✅ Resolved Name: ${nameData.name}`);
-                    }
-                  } catch (e) {
-                    console.log('⚠️ Failed to resolve beneficiary name');
-                  }
-                }
-
-                beneficiaries.push({
-                  id: beneficiaryValue,
-                  name: displayName
-                });
-                console.log(`  ✅ Found beneficiary from AdSet: ${displayName}`);
-                break; // Found one, no need to continue
-              }
-            }
+        for (const adSet of adSets) {
+          const r = adSet.regional_regulation_identities;
+          if (!r) continue;
+          const vals = [r.universal_beneficiary, r.universal_payer].filter(Boolean).map(String);
+          for (const v of vals) {
+            const id = v.trim();
+            if (!id || seenIds.has(id)) continue;
+            seenIds.add(id);
+            beneficiaries.push({
+              id,
+              name: /^\d+$/.test(id) ? `ID ${id}` : id
+            });
+            console.log(`  ✅ AdSet beneficiary: ${id}`);
           }
         }
       } catch (error: any) {
-        console.log('❌ Campaigns check failed:', error.message);
+        console.log('❌ Ad Sets check failed:', error.message);
       }
 
-      // ========== METHOD 5: Check User's Businesses ==========
-      console.log('\n🔍 Method 5: Checking User Businesses...');
-      try {
-        const meResponse = await fetch(
-          `https://graph.facebook.com/v22.0/me?fields=id,name,businesses{id,name,legal_entity_name,verification_status}&access_token=${accessToken}`
-        );
-        const meData = await meResponse.json();
-        console.log('👤 User Businesses:', JSON.stringify(meData.businesses, null, 2));
-
-        if (meData.businesses?.data) {
-          for (const business of meData.businesses.data) {
-            if (business.legal_entity_name) {
-              beneficiaries.push({
-                id: business.legal_entity_name,
-                name: `${business.legal_entity_name} (${business.name})`
-              });
-              console.log(`✅ Business legal entity: ${business.legal_entity_name}`);
-            }
-          }
-        }
-      } catch (error: any) {
-        console.log('❌ User businesses check failed:', error.message);
-      }
+      // ไม่ใช้ fallback (Page, Business, promote_pages, me/accounts) ใน dropdown — จะแสดงเฉพาะผู้รับผลประโยชน์แบบยืนยันตัวตน (DSA, Ad Set).
+      // ไม่ใส่ชื่อเพจ/ธุรกิจ. ตอนสร้างแคมเปญยังใช้ getVerifiedBeneficiary fallback ฝั่ง create ได้.
 
     } catch (error: any) {
       console.error('❌ Error fetching beneficiaries:', error);
       console.error('Error details:', error.message);
     }
 
-    // Remove duplicates by ID
-    const uniqueBeneficiaries = Array.from(
-      new Map(beneficiaries.map(b => [b.id, b])).values()
-    );
+    // Remove duplicates by ID; prefer numeric IDs (valid for universal_beneficiary)
+    const byId = new Map<string, { id: string; name: string }>();
+    for (const b of beneficiaries) {
+      const id = String(b.id).trim();
+      if (id && !byId.has(id)) byId.set(id, { id, name: b.name });
+    }
+    let unique = Array.from(byId.values());
+    const numericFirst = (a: { id: string }, b: { id: string }) => {
+      const aNum = /^\d+$/.test(a.id) ? 0 : 1;
+      const bNum = /^\d+$/.test(b.id) ? 0 : 1;
+      if (aNum !== bNum) return aNum - bNum;
+      return a.id.localeCompare(b.id);
+    };
+    unique.sort(numericFirst);
 
-    console.log(`📋 Total unique beneficiaries found: ${uniqueBeneficiaries.length}`);
+    // Display like Meta: "ชื่อ (ID: xxx)". Resolve all numeric IDs then set name.
+    const numericIds = unique.filter((u) => /^\d+$/.test(u.id)).map((u) => u.id);
+    const chunk = numericIds.slice(0, 50);
+    if (chunk.length > 0) {
+      try {
+        const r = await fetch(
+          `https://graph.facebook.com/v22.0/?ids=${encodeURIComponent(chunk.join(','))}&fields=name&access_token=${accessToken}`
+        );
+        const data = (await r.json()) as Record<string, { name?: string; error?: { message: string } }>;
+        for (const id of chunk) {
+          const u = unique.find((x) => x.id === id);
+          if (!u) continue;
+          const node = data[id];
+          const n = node && !node.error && typeof node.name === 'string' ? node.name.trim() : null;
+          u.name = n ? `${n} (ID: ${id})` : `— (ID: ${id})`;
+          if (n) console.log(`📌 Resolved beneficiary ${id} → ${n}`);
+        }
+      } catch (e: any) {
+        console.log('⚠️ Resolve names failed:', e?.message);
+        for (const id of chunk) {
+          const u = unique.find((x) => x.id === id);
+          if (u) u.name = `— (ID: ${id})`;
+        }
+      }
+    }
+    for (const u of unique) {
+      if (!/^\d+$/.test(u.id)) continue;
+      if (!u.name.includes(' (ID: ')) u.name = `— (ID: ${u.id})`;
+    }
+    // Non-numeric: use name as-is (no " (ID: ...)" suffix).
+    for (const u of unique) {
+      if (/^\d+$/.test(u.id)) continue;
+      const cleaned = u.name
+        .replace(/\s*\(Default DSA\)\s*$/i, '')
+        .replace(/\s*\(DSA\)\s*$/i, '')
+        .replace(/\s*\(DSA แนะนำ\)\s*$/i, '')
+        .replace(/\s*\(จาก Ad Set\)\s*$/i, '')
+        .trim();
+      u.name = cleaned || u.id;
+    }
+
+    console.log(`📋 Total unique beneficiaries: ${unique.length}`);
 
     return NextResponse.json({
-      beneficiaries: uniqueBeneficiaries,
-      count: uniqueBeneficiaries.length
+      beneficiaries: unique,
+      count: unique.length
     });
 
   } catch (error: any) {

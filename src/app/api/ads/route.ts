@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     // Rate limiting (User ID priority)
-    const rateLimitResponse = rateLimit(request, RateLimitPresets.standard, session?.user?.id);
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.standard, session?.user?.id);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
       CacheTTL.ADS_LIST,
       STALE_TTL,
       async () => {
-        return await fetchAdsFromMeta(adAccountIds, tokens, dateFrom, dateTo);
+        return await fetchAdsFromMeta(adAccountIds, tokens, dateFrom, dateTo, forceRefresh);
       }
     );
 
@@ -153,36 +153,64 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper to fetch all pages of data from Facebook API
-async function fetchAllPages(initialUrl: string, token: string): Promise<any[]> {
-  let allData: any[] = [];
+const ADS_PAGE_RETRIES = 3;
+const ADS_PAGE_RETRY_DELAY_MS = 800;
+
+async function fetchOnePage(url: string): Promise<{ data: any[]; next: string | null }> {
+  for (let attempt = 1; attempt <= ADS_PAGE_RETRIES; attempt++) {
+    const res = await fetch(url);
+    const data: any = await res.json().catch(() => ({}));
+
+    if (data.error) {
+      const msg = data.error?.error_user_msg || data.error?.message || 'Unknown';
+      if (attempt < ADS_PAGE_RETRIES && (res.status >= 500 || res.status === 429)) {
+        console.warn(`[ads] Meta API error (attempt ${attempt}/${ADS_PAGE_RETRIES}): ${msg}. Retrying in ${ADS_PAGE_RETRY_DELAY_MS}ms...`);
+        await new Promise((r) => setTimeout(r, ADS_PAGE_RETRY_DELAY_MS));
+        continue;
+      }
+      throw new Error(msg);
+    }
+
+    if (!res.ok) {
+      if (attempt < ADS_PAGE_RETRIES && (res.status >= 500 || res.status === 429)) {
+        console.warn(`[ads] Meta API HTTP ${res.status} (attempt ${attempt}/${ADS_PAGE_RETRIES}). Retrying...`);
+        await new Promise((r) => setTimeout(r, ADS_PAGE_RETRY_DELAY_MS));
+        continue;
+      }
+      throw new Error(`Failed to fetch page: ${res.status} ${res.statusText}`);
+    }
+
+    const items = Array.isArray(data.data) ? data.data : [];
+    const next = typeof data.paging?.next === 'string' ? data.paging.next : null;
+    return { data: items, next };
+  }
+
+  throw new Error('Failed to fetch page after retries');
+}
+
+const ADS_MAX_PAGES_PER_ACCOUNT = 5;
+
+async function fetchAllPages(initialUrl: string, _token: string): Promise<any[]> {
+  const allData: any[] = [];
   let nextUrl: string | null = initialUrl;
+  let pageCount = 0;
 
-  while (nextUrl) {
+  while (nextUrl && pageCount < ADS_MAX_PAGES_PER_ACCOUNT) {
     try {
-      const res: Response = await fetch(nextUrl);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch page: ${res.statusText}`);
-      }
-
-      const data: any = await res.json();
-      if (data.data && Array.isArray(data.data)) {
-        allData = allData.concat(data.data);
-      }
-
-      // Update nextUrl for next page
-      nextUrl = data.paging?.next || null;
-
+      const { data: pageData, next } = await fetchOnePage(nextUrl);
+      allData.push(...pageData);
+      nextUrl = next;
+      pageCount++;
     } catch (error) {
-      console.error('Error fetching page:', error);
-      nextUrl = null; // Stop pagination on error
+      console.error('[ads] Error fetching page:', error instanceof Error ? error.message : error);
+      nextUrl = null;
     }
   }
 
   return allData;
 }
 
-async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null) {
+async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dateFrom?: string | null, dateTo?: string | null, forceRefresh = false) {
   const allAds: any[] = [];
 
   // Build insights time range parameter
@@ -215,12 +243,14 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
         );
 
         if (!accountResponse.ok) {
+          console.warn(`[ads] Account ${accountId} fetch failed: ${accountResponse.status}`);
+          return;
         }
 
         const accountData = await accountResponse.json();
         const accountCurrency = accountData.currency || 'USD';
 
-        const initialUrl = `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{targeting,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=200&access_token=${token}`;
+        const initialUrl = `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{name,targeting,daily_budget,lifetime_budget},campaign{name},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id,actor_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=200&access_token=${token}`;
 
         const ads = await fetchAllPages(initialUrl, token);
 
@@ -239,68 +269,92 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
     }));
 
     if (i + CHUNK_SIZE < adAccountIds.length) {
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
   }
 
-  // Collect unique page IDs first to batch fetch page names
-  const pageIds = new Set<string>();
-  allAds.forEach(ad => {
-    const storyId = ad.creative?.object_story_id || ad.creative?.effective_object_story_id;
+  const extractPageId = (ad: any): string | null => {
+    const c = ad.creative;
+    if (!c) return null;
+    // actor_id = Page ID for page post ads (Meta Marketing API)
+    if (c.actor_id) return String(c.actor_id);
+    const storyId = c.object_story_id || c.effective_object_story_id;
     if (storyId) {
       const parts = storyId.split('_');
-      if (parts.length > 0 && parts[0]) {
-        pageIds.add(parts[0]);
-      }
+      if (parts.length > 0 && parts[0]) return parts[0];
+    }
+    const spec = c.object_story_spec;
+    if (spec?.page_id) return String(spec.page_id);
+    if (spec?.link_data?.page_id) return String(spec.link_data.page_id);
+    if (spec?.video_data?.page_id) return String(spec.video_data.page_id);
+    if (spec?.photo_data?.page_id) return String(spec.photo_data.page_id);
+    return null;
+  };
+
+  // Build pageId -> adAccountId map (token that can access ad account can usually access its page)
+  const pageIdToAdAccount = new Map<string, string>();
+  allAds.forEach((ad: any) => {
+    const pid = extractPageId(ad);
+    const accId = ad.adAccountId;
+    if (pid && accId && !pageIdToAdAccount.has(pid)) {
+      pageIdToAdAccount.set(pid, accId);
     }
   });
 
-  // Batch fetch all page names with caching
-  const pageNamesCache: Record<string, string> = {};
+  const pageIds = new Set(pageIdToAdAccount.keys());
+
+  // Batch fetch page names + usernames - use ad account token per page for better permission
+  type PageInfo = { name: string; username?: string };
+  const pageInfoCache: Record<string, string | PageInfo> = {};
   if (pageIds.size > 0) {
     const pageIdsArray = Array.from(pageIds);
+    const pageInfoCacheKey = generateCacheKey('meta:pages', pageIdsArray.sort().join(','));
+    if (forceRefresh) await deleteCache(pageInfoCacheKey);
 
-    // Try to get all page names from cache first
-    const pageNamesCacheKey = generateCacheKey('meta:pages', pageIdsArray.sort().join(','));
-    const cachedPageNames = await withCache(
-      pageNamesCacheKey,
+    const cached = await withCache(
+      pageInfoCacheKey,
       CacheTTL.PAGE_NAMES,
-      async () => {
-        const names: Record<string, string> = {};
-        const PAGE_BATCH_SIZE = 10;
+      async (): Promise<Record<string, PageInfo>> => {
+        const info: Record<string, PageInfo> = {};
 
-        for (let i = 0; i < pageIdsArray.length; i += PAGE_BATCH_SIZE) {
-          const batch = pageIdsArray.slice(i, i + PAGE_BATCH_SIZE);
-
-          await Promise.all(batch.map(async (pageId) => {
-            // Use helper for Page token (uses Redis cache)
-            const token = await getValidTokenForPage(pageId, tokens);
-
-            if (token) {
-              try {
-                const pageResponse = await fetch(
-                  `https://graph.facebook.com/v22.0/${pageId}?fields=name&access_token=${token}`
-                );
-                if (pageResponse.ok) {
-                  const pageData = await pageResponse.json();
-                  names[pageId] = pageData.name;
+        // Fetch each page using the token from its ad account (better permission match)
+        await Promise.all(
+          pageIdsArray.map(async (pageId) => {
+            const adAccountId = pageIdToAdAccount.get(pageId);
+            const token = adAccountId
+              ? await getValidTokenForAdAccount(adAccountId, tokens)
+              : await getValidTokenForPage(pageId, tokens);
+            if (!token) return;
+            try {
+              const res = await fetch(
+                `https://graph.facebook.com/v22.0/${pageId}?fields=name,username&access_token=${token}`
+              );
+              if (res.ok) {
+                const pageData = await res.json();
+                const name = pageData.name ?? '';
+                const username = pageData.username;
+                if (name) {
+                  info[pageId] = { name, username };
                 }
-              } catch (err) {
-                // Ignore
               }
+            } catch {
+              /* ignore */
             }
-          }));
-
-          if (i + PAGE_BATCH_SIZE < pageIdsArray.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-        }
-        return names;
+          })
+        );
+        return info;
       }
     );
 
-    Object.assign(pageNamesCache, cachedPageNames);
+    Object.assign(pageInfoCache, cached);
   }
+
+  const getPageInfo = (pageId: string): { name: string | null; username: string | null } => {
+    const v = pageInfoCache[pageId];
+    if (!v) return { name: null, username: null };
+    if (typeof v === 'string') return { name: v, username: null };
+    return { name: v.name || null, username: v.username ?? null };
+  };
 
   // Format ads for display - now using cached page names
   const formattedAds = allAds.map((ad) => {
@@ -340,21 +394,15 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
       }
     }
 
-    // Extract page info from creative object_story_id (format: {page-id}_{post-id})
-    let pageId = null;
-    let pageName = null;
-
-    // Try to get page ID from creative
-    const storyId = ad.creative?.object_story_id || ad.creative?.effective_object_story_id;
-
-    if (storyId) {
-      const parts = storyId.split('_');
-      if (parts.length > 0 && parts[0]) {
-        pageId = parts[0];
-        // Get page name from cache instead of making individual API calls
-        pageName = pageNamesCache[pageId] || null;
-      }
+    let pageId: string | null = extractPageId(ad);
+    let pageName: string | null = null;
+    let pageUsername: string | null = null;
+    if (pageId) {
+      const info = getPageInfo(pageId);
+      pageName = info.name;
+      pageUsername = info.username;
     }
+    const storyId = ad.creative?.object_story_id || ad.creative?.effective_object_story_id || null;
 
     // Extract metrics from insights
     const insights = ad.insights?.data?.[0];
@@ -387,6 +435,8 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
       issuesInfo: ad.issuesInfo || [],
       adsetId: ad.adset_id,
       campaignId: ad.campaign_id,
+      campaignName: ad.campaign?.name || null,
+      adSetName: ad.adset?.name || null,
       creativeId: ad.creative?.id || '-',
       creativeName: ad.creative?.name || '-',
       title: ad.creative?.title || '-',
@@ -398,6 +448,7 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
       currency: ad.currency,
       pageId: pageId,
       pageName: pageName || (pageId ? `Page ${pageId}` : null),
+      pageUsername: pageUsername,
       budget: budget,
       metrics: {
         spend: spend,

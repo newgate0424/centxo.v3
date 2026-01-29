@@ -8,7 +8,12 @@ import crypto from 'crypto';
 
 const CSRF_TOKEN_HEADER = 'x-csrf-token';
 const CSRF_COOKIE_NAME = 'csrf-token';
-const CSRF_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret-change-me';
+
+// Use NEXTAUTH_SECRET for CSRF - must be set in production
+if (process.env.NODE_ENV === 'production' && !process.env.NEXTAUTH_SECRET) {
+    throw new Error('NEXTAUTH_SECRET must be set in production for CSRF protection');
+}
+const CSRF_SECRET = process.env.NEXTAUTH_SECRET || 'dev-secret-not-for-production';
 
 /**
  * Generate a CSRF token

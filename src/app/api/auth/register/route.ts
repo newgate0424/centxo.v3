@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { z } from 'zod';
+import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 
 const prisma = new PrismaClient();
 
@@ -18,6 +19,10 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting to prevent registration abuse
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.auth);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
     
     // Validate input

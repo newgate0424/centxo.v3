@@ -24,22 +24,47 @@ if (ENCRYPTION_KEY.length < 32) {
   console.warn('⚠️ WARNING: ENCRYPTION_KEY should be at least 32 characters for optimal security');
 }
 
+// Derive a proper 32-byte key using PBKDF2 (more secure than padding)
+const DERIVED_KEY = crypto.pbkdf2Sync(
+  ENCRYPTION_KEY,
+  'centxo-salt-v1', // Static salt (app-level)
+  100000,           // Iterations
+  32,               // Key length
+  'sha256'
+);
+
 export function encryptToken(token: string): string {
   const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32)), iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', DERIVED_KEY, iv);
   let encrypted = cipher.update(token, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   return iv.toString('hex') + ':' + encrypted;
 }
 
+// Legacy key for backward compatibility with existing tokens
+const LEGACY_KEY = Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32));
+
 export function decryptToken(encryptedToken: string): string {
   const parts = encryptedToken.split(':');
+  if (parts.length !== 2) {
+    throw new Error('Invalid encrypted token format');
+  }
   const iv = Buffer.from(parts[0], 'hex');
   const encrypted = parts[1];
-  const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY.padEnd(32, '0').slice(0, 32)), iv);
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+
+  // Try new PBKDF2-derived key first
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-cbc', DERIVED_KEY, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch {
+    // Fallback to legacy key for backward compatibility
+    const decipher = crypto.createDecipheriv('aes-256-cbc', LEGACY_KEY, iv);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
 }
 
 interface MetaAPIError {
@@ -62,32 +87,38 @@ class MetaAPIClient {
     method: 'GET' | 'POST' | 'DELETE' = 'GET',
     data?: any
   ): Promise<any> {
-    // Ensure endpoint starts with / for proper URL construction
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${GRAPH_API_BASE}${normalizedEndpoint}`;
     const options: RequestInit = {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
     };
 
-    if (method === 'GET') {
-      const params = new URLSearchParams({
-        access_token: this.accessToken,
-        ...data,
-      });
-      const response = await fetch(`${url}?${params}`);
-      return this.handleResponse(response);
-    } else {
-      const body = {
-        access_token: this.accessToken,
-        ...data,
-      };
+    const doFetch = (): Promise<Response> => {
+      if (method === 'GET') {
+        const params = new URLSearchParams({
+          access_token: this.accessToken,
+          ...data,
+        });
+        return fetch(`${url}?${params}`);
+      }
+      const body = { access_token: this.accessToken, ...data };
       options.body = JSON.stringify(body);
-      const response = await fetch(url, options);
+      return fetch(url, options);
+    };
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await doFetch();
+      if (response.ok) return this.handleResponse(response);
+      const retriable = response.status >= 500 || response.status === 429;
+      if (attempt < 1 && retriable) {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
       return this.handleResponse(response);
     }
+
+    throw new Error('Meta API request failed');
   }
 
   private async handleResponse(response: Response) {

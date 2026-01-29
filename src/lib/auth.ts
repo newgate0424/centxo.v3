@@ -6,6 +6,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { PrismaClient } from '@prisma/client';
 import { compare } from 'bcryptjs';
 import { createAuditLog } from '@/lib/audit';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
 
@@ -57,8 +58,10 @@ export const authOptions: NextAuthOptions = {
                             where: { email: credentials.email },
                         });
 
+                        // Generate deterministic ID from email if no DB user exists
+                        const adminId = dbUser?.id || `admin-${crypto.createHash('sha256').update(envAdminEmail).digest('hex').slice(0, 24)}`;
                         return {
-                            id: dbUser?.id || 'super-admin-id',
+                            id: adminId,
                             email: envAdminEmail,
                             name: dbUser?.name || 'Super Admin',
                             image: dbUser?.image,
@@ -300,5 +303,5 @@ export const authOptions: NextAuthOptions = {
     },
 
     secret: process.env.NEXTAUTH_SECRET,
-    debug: true, // Temporarily enable for debugging
+    debug: process.env.NODE_ENV === 'development',
 };

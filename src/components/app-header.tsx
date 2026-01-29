@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -14,11 +13,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { signOut } from "next-auth/react"
 import Link from "next/link"
-import { Menu, Settings, LogOut, Sparkles } from "lucide-react"
+import { Menu, LogOut, Sparkles } from "lucide-react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { useLanguage } from "@/contexts/LanguageContext"
-import { SettingsDialog } from "@/components/settings-dialog"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
@@ -31,7 +29,6 @@ export default function AppHeader({ onMobileMenuToggle, isCollapsed = false }: A
     const { data: session } = useSession()
     const { t, language } = useLanguage()
     const user = session?.user
-    const [settingsOpen, setSettingsOpen] = useState(false)
     const pathname = usePathname()
 
     // Determine if we should use the split border style
@@ -121,14 +118,6 @@ export default function AppHeader({ onMobileMenuToggle, isCollapsed = false }: A
                                 <span>{language === 'th' ? 'อัปเกรด' : 'Upgrade'}</span>
                             </Link>
                         </DropdownMenuItem>
-
-                        <DropdownMenuItem
-                            onClick={() => setSettingsOpen(true)}
-                            className="rounded-lg cursor-pointer focus:bg-primary/10 focus:text-primary"
-                        >
-                            <Settings className="mr-2 h-4 w-4" />
-                            <span>{t('header.settings', 'Settings')}</span>
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-border/50" />
                         <DropdownMenuItem
                             onClick={() => signOut({ callbackUrl: "/login" })}
@@ -140,8 +129,6 @@ export default function AppHeader({ onMobileMenuToggle, isCollapsed = false }: A
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-
-            <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
         </header >
     )
 }

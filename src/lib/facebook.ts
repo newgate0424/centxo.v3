@@ -90,11 +90,14 @@ export async function getAds(accessToken: string, adAccountId: string, status?: 
 }
 
 export async function getInsights(accessToken: string, objectId: string, level: string, dateRange?: { from: string, to: string }) {
-    const fields = 'reach,impressions,spend,cpm,cpp,ctr,actions,action_values,cost_per_action_type,clicks,inline_link_clicks,unique_clicks,video_avg_time_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p95_watched_actions,video_p100_watched_actions';
+    // Include ad_id, campaign_id, adset_id for proper merging when level=ad/campaign/adset
+    const fields = 'ad_id,campaign_id,adset_id,reach,impressions,spend,cpm,cpp,ctr,actions,action_values,cost_per_action_type,clicks,inline_link_clicks,unique_clicks,video_avg_time_watched_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p95_watched_actions,video_p100_watched_actions';
     let url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${objectId}/insights?level=${level}&fields=${fields}&limit=500&access_token=${accessToken}`;
 
     if (dateRange && dateRange.from && dateRange.to) {
-        url += `&time_range={'since':'${dateRange.from}','until':'${dateRange.to}'}`;
+        // Facebook API expects time_range as JSON object or time_range[since]&time_range[until]
+        const timeRange = JSON.stringify({ since: dateRange.from, until: dateRange.to });
+        url += `&time_range=${encodeURIComponent(timeRange)}`;
     } else {
         url += `&date_preset=maximum`;
     }
@@ -129,7 +132,7 @@ export async function getInsights(accessToken: string, objectId: string, level: 
         // Video stats mapping
         result.videoAvgTimeWatched = getVideoStat('video_avg_time_watched_actions');
         result.videoPlays = getActionValue('video_view');
-        result.video3SecWatched = getActionValue('video_view'); // Approximate match
+        result.video3SecWatched = getActionValue('video_view_3s') || getActionValue('video_view'); // 3-second video plays
         result.videoP25Watched = getVideoStat('video_p25_watched_actions');
         result.videoP50Watched = getVideoStat('video_p50_watched_actions');
         result.videoP75Watched = getVideoStat('video_p75_watched_actions');

@@ -36,12 +36,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAdAccount } from '@/contexts/AdAccountContext';
+import { formatCurrencyByCode, getCurrencySymbol } from '@/lib/currency-utils';
 
 interface AdAccount {
     id: string;
     name: string;
     account_id: string;
     businessName?: string;
+    businessProfilePictureUri?: string;
     status: string | number; // Can be string or number from API
     disable_reason?: string;
     activeAds: number;
@@ -250,7 +252,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
         setIsLoadingAccounts(true);
         setLoading(true);
         try {
-            const response = await fetch('/api/team/ad-accounts');
+            const response = await fetch('/api/team/ad-accounts' + (refreshTrigger > 0 ? '?refresh=true' : ''));
 
             if (response.ok) {
                 const data = await response.json();
@@ -267,13 +269,14 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                         name: acc.name,
                         account_id: acc.account_id,
                         businessName: fbAccount?.business_name || '-',
+                        businessProfilePictureUri: fbAccount?.business_profile_picture_uri,
                         status: fbAccount?.account_status ?? 'UNKNOWN',
                         disable_reason: fbAccount?.disable_reason,
                         activeAds: fbAccount?.ads?.summary?.total_count || 0,
                         spendingCap: fbAccount?.spend_cap || null,
                         spentAmount: fbAccount?.amount_spent || null,
                         timeZone: fbAccount?.timezone_name || '-',
-                        timeZoneOffset: fbAccount?.timezone_offset,
+                        timeZoneOffset: fbAccount?.timezone_offset_hours_utc ?? fbAccount?.timezone_offset,
                         nationality: fbAccount?.business_country_code || '-',
                         currency: fbAccount?.currency || '-',
                         paymentMethod: fbAccount?.funding_source_details?.display_string || fbAccount?.funding_source_details?.type || '-',
@@ -422,7 +425,10 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
         <TableRow className="border-b border-gray-200 dark:border-zinc-800">
 
             <TableCell className="px-4 py-2">
-                <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
+                <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-zinc-700 animate-pulse flex-shrink-0" />
+                    <div className="h-4 w-24 bg-gray-200 dark:bg-zinc-700 rounded animate-pulse" />
+                </div>
             </TableCell>
             <TableCell className="px-4 py-2">
                 <div className="space-y-2">
@@ -545,8 +551,21 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                             )).map((account, index) => (
                                 <TableRow key={account.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleSelectOne(account.id, !selectedIds.has(account.id))}>
                                     <TableCell className="px-4 py-2">
-                                        <div className="text-sm text-gray-900 dark:text-gray-100 font-medium truncate max-w-[200px]" title={account.businessName}>
-                                            {account.businessName}
+                                        <div className="flex items-center gap-2 min-w-0 max-w-[200px]">
+                                            {account.businessProfilePictureUri ? (
+                                                <img
+                                                    src={account.businessProfilePictureUri}
+                                                    alt={account.businessName || ''}
+                                                    className="w-8 h-8 rounded-full border flex-shrink-0 object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium flex-shrink-0">
+                                                    {(account.businessName || '-').substring(0, 2).toUpperCase()}
+                                                </div>
+                                            )}
+                                            <span className="text-sm text-gray-900 dark:text-gray-100 font-medium truncate" title={account.businessName}>
+                                                {account.businessName}
+                                            </span>
                                         </div>
                                     </TableCell>
 
@@ -604,7 +623,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                             <div className="flex items-center gap-2 justify-end">
                                                 {/* Amount */}
                                                 <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                                                    ${Number(account.spentAmount || 0).toFixed(2)}
+                                                    {formatCurrencyByCode(Number(account.spentAmount || 0), account.currency || 'USD', { maximumFractionDigits: 2 })}
                                                 </span>
 
                                                 {/* Progress Bar with Tooltip */}
@@ -619,7 +638,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
 
                                                     {/* Custom Black Tooltip */}
                                                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#0F172A] text-white text-[11px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg select-none">
-                                                        ${Number(account.spentAmount || 0).toFixed(2)} / ${Number(account.spendingCap || 0).toFixed(2)}
+                                                        {formatCurrencyByCode(Number(account.spentAmount || 0), account.currency || 'USD', { maximumFractionDigits: 2 })} / {formatCurrencyByCode(Number(account.spendingCap || 0), account.currency || 'USD', { maximumFractionDigits: 2 })}
                                                         {/* Triangle/Arrow */}
                                                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#0F172A]"></div>
                                                     </div>
@@ -674,7 +693,9 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                         )}
                                     </TableCell>
                                     <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
-                                        {account.timeZone} {account.timeZoneOffset !== undefined ? `| ${account.timeZoneOffset >= 0 ? '+' : ''}${account.timeZoneOffset}` : ''}
+                                        {account.timeZone}{account.timeZoneOffset !== undefined && account.timeZoneOffset !== null
+                                            ? ` | ${account.timeZoneOffset >= 0 ? '+' : ''}${account.timeZoneOffset}`
+                                            : ''}
                                     </TableCell>
                                     <TableCell className="px-4 py-2 text-center text-sm text-gray-600 dark:text-gray-400">
                                         {account.nationality}
@@ -727,7 +748,7 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                     {/* Header */}
                     {/* Header */}
                     <div className="flex items-center gap-2 px-6 pt-6 pb-2">
-                        <span className="text-blue-600 text-xl font-bold">$</span>
+                        <span className="text-blue-600 text-xl font-bold">{getCurrencySymbol(selectedAccountForLimit?.currency)}</span>
                         <DialogTitle className="text-[17px] font-semibold text-[#0E1B25] dark:text-gray-100">
                             {t('accounts.spendingLimit.title', 'Set Spending Limit')}
                         </DialogTitle>
@@ -752,8 +773,8 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                 <div className="text-[15px]">
                                     <span className="font-medium text-[#0F172A] dark:text-gray-200">{t('accounts.spendingLimit.moneyLeft', 'Money Left')}: </span>
                                     <span className="text-[#0F172A] dark:text-gray-200">
-                                        ${selectedAccountForLimit.spendingCap
-                                            ? Math.max(0, (Number(selectedAccountForLimit.spendingCap) - Number(selectedAccountForLimit.spentAmount || 0))).toFixed(2)
+                                        {selectedAccountForLimit.spendingCap
+                                            ? formatCurrencyByCode(Math.max(0, (Number(selectedAccountForLimit.spendingCap) - Number(selectedAccountForLimit.spentAmount || 0))), selectedAccountForLimit.currency || 'USD', { maximumFractionDigits: 2 })
                                             : '∞'
                                         }
                                     </span>
@@ -761,11 +782,11 @@ export function AccountsTab({ selectedIds, onSelectionChange, refreshTrigger = 0
                                 <div className="text-[15px]">
                                     <span className="text-[#0F172A] dark:text-gray-200">{t('accounts.spendingLimit.spent', 'Spent')} </span>
                                     <span className="text-blue-600 dark:text-blue-400 font-medium">
-                                        ${Number(selectedAccountForLimit.spentAmount || 0).toFixed(2)}
+                                        {formatCurrencyByCode(Number(selectedAccountForLimit.spentAmount || 0), selectedAccountForLimit.currency || 'USD', { maximumFractionDigits: 2 })}
                                     </span>
                                     <span className="text-[#0F172A] dark:text-gray-200"> • {t('accounts.table.limit', 'Limit')}: </span>
                                     <span className="text-blue-600 dark:text-blue-400 font-medium">
-                                        ${Number(selectedAccountForLimit.spendingCap || 0).toFixed(2) || '∞'}
+                                        {selectedAccountForLimit.spendingCap ? formatCurrencyByCode(Number(selectedAccountForLimit.spendingCap), selectedAccountForLimit.currency || 'USD', { maximumFractionDigits: 2 }) : '∞'}
                                     </span>
                                 </div>
                             </div>

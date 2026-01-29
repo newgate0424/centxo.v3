@@ -10,11 +10,11 @@ import { useRouter } from 'next/navigation';
 
 export function AdAccountsSettings() {
     const { t } = useLanguage();
-    const { adAccounts, pages, loading } = useConfig();
+    const { adAccounts, pages, businesses, loading } = useConfig();
     const router = useRouter();
 
-    // Check if we have any ad accounts or pages from team members
-    const hasData = adAccounts.length > 0 || pages.length > 0;
+    // Check if we have any ad accounts, pages, or businesses from team members
+    const hasData = adAccounts.length > 0 || pages.length > 0 || businesses.length > 0;
 
     const handleGoToTeam = () => {
         router.push('/settings?section=team');
@@ -61,9 +61,7 @@ export function AdAccountsSettings() {
 
     return (
         <div className="space-y-6">
-            {/* Header removed - moved to layout */}
-
-            <div className="glass-card p-6">
+            <div className="rounded-lg border border-border bg-muted/30 p-6">
                 <ConfigForm />
             </div>
         </div>

@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useConfig } from '@/contexts/AdAccountContext';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, FileText, Loader2, RefreshCw, Search, Briefcase } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, FileText, Loader2, RefreshCw, Search, Briefcase, ExternalLink } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
@@ -35,7 +36,26 @@ export function ConfigForm() {
     const pathname = usePathname();
 
     // Get active tab from URL or default to 'accounts'
-    const activeTab = searchParams.get('view') || 'accounts';
+    const validViews = ['accounts', 'pages', 'businesses'];
+    const viewFromUrl = searchParams.get('view') || 'accounts';
+    const activeTab = validViews.includes(viewFromUrl) ? viewFromUrl : 'accounts';
+
+    // Redirect old URLs: business-accounts and business-pages moved to /ads-manager/accounts-vcid
+    useEffect(() => {
+        if (viewFromUrl === 'business-accounts' || viewFromUrl === 'business-pages') {
+            router.replace(viewFromUrl === 'business-accounts'
+                ? '/ads-manager/accounts-vcid?tab=accounts-by-business'
+                : '/ads-manager/accounts-vcid?tab=pages-by-business');
+        }
+    }, [viewFromUrl, router]);
+
+    if (viewFromUrl === 'business-accounts' || viewFromUrl === 'business-pages') {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
 
     const onTabChange = (val: string) => {
         const params = new URLSearchParams(searchParams.toString());
@@ -153,28 +173,28 @@ export function ConfigForm() {
     return (
         <div className="space-y-6">
             <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
-                <TabsList className="w-full h-auto flex flex-wrap lg:grid lg:grid-cols-5">
-                    <TabsTrigger value="accounts" className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        Ad Accounts ({adAccounts.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="pages" className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Pages ({pages.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="businesses" className="flex items-center gap-2">
-                        <Briefcase className="h-4 w-4" />
-                        Business Portfolios ({businesses.length})
-                    </TabsTrigger>
-                    <TabsTrigger value="business-accounts" className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        Accounts by Business
-                    </TabsTrigger>
-                    <TabsTrigger value="business-pages" className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Pages by Business
-                    </TabsTrigger>
-                </TabsList>
+                <div className="space-y-2">
+                    <TabsList className="w-full h-auto flex flex-wrap lg:grid lg:grid-cols-3">
+                        <TabsTrigger value="accounts" className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            Ad Accounts ({adAccounts.length})
+                        </TabsTrigger>
+                        <TabsTrigger value="pages" className="flex items-center gap-2">
+                            <FileText className="h-4 w-4" />
+                            Pages ({pages.length})
+                        </TabsTrigger>
+                        <TabsTrigger value="businesses" className="flex items-center gap-2">
+                            <Briefcase className="h-4 w-4" />
+                            Business Portfolios ({businesses.length})
+                        </TabsTrigger>
+                    </TabsList>
+                    <p className="text-xs text-muted-foreground">
+                        <Link href="/ads-manager/accounts-vcid" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                            <ExternalLink className="h-3 w-3" />
+                            Accounts by Business & Pages by Business
+                        </Link>
+                    </p>
+                </div>
 
                 <TabsContent value="accounts" className="mt-6">
                     <div className="space-y-4">
@@ -499,222 +519,6 @@ export function ConfigForm() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="business-accounts" className="mt-6">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                Ad Accounts grouped by Business Portfolio
-                            </p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => refreshData(true)}
-                                className="h-8"
-                            >
-                                <RefreshCw className="h-3 w-3 mr-2" />
-                                Refresh
-                            </Button>
-                        </div>
-
-                        {businesses.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-40 text-center border rounded-md">
-                                <Briefcase className="h-12 w-12 text-muted-foreground mb-2" />
-                                <p className="text-sm text-muted-foreground">
-                                    No business portfolios found
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {(() => {
-                                    // Group ad accounts by business_name
-                                    const accountsByBusiness = adAccounts.reduce((acc, account) => {
-                                        const businessName = account.business_name || 'Unknown Business';
-                                        if (!acc[businessName]) {
-                                            acc[businessName] = [];
-                                        }
-                                        acc[businessName].push(account);
-                                        return acc;
-                                    }, {} as Record<string, typeof adAccounts>);
-
-                                    // Convert to array and sort by business name
-                                    const businessGroups = Object.entries(accountsByBusiness)
-                                        .sort(([a], [b]) => a.localeCompare(b));
-
-                                    return businessGroups.map(([businessName, businessAccounts]) => {
-                                        // Find matching business from the businesses list
-                                        const matchingBusiness = businesses.find(b => b.name === businessName);
-
-                                        return (
-                                            <div key={businessName} className="border rounded-md overflow-hidden">
-                                                <div className="bg-muted px-4 py-3 flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        {matchingBusiness?.profile_picture_uri ? (
-                                                            <img
-                                                                src={matchingBusiness.profile_picture_uri}
-                                                                alt={businessName}
-                                                                className="w-8 h-8 rounded-full border"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-medium">
-                                                                {businessName.substring(0, 2).toUpperCase()}
-                                                            </div>
-                                                        )}
-                                                        <div>
-                                                            <h3 className="font-medium">{businessName}</h3>
-                                                            {matchingBusiness && (
-                                                                <p className="text-xs text-muted-foreground">{matchingBusiness.id}</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <Badge variant="secondary">
-                                                        {businessAccounts.length} account{businessAccounts.length !== 1 ? 's' : ''}
-                                                    </Badge>
-                                                </div>
-
-                                                <div className="divide-y">
-                                                    {businessAccounts.map((account) => {
-                                                        const status = account.account_status === 1 ? 'ACTIVE' :
-                                                            account.account_status === 2 ? 'DISABLED' :
-                                                                account.account_status === 3 ? 'UNSETTLED' : 'UNKNOWN';
-
-                                                        return (
-                                                            <div key={account.id} className="px-4 py-3 hover:bg-accent/50 transition-colors">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex-1">
-                                                                        <p className="font-medium text-sm">{account.name}</p>
-                                                                        <p className="text-xs text-muted-foreground">ID: {account.account_id}</p>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className={`w-2 h-2 rounded-full ${status === 'ACTIVE' ? 'bg-green-500' :
-                                                                            status === 'DISABLED' ? 'bg-red-500' :
-                                                                                status === 'UNSETTLED' ? 'bg-yellow-500' : 'bg-gray-500'
-                                                                            }`} />
-                                                                        <span className="text-sm">
-                                                                            {status === 'ACTIVE' ? 'Active' :
-                                                                                status === 'DISABLED' ? 'Disabled' :
-                                                                                    status === 'UNSETTLED' ? 'Unsettled' : status}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        );
-                                    });
-                                })()}
-                            </div>
-                        )}
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="business-pages" className="mt-6">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                Pages grouped by Business Portfolio
-                            </p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => refreshData(true)}
-                                className="h-8"
-                            >
-                                <RefreshCw className="h-3 w-3 mr-2" />
-                                Refresh
-                            </Button>
-                        </div>
-
-                        {pages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-40 text-center border rounded-md">
-                                <FileText className="h-12 w-12 text-muted-foreground mb-2" />
-                                <p className="text-sm text-muted-foreground">
-                                    No pages found
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {(() => {
-                                    // Group pages by business_name
-                                    const pagesByBusiness = pages.reduce((acc, page) => {
-                                        const businessName = page.business_name || 'Unknown Business';
-                                        if (!acc[businessName]) {
-                                            acc[businessName] = [];
-                                        }
-                                        acc[businessName].push(page);
-                                        return acc;
-                                    }, {} as Record<string, typeof pages>);
-
-                                    // Convert to array and sort by business name
-                                    const businessGroups = Object.entries(pagesByBusiness)
-                                        .sort(([a], [b]) => a.localeCompare(b));
-
-                                    return businessGroups.map(([businessName, businessPages]) => {
-                                        // Find matching business from the businesses list
-                                        const matchingBusiness = businesses.find(b => b.name === businessName);
-
-                                        return (
-                                            <div key={businessName} className="border rounded-md overflow-hidden">
-                                                <div className="bg-muted px-4 py-3 flex items-center justify-between">
-                                                    <div className="flex items-center gap-3">
-                                                        {matchingBusiness?.profile_picture_uri ? (
-                                                            <img
-                                                                src={matchingBusiness.profile_picture_uri}
-                                                                alt={businessName}
-                                                                className="w-8 h-8 rounded-full border"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center text-xs font-medium">
-                                                                {businessName.substring(0, 2).toUpperCase()}
-                                                            </div>
-                                                        )}
-                                                        <div>
-                                                            <h3 className="font-medium">{businessName}</h3>
-                                                            {matchingBusiness && (
-                                                                <p className="text-xs text-muted-foreground">{matchingBusiness.id}</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <Badge variant="secondary">
-                                                        {businessPages.length} page{businessPages.length !== 1 ? 's' : ''}
-                                                    </Badge>
-                                                </div>
-
-                                                <div className="divide-y">
-                                                    {businessPages.map((page) => (
-                                                        <div key={page.id} className="px-4 py-3 hover:bg-accent/50 transition-colors">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                                                                        {page.picture?.data?.url ? (
-                                                                            <img src={page.picture.data.url} alt={page.name} className="w-full h-full object-cover" />
-                                                                        ) : (
-                                                                            <FileText className="h-5 w-5 text-muted-foreground" />
-                                                                        )}
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="font-medium text-sm">{page.name}</p>
-                                                                        <p className="text-xs text-muted-foreground">ID: {page.id}</p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Badge variant="outline" className="text-xs">
-                                                                        {page.access_token ? 'Connected' : 'No Access'}
-                                                                    </Badge>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    });
-                                })()}
-                            </div>
-                        )}
-                    </div>
-                </TabsContent>
             </Tabs>
         </div>
     );

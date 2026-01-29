@@ -8,7 +8,7 @@ import { TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-helpe
 export async function GET(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResponse = rateLimit(request, RateLimitPresets.standard);
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.standard);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }

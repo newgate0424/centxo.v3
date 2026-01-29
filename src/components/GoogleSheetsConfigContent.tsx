@@ -38,6 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Image from "next/image"
 import { translations } from "./export-feature-translations"
 import { useLanguage } from "@/contexts/LanguageContext"
+import { useConfig } from "@/contexts/AdAccountContext"
 
 export interface ExportConfig {
     id?: string
@@ -78,6 +79,7 @@ interface GoogleSheetsConfigContentProps {
 const getAvailableColumns = (dataType: string, lang: 'th' | 'en') => {
     const t = translations[lang]
     const commonColumns = [
+        { key: 'date', label: t.col_date },
         { key: 'index', label: t.col_index },
         { key: 'name', label: t.col_name },
         { key: 'id', label: t.col_id },
@@ -180,8 +182,18 @@ export default function GoogleSheetsConfigContent({
     const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null)
 
     const [googleStatus, setGoogleStatus] = useState<{ isConnected: boolean, email?: string, picture?: string } | null>(null)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [availableAccounts, setAvailableAccounts] = useState<Record<string, any>[]>([])
+    const { selectedAccounts, adAccounts, loading: accountsLoading } = useConfig()
+    // Use selectedAccounts from settings/connections - same source as Ad Accounts tab
+    const availableAccounts = (selectedAccounts?.length > 0 ? selectedAccounts : adAccounts || [])
+        .filter((acc: any) => acc?.id || acc?.account_id)
+        .map((acc: any) => ({
+            id: acc.id || acc.account_id,
+            name: acc.name || '',
+            currency: acc.currency || 'USD',
+            timezone: acc.timezone_name ?? acc.timezone_offset_hours_utc ?? '',
+            status: acc.account_status ?? 1,
+            accountName: acc.name || '',
+        }))
 
     const [config, setConfig] = useState<ExportConfig>({
         name: '',
@@ -221,19 +233,21 @@ export default function GoogleSheetsConfigContent({
         // or if we are switching types (which implies we abandoned edit mode for that type)
         if ((isEmpty || typeChanged) && !initialConfig) {
             const defaultMapping: Record<string, string> = {}
+            if (config.includeDate) {
+                defaultMapping['date'] = 'A'
+            }
 
             if (dataType === 'ads') {
+                // A=Date, B=AD ID, C=Skip, D=Account Name, E=Skip, F=Reach, G=Impression, H=Engagement, I=Clicks, J=Message, K=Cost, L=Skip, M-T=Video stats
+                defaultMapping['date'] = 'A'
                 defaultMapping['id'] = 'B'
-                defaultMapping['name'] = 'skip'
                 defaultMapping['accountName'] = 'D'
-                defaultMapping['status'] = 'skip'
                 defaultMapping['reach'] = 'F'
                 defaultMapping['impressions'] = 'G'
                 defaultMapping['postEngagements'] = 'H'
                 defaultMapping['clicks'] = 'I'
                 defaultMapping['newMessagingContacts'] = 'J'
                 defaultMapping['spend'] = 'K'
-                defaultMapping['costPerResult'] = 'skip'
                 defaultMapping['videoAvgTimeWatched'] = 'M'
                 defaultMapping['videoPlays'] = 'N'
                 defaultMapping['video3SecWatched'] = 'O'
@@ -243,20 +257,24 @@ export default function GoogleSheetsConfigContent({
                 defaultMapping['videoP95Watched'] = 'S'
                 defaultMapping['videoP100Watched'] = 'T'
             } else if (dataType === 'campaigns' || dataType === 'adsets') {
-                defaultMapping['id'] = 'B'
-                defaultMapping['name'] = 'C'
-                defaultMapping['reach'] = 'F'
-                defaultMapping['impressions'] = 'G'
-                defaultMapping['postEngagements'] = 'H'
-                defaultMapping['clicks'] = 'I'
-                defaultMapping['newMessagingContacts'] = 'J'
-                defaultMapping['spend'] = 'K'
-            } else {
-                availableColumns.forEach((col, index) => {
-                    const startIndex = config.includeDate ? index + 1 : index
-                    defaultMapping[col.key] = sheetColumns[startIndex] || 'skip'
-                })
+                defaultMapping['id'] = config.includeDate ? 'B' : 'A'
+                defaultMapping['name'] = config.includeDate ? 'C' : 'B'
+                defaultMapping['reach'] = config.includeDate ? 'F' : 'E'
+                defaultMapping['impressions'] = config.includeDate ? 'G' : 'F'
+                defaultMapping['postEngagements'] = config.includeDate ? 'H' : 'G'
+                defaultMapping['clicks'] = config.includeDate ? 'I' : 'H'
+                defaultMapping['newMessagingContacts'] = config.includeDate ? 'J' : 'I'
+                defaultMapping['spend'] = config.includeDate ? 'K' : 'J'
+        } else {
+            let startIndex = 0
+            if (config.includeDate) {
+                defaultMapping['date'] = 'A'
+                startIndex = 1
             }
+            availableColumns.filter(col => col.key !== 'date').forEach((col, index) => {
+                defaultMapping[col.key] = sheetColumns[startIndex + index] || 'skip'
+            })
+        }
 
             setConfig(prev => ({
                 ...prev,
@@ -291,41 +309,6 @@ export default function GoogleSheetsConfigContent({
         }
     }
 
-    const fetchAccounts = async () => {
-        try {
-            const res = await fetch('/api/facebook/ad-accounts')
-            if (res.ok) {
-                const { accounts } = await res.json()
-                const formattedAccounts = (accounts || []).map((acc: any) => ({
-                    id: acc.id,
-                    name: acc.name,
-                    currency: acc.currency,
-                    timezone: acc.timezone_name,
-                    status: acc.status || 1,
-                    accountName: acc.name,
-                }))
-                setAvailableAccounts(formattedAccounts)
-            } else {
-                // Handle error response
-                const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
-                console.error('Error fetching accounts:', errorData)
-
-                if (res.status === 400 && errorData.error?.includes('Facebook not connected')) {
-                    toast.error('กรุณาเชื่อมต่อ Facebook ก่อน', {
-                        description: 'ไปที่ Settings → Integrations เพื่อเชื่อมต่อบัญชี Facebook ของคุณ'
-                    })
-                } else {
-                    toast.error('ไม่สามารถดึงข้อมูลบัญชีโฆษณาได้', {
-                        description: errorData.error || 'กรุณาลองใหม่อีกครั้ง'
-                    })
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching accounts:', error)
-            toast.error('เกิดข้อผิดพลาดในการดึงข้อมูล')
-        }
-    }
-
     const fetchSavedConfigs = useCallback(async () => {
         try {
             const res = await fetch('/api/export/google-sheets')
@@ -338,10 +321,9 @@ export default function GoogleSheetsConfigContent({
         }
     }, [dataType])
 
-    // Fetch Google Status and Accounts
+    // Fetch Google Status and Saved Configs (accounts come from AdAccountContext = settings/connections)
     useEffect(() => {
         fetchGoogleStatus()
-        fetchAccounts()
         fetchSavedConfigs()
     }, [fetchSavedConfigs])
 
@@ -424,9 +406,13 @@ export default function GoogleSheetsConfigContent({
 
     const handleLoadConfig = (savedConfig: ExportConfig, targetStep: number = 3) => {
         setSelectedConfigId(savedConfig.id || null)
-        const mapping = typeof savedConfig.columnMapping === 'string'
+        let mapping = typeof savedConfig.columnMapping === 'string'
             ? JSON.parse(savedConfig.columnMapping)
             : savedConfig.columnMapping || {}
+        // Backwards compat: add date=A when includeDate but no date in mapping
+        if (savedConfig.includeDate && !mapping.date) {
+            mapping = { date: 'A', ...mapping }
+        }
 
         setConfig({
             ...savedConfig,
@@ -460,8 +446,13 @@ export default function GoogleSheetsConfigContent({
     const resetConfig = () => {
         // Default mapping based on user preference
         const defaultMapping: Record<string, string> = {}
+        if (config.includeDate) {
+            defaultMapping['date'] = 'A'
+        }
 
         if (dataType === 'ads') {
+            // A=Date, B=AD ID, C=Skip, D=Account Name, E=Skip, F=Reach, G=Impression, H=Engagement, I=Clicks, J=Message, K=Cost, L=Skip, M-T=Video stats
+            defaultMapping['date'] = 'A'
             defaultMapping['id'] = 'B'
             defaultMapping['accountName'] = 'D'
             defaultMapping['reach'] = 'F'
@@ -479,14 +470,14 @@ export default function GoogleSheetsConfigContent({
             defaultMapping['videoP95Watched'] = 'S'
             defaultMapping['videoP100Watched'] = 'T'
         } else if (dataType === 'campaigns' || dataType === 'adsets') {
-            defaultMapping['id'] = 'B'
-            defaultMapping['name'] = 'C'
-            defaultMapping['reach'] = 'F'
-            defaultMapping['impressions'] = 'G'
-            defaultMapping['postEngagements'] = 'H'
-            defaultMapping['clicks'] = 'I'
-            defaultMapping['newMessagingContacts'] = 'J'
-            defaultMapping['spend'] = 'K'
+            defaultMapping['id'] = config.includeDate ? 'B' : 'A'
+            defaultMapping['name'] = config.includeDate ? 'C' : 'B'
+            defaultMapping['reach'] = config.includeDate ? 'F' : 'E'
+            defaultMapping['impressions'] = config.includeDate ? 'G' : 'F'
+            defaultMapping['postEngagements'] = config.includeDate ? 'H' : 'G'
+            defaultMapping['clicks'] = config.includeDate ? 'I' : 'H'
+            defaultMapping['newMessagingContacts'] = config.includeDate ? 'J' : 'I'
+            defaultMapping['spend'] = config.includeDate ? 'K' : 'J'
         } else {
             availableColumns.forEach((col, index) => {
                 const startIndex = config.includeDate ? index + 1 : index
@@ -545,9 +536,6 @@ export default function GoogleSheetsConfigContent({
         if (maxColIndex < 19 && config.dataType === 'ads') maxColIndex = 19
 
         const headerRow: string[] = new Array(maxColIndex + 1).fill('')
-        if (config.includeDate) {
-            headerRow[0] = t.date_label
-        }
         Object.entries(config.columnMapping).forEach(([key, col]) => {
             if (col !== 'skip') {
                 const colIndex = getColumnIndex(col)
@@ -562,16 +550,14 @@ export default function GoogleSheetsConfigContent({
         data.forEach((item, index) => {
             const row: string[] = new Array(maxColIndex + 1).fill('')
 
-            if (config.includeDate) {
-                row[0] = dateStr
-            }
-
             Object.entries(config.columnMapping).forEach(([key, col]) => {
                 if (col !== 'skip') {
                     const colIndex = getColumnIndex(col)
                     if (colIndex >= 0) {
                         let value = ''
-                        switch (key) {
+                        if (key === 'date') {
+                            value = dateStr
+                        } else switch (key) {
                             case 'index':
                                 value = String(index + 1)
                                 break
@@ -584,8 +570,8 @@ export default function GoogleSheetsConfigContent({
                                 break
                             case 'videoAvgTimeWatched':
                                 const vVal = item.videoAvgTimeWatched ? parseFloat(item.videoAvgTimeWatched) : 0
-                                if (vVal === 0 && !item.videoAvgTimeWatched) {
-                                    value = '-'
+                                if (vVal === 0) {
+                                    value = '00.00'
                                 } else {
                                     const m = Math.floor(vVal / 60)
                                     const s = Math.floor(vVal % 60)
@@ -616,7 +602,7 @@ export default function GoogleSheetsConfigContent({
         try {
             let currentConfigId = selectedConfigId
 
-            // Always save/update config first to ensure backend has latest version
+            // Save config first (creates new or updates existing) so trigger has latest
             const method = currentConfigId ? 'PUT' : 'POST'
             const saveRes = await fetch('/api/export/google-sheets', {
                 method,
@@ -632,7 +618,8 @@ export default function GoogleSheetsConfigContent({
                     fetchSavedConfigs()
                 }
             } else {
-                throw new Error('Failed to save config')
+                const errData = await saveRes.json().catch(() => ({}))
+                throw new Error(errData.error || 'Failed to save config')
             }
 
             if (googleStatus?.isConnected) {
@@ -962,11 +949,37 @@ export default function GoogleSheetsConfigContent({
                         {step === 3 && t.step3_title}
                     </div>
 
-                    {/* Step 1: Select Ad Accounts */}
+                    {/* Step 1: Select Ad Accounts (same source as settings/connections ad-accounts) */}
                     {step === 1 && (
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <Label>{t.step1_title}</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    {lang === 'th' ? 'บัญชีโฆษณาจากการเลือกที่' : 'Accounts from selection at'}{' '}
+                                    <a href="/settings/connections?tab=ad-accounts" className="text-primary hover:underline">
+                                        Settings → Connections → Ad Accounts
+                                    </a>
+                                </p>
+                                {accountsLoading ? (
+                                    <div className="h-[300px] flex items-center justify-center border rounded-xl bg-muted/30">
+                                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                                    </div>
+                                ) : availableAccounts.length === 0 ? (
+                                    <div className="h-[300px] flex flex-col items-center justify-center border rounded-xl bg-muted/30 p-6 text-center">
+                                        <p className="text-sm font-medium mb-2">
+                                            {lang === 'th' ? 'ยังไม่มีบัญชีโฆษณา' : 'No ad accounts yet'}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground mb-4">
+                                            {lang === 'th' ? 'ไปที่ Settings → Connections → Ad Accounts เพื่อเลือกบัญชีโฆษณา' : 'Go to Settings → Connections → Ad Accounts to select ad accounts'}
+                                        </p>
+                                        <Button asChild variant="outline" size="sm">
+                                            <a href="/settings/connections?tab=ad-accounts">
+                                                {lang === 'th' ? 'ไปที่ Connections' : 'Go to Connections'}
+                                            </a>
+                                        </Button>
+                                    </div>
+                                ) : (
+                                <>
                                 <Input
                                     placeholder={t.search_placeholder}
                                     value={searchQuery}
@@ -1014,12 +1027,14 @@ export default function GoogleSheetsConfigContent({
                                 <p className="text-xs text-gray-500">
                                     * {lang === 'th' ? 'สามารถเลือกได้หลายบัญชี' : 'Multiple accounts can be selected'} {searchQuery && `(${availableAccounts.filter(acc => acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || acc.id.toLowerCase().includes(searchQuery.toLowerCase())).length} matches)`}
                                 </p>
+                                </>
+                                )}
                             </div>
 
                             <div className="flex justify-end pt-4">
                                 <Button
                                     onClick={() => setStep(2)}
-                                    disabled={config.accountIds.length === 0}
+                                    disabled={config.accountIds.length === 0 || availableAccounts.length === 0}
                                     className="w-full sm:w-auto"
                                 >
                                     {t.next_btn}
@@ -1204,7 +1219,18 @@ export default function GoogleSheetsConfigContent({
                                 <div className="flex items-center space-x-2">
                                     <Switch
                                         checked={config.includeDate}
-                                        onCheckedChange={checked => setConfig({ ...config, includeDate: checked })}
+                                        onCheckedChange={checked => {
+                                            const newMapping = { ...config.columnMapping }
+                                            if (checked) {
+                                                newMapping['date'] = 'A'
+                                                if (!managedColumns.includes('A')) {
+                                                    setManagedColumns(prev => ['A', ...prev])
+                                                }
+                                            } else {
+                                                delete newMapping['date']
+                                            }
+                                            setConfig(prev => ({ ...prev, includeDate: checked, columnMapping: newMapping }))
+                                        }}
                                     />
                                     <Label>{t.auto_date_column}</Label>
                                 </div>

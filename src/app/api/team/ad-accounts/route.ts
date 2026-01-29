@@ -5,8 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { fromBasicUnits } from '@/lib/currency-utils';
 
 // Simple in-memory cache using globalThis to survive HMR in dev
-// Key: userId, Value: { data: any, timestamp: number }
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes - reduce Meta rate limit usage
 
 declare global {
     var _adAccountCache: Record<string, { data: any, timestamp: number }> | undefined;
@@ -44,7 +43,7 @@ export async function GET(req: NextRequest) {
         // Check Cache
         const searchParams = req.nextUrl.searchParams;
         const forceRefresh = searchParams.get('refresh') === 'true';
-        const cacheKey = user.id;
+        const cacheKey = `ad_accounts_v3_${user.id}`;
 
         if (!forceRefresh && cache[cacheKey]) {
             const cached = cache[cacheKey];
@@ -121,10 +120,9 @@ export async function GET(req: NextRequest) {
                     continue;
                 }
 
-                // Optimization: Only fetch essential fields for mapping (id, name, account_id)
-                // Removed: account_status, currency, spend_cap, amount_spent to reduce API complexity cost
+                // Fetch businesses with profile_picture_uri for display in ads-manager
                 const bizResponse = await fetch(
-                    `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,client_ad_accounts{id,name,account_id}&limit=500&access_token=${member.accessToken}`
+                    `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,profile_picture_uri,client_ad_accounts{id,name,account_id}&limit=500&access_token=${member.accessToken}`
                 );
 
                 if (bizResponse.ok) {
@@ -141,17 +139,25 @@ export async function GET(req: NextRequest) {
         // Create a map of business ID to business name for quick lookup
         const businessMap = new Map();
 
+        // Map business ID/name to profile picture URI
+        const businessIdToProfile = new Map<string, string>();
+        const businessNameToProfile = new Map<string, string>();
+
         // Also map ad account IDs to the Business that has access to them
-        const adAccountToBusinessMap = new Map();
+        const adAccountToBusinessMap = new Map<string, { name: string; profilePictureUri?: string }>();
 
         allBusinesses.forEach(b => {
             businessMap.set(b.id, b.name);
+            if (b.profile_picture_uri) {
+                businessIdToProfile.set(b.id, b.profile_picture_uri);
+                businessNameToProfile.set(b.name, b.profile_picture_uri);
+            }
 
             // If this business has client ad accounts (accounts shared to it), map them
             if (b.client_ad_accounts && b.client_ad_accounts.data) {
                 b.client_ad_accounts.data.forEach((acc: any) => {
-                    adAccountToBusinessMap.set(acc.id, b.name); // Using 'id' which usually starts with 'act_'
-                    adAccountToBusinessMap.set(acc.account_id, b.name); // Also map simple ID just in case
+                    adAccountToBusinessMap.set(acc.id, { name: b.name, profilePictureUri: b.profile_picture_uri });
+                    adAccountToBusinessMap.set(acc.account_id, { name: b.name, profilePictureUri: b.profile_picture_uri });
                 });
             }
         });
@@ -177,7 +183,7 @@ export async function GET(req: NextRequest) {
                 console.log(`[team/ad-accounts] Fetching ad accounts for: ${member.facebookName || member.id}`);
 
                 // Fetch ad accounts from this team member's Facebook account
-                const url = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_id,currency,account_status,disable_reason,spend_cap,amount_spent,timezone_name,timezone_offset,business_country_code,business{id,name},owner{id,name},funding_source_details,ads.filtering([{'field':'effective_status','operator':'IN','value':['ACTIVE']}]).limit(0).summary(true)&limit=500&access_token=${member.accessToken}`;
+                const url = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_id,currency,account_status,disable_reason,spend_cap,amount_spent,timezone_name,timezone_offset_hours_utc,business_country_code,business{id,name,profile_picture_uri},owner{id,name},funding_source_details,ads.filtering([{'field':'effective_status','operator':'IN','value':['ACTIVE']}]).limit(0).summary(true)&limit=500&access_token=${member.accessToken}`;
                 const response = await fetch(url);
 
                 if (!response.ok) {
@@ -197,6 +203,9 @@ export async function GET(req: NextRequest) {
                         // Determine business name or owner name
                         let businessName = account.business?.name || account.owner?.name;
 
+                        // Get profile picture - prefer direct from ad account's business object
+                        let businessProfilePictureUri: string | undefined = account.business?.profile_picture_uri;
+
                         // If business name is missing but we have business ID, look it up
                         if (!businessName && account.business?.id) {
                             businessName = businessMap.get(account.business.id);
@@ -207,7 +216,8 @@ export async function GET(req: NextRequest) {
                             // Try matching with id (act_...) or account_id
                             const businessSharedTo = adAccountToBusinessMap.get(account.id) || adAccountToBusinessMap.get(account.account_id);
                             if (businessSharedTo) {
-                                businessName = businessSharedTo;
+                                businessName = businessSharedTo.name;
+                                businessProfilePictureUri = businessSharedTo.profilePictureUri;
                             }
                         }
 
@@ -227,10 +237,19 @@ export async function GET(req: NextRequest) {
                             }
                         }
 
+                        // Resolve profile picture: from business ID, shared account, or business name
+                        if (!businessProfilePictureUri && account.business?.id) {
+                            businessProfilePictureUri = businessIdToProfile.get(account.business.id);
+                        }
+                        if (!businessProfilePictureUri && businessName) {
+                            businessProfilePictureUri = businessNameToProfile.get(businessName);
+                        }
+
                         return {
                             ...account,
                             // Flatten business name for frontend
                             business_name: businessName,
+                            business_profile_picture_uri: businessProfilePictureUri,
                             // Convert from basic units (cents/satang/yen) to main units (dollars/baht/yen)
                             spend_cap: spendCapInMainUnits,
                             amount_spent: amountSpentInMainUnits,
@@ -254,8 +273,8 @@ export async function GET(req: NextRequest) {
             teamMembersCount: teamMembers.length,
         };
 
-        // Save to cache
-        cache[user.id] = {
+        // Save to cache (use same key as read)
+        cache[cacheKey] = {
             data: responseData,
             timestamp: Date.now()
         };

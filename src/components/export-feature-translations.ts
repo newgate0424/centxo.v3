@@ -45,6 +45,7 @@ export const translations = {
         col_created: 'สร้างเมื่อ',
         col_start_date: 'วันที่เริ่มต้น',
         col_end_date: 'วันที่สิ้นสุด',
+        col_date: 'วันที่',
 
         // Steps
         step1_title: '1. เลือกบัญชีและประเภทข้อมูล',
@@ -175,6 +176,7 @@ export const translations = {
         col_created: 'Created At',
         col_start_date: 'Start Date',
         col_end_date: 'End Date',
+        col_date: 'Date',
 
         // Steps
         step1_title: '1. Select Account & Data Type',

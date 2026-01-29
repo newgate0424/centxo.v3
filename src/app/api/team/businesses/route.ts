@@ -4,8 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // Simple in-memory cache using globalThis to survive HMR in dev
-// Key: userId, Value: { data: any, timestamp: number }
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes - reduce Meta rate limit usage
 
 declare global {
     var _businessCache: Record<string, { data: any, timestamp: number }> | undefined;

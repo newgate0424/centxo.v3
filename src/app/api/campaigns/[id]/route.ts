@@ -23,7 +23,7 @@ export async function GET(
   try {
     const params = await props.params;
     // Rate limiting
-    const rateLimitResponse = rateLimit(request, RateLimitPresets.relaxed);
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.relaxed);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -145,7 +145,7 @@ export async function PATCH(
   try {
     const params = await props.params;
     // Rate limiting
-    const rateLimitResponse = rateLimit(request, RateLimitPresets.strict);
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.strict);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }

@@ -19,6 +19,8 @@ const AnalyzeMediaInputSchema = z.object({
    isVideoFile: z.boolean().optional().describe('Whether the mediaUrl is a local video file path (not data URI)'),
    mimeType: z.string().optional().describe('MIME type of the file (required if mediaUrl is a file path)'),
    adSetCount: z.number().optional().describe('Number of AdSets requesting unique targets'),
+   adsCount: z.number().optional().describe('Number of Ads requesting unique primary text/headline variations'),
+   copyVariationCount: z.number().optional().describe('Generate at least this many ad copy variations (default: max(adSetCount, adsCount))'),
    randomContext: z.string().optional().describe('Random seed string to ensure high entropy/uniqueness'),
    pastSuccessExamples: z.array(z.string()).optional().describe('List of past successful ad copies or analysis notes to learn from')
 });
@@ -43,11 +45,12 @@ const AnalyzeMediaOutputSchema = z.object({
    adCopyVariations: z.array(z.object({
       primaryText: z.string().describe('Unique primary text variation in Thai'),
       headline: z.string().describe('Unique headline variation in Thai'),
-   })).describe('Multiple ad copy variations for different Ads.'),
+   })).describe('Multiple ad copy variations for different Ads. MUST return at least copyVariationCount (or adSetCount) unique variations.'),
    iceBreakers: z.array(z.object({
       question: z.string().describe('Customer question string in Thai (e.g. "สนใจสินค้า", "ราคาเท่าไหร่")'),
       payload: z.string().describe('Internal payload string (e.g. "INTERESTED", "PRICE")')
    })).min(1).max(4).describe('List of 3-4 conversation starter buttons for Messenger'),
+   greeting: z.string().describe('Short welcome message (คำทักทาย) when user taps Send Message, e.g. "สนใจ พิมพ์ \\"เข้ากลุ่ม\\"" or "สวัสดีครับ มีอะไรให้ช่วยไหม?" Max 300 chars.'),
    salesHook: z.string().optional().describe('Short, punchy 1-sentence sales hook for the product'),
 });
 
@@ -273,15 +276,16 @@ STEP 3: CREATIVE AD GENERATION & TARGETING (DIVERSE)
 
 **Targeting Strategy (Generate {{adSetCount}} Groups):**
 - You MUST create {{adSetCount}} DISTINCT interest groups.
+- **Interest group NAMES (Thai):** Each group MUST have a clear, descriptive name that reflects the TARGET AUDIENCE and CONTENT. Examples: "กลุ่มสนใจแฟชั่นหญิง", "กลุ่มคนรักคาเฟ่-เครื่องดื่ม", "กลุ่มยานยนต์-ผู้สนใจ EV". NEVER use generic names like "Group A" or "กลุ่มที่ 1".
 - If {{adSetCount}} is high (e.g., 20), you must stretch your imagination significantly.
 - Group Ideas: Direct Interest, User Persona, Competitors, Lifestyle, Broad Behaviors, Indirect Interests, Adjacent Markets.
 - **NO DUPLICATES** between groups.
 
-**Ad Copy Strategy (Generate {{adSetCount}} Variations):**
-- Write {{adSetCount}} UNIQUE variations.
+**Ad Copy Strategy (Generate {{#if copyVariationCount}}{{copyVariationCount}}{{else}}{{adSetCount}}{{/if}} Variations):**
+- You MUST write at least {{#if copyVariationCount}}{{copyVariationCount}}{{else}}{{adSetCount}}{{/if}} UNIQUE primary text + headline variations (one per Ad when Ads > 1).
 - Vary the tone: Urgent, Relaxed, Premium, Friendly, Professional.
 - Use differing hooks: Price, Quality, Benefit, Emotion, Social Proof.
-- **DO NOT REPEAT** the same phrase structure.
+- **DO NOT REPEAT** the same phrase structure across variations.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 4: AD COPY GENERATION (THAI)
@@ -292,24 +296,24 @@ Create compelling Thai ad copy.
 - **Structure:** Hook -> Benefit -> CTA.
 - **Language:** Natural marketing Thai (not robotic).
 
-**Instructions for Ad Copy:**
-1. **Primary Text:** 3-5 lines. Highlight key benefits. Use emojis.
-2. **Headline:** Short, punchy, grabs attention.
+**Instructions for Ad Copy (MUST match the visual content):**
+1. **Primary Text:** 3-5 lines. Describe what is actually shown (product, offer, scene). Highlight key benefits. Use emojis. Must feel relevant to the video/image.
+2. **Headline:** Short, punchy. Reflect the main subject or hook visible in the creative.
 3. **CTA:** Clear action (e.g., "ทักแชท", "ดูโปรโมชั่น").
 
 **Variations:**
 - Create distinct variations focusing on different angles (e.g., Price, Quality, Speed, Emotion).
+- Every variation MUST stay true to the product/content in the media.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 5: MESSENGER ICE BREAKERS (CRITICAL)
+STEP 5: MESSENGER CHAT TOOL — GREETING + ICE BREAKERS (CRITICAL)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Create 3-4 conversational starter buttons for Messenger.
-They MUST be relevant to the product.
+1. **greeting** (คำทักทาย): Short welcome message shown when user taps "Send Message" on the ad. Max 300 chars.
+   - Examples: "สนใจ พิมพ์ \"เข้ากลุ่ม\"", "สวัสดีครับ มีอะไรให้ช่วยไหม?", "สงสัยเรื่องสินค้า? ทีมงานพร้อมตอบทุกข้อสงสัย ส่งข้อความมาได้เลย!"
+   - Should invite the user to type or tap a quick reply; can reference your ice breaker options.
 
-Examples:
-- Common: "สนใจสินค้า", "ขอทราบราคา", "มีโปรโมชั่นไหม"
-- Specific (Car): "จองทดลองขับ", "ถามรายละเอียดรุ่น", "ตารางผ่อน"
-- Specific (Cream): "ปรึกษาปัญหาผิว", "รีวิวผู้ใช้จริง", "วิธีใช้"
+2. **iceBreakers**: 3-4 conversation starter buttons (คำถามและการตอบกลับ). MUST be relevant to the product.
+   - Examples: "สนใจสินค้า", "ขอทราบราคา", "มีโปรโมชั่นไหม"; (Car) "จองทดลองขับ", "ถามรายละเอียดรุ่น"; (Cream) "ปรึกษาปัญหาผิว", "รีวิวผู้ใช้จริง"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FINAL VERIFICATION
@@ -318,6 +322,7 @@ FINAL VERIFICATION
 - Is the language Thai?
 - Are interests in English?
 - Are there 3-4 Ice Breakers?
+- Is **greeting** (คำทักทาย) provided and under 300 chars?
 
 Analyze now.`,
 });
@@ -393,10 +398,12 @@ const analyzeMediaFlow = ai.defineFlow(
                      throw new Error("Video processing failed by Google AI");
                   }
 
-                  // Use the Google URI
+                  // Use the Google URI — Gemini requires contentType for File URIs
+                  const mimeType = input.mimeType || 'video/mp4';
                   const { output } = await prompt({
                      ...input,
                      mediaUrl: uploadResult.file.uri,
+                     mimeType,
                   });
                   return output!;
 

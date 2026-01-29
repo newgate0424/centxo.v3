@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     // Rate limiting (User ID priority)
-    const rateLimitResponse = rateLimit(request, RateLimitPresets.standard, session?.user?.id);
+    const rateLimitResponse = await rateLimit(request, RateLimitPresets.standard, session?.user?.id);
     if (rateLimitResponse) {
       return rateLimitResponse;
     }
@@ -160,7 +160,9 @@ export async function GET(request: NextRequest) {
 
     // Check for force refresh
     const forceRefresh = searchParams.get('refresh') === 'true';
-    const mode = searchParams.get('mode'); // 'lite' or undefined
+    const mode = searchParams.get('mode'); // 'lite' or undefined (full)
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? Math.min(500, Math.max(1, parseInt(limitParam, 10) || 10)) : undefined;
 
     // Create cache key
     const CACHE_VERSION = 'v2';
@@ -168,7 +170,7 @@ export async function GET(request: NextRequest) {
     const cacheKey = generateCacheKey(
       `meta:campaigns:${CACHE_VERSION}`,
       session.user.id!,
-      `${adAccountIds.sort().join(',')}:${dateRangeKey}:${mode || 'full'}`
+      `${adAccountIds.sort().join(',')}:${dateRangeKey}:${mode || 'full'}:${limit ?? 'all'}`
     );
 
     // Delete cache if force refresh
@@ -188,9 +190,15 @@ export async function GET(request: NextRequest) {
       }
     );
 
+    let campaigns = result.data.campaigns;
+    if (typeof limit === 'number' && limit > 0 && campaigns.length > limit) {
+      campaigns = campaigns.slice(0, limit);
+    }
+
     return NextResponse.json({
-      campaigns: result.data.campaigns,
+      campaigns,
       total: result.data.campaigns.length,
+      returned: campaigns.length,
       errors: result.data.errors,
       isStale: result.isStale,
       revalidating: result.revalidating,
