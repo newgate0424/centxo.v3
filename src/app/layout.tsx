@@ -6,10 +6,23 @@ import { AdAccountProvider } from '@/contexts/AdAccountContext';
 import { ThemeProvider } from '@/components/theme-provider';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeColorProvider } from '@/contexts/ThemeColorContext';
+import { Inter, Sarabun } from 'next/font/google';
 import './globals.css';
 
-// Use system fonts as fallback during build
-const fontVariables = '--font-roboto:system-ui,arial,sans-serif; --font-sarabun:system-ui,arial,sans-serif; --font-inter:system-ui,arial,sans-serif;';
+const inter = Inter({
+    subsets: ['latin'],
+    variable: '--font-inter',
+    display: 'swap',
+    fallback: ['system-ui', 'arial', 'sans-serif'],
+});
+
+const sarabun = Sarabun({
+    weight: ['300', '400', '500', '600', '700'],
+    subsets: ['latin', 'thai'],
+    variable: '--font-sarabun',
+    display: 'swap',
+    fallback: ['system-ui', 'arial', 'sans-serif'],
+});
 
 export const metadata: Metadata = {
     title: 'Centxo - Advanced Ad Management',
@@ -23,7 +36,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className="min-h-screen bg-background text-foreground antialiased font-sans">
+            <body className={`min-h-screen bg-background text-foreground antialiased font-sans ${inter.variable} ${sarabun.variable}`}>
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="system"
