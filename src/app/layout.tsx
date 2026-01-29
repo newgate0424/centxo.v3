@@ -12,17 +12,23 @@ import './globals.css';
 const roboto = Roboto({
     weight: ['300', '400', '500', '700'],
     subsets: ['latin'],
-    variable: '--font-roboto'
+    variable: '--font-roboto',
+    fallback: ['system-ui', 'arial'],
+    adjustFontFallback: false,
 });
 const sarabun = Sarabun({
     weight: ['300', '400', '500', '600', '700'],
     subsets: ['latin', 'thai'],
-    variable: '--font-sarabun'
+    variable: '--font-sarabun',
+    fallback: ['system-ui', 'arial'],
+    adjustFontFallback: false,
 });
 const inter = Inter({
     subsets: ['latin'],
     variable: '--font-inter',
     display: 'swap',
+    fallback: ['system-ui', 'arial'],
+    adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
