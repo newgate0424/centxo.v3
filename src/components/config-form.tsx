@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
-import { Building2, FileText, Loader2, RefreshCw, Search, Briefcase, ExternalLink } from 'lucide-react';
+import { Building2, FileText, Loader2, RefreshCw, Search, ExternalLink } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
@@ -24,11 +24,7 @@ export function ConfigForm() {
         pages,
         loading,
         error,
-        refreshData,
-        selectedBusinesses,
-        setSelectedBusinesses,
-        toggleBusiness,
-        businesses
+        refreshData
     } = useConfig();
 
     const searchParams = useSearchParams();
@@ -36,20 +32,24 @@ export function ConfigForm() {
     const pathname = usePathname();
 
     // Get active tab from URL or default to 'accounts'
-    const validViews = ['accounts', 'pages', 'businesses'];
+    const validViews = ['accounts', 'pages'];
     const viewFromUrl = searchParams.get('view') || 'accounts';
     const activeTab = validViews.includes(viewFromUrl) ? viewFromUrl : 'accounts';
 
-    // Redirect old URLs: business-accounts and business-pages moved to /ads-manager/accounts-vcid
+    // Redirect old URLs: business-accounts, business-pages, businesses moved
     useEffect(() => {
         if (viewFromUrl === 'business-accounts' || viewFromUrl === 'business-pages') {
             router.replace(viewFromUrl === 'business-accounts'
                 ? '/ads-manager/accounts-vcid?tab=accounts-by-business'
                 : '/ads-manager/accounts-vcid?tab=pages-by-business');
+        } else if (viewFromUrl === 'businesses') {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('view', 'accounts');
+            router.replace(`${pathname}?${params.toString()}`);
         }
-    }, [viewFromUrl, router]);
+    }, [viewFromUrl, router, pathname, searchParams]);
 
-    if (viewFromUrl === 'business-accounts' || viewFromUrl === 'business-pages') {
+    if (viewFromUrl === 'business-accounts' || viewFromUrl === 'business-pages' || viewFromUrl === 'businesses') {
         return (
             <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -65,7 +65,6 @@ export function ConfigForm() {
 
     const [accountSearch, setAccountSearch] = useState('');
     const [pageSearch, setPageSearch] = useState('');
-    const [businessSearch, setBusinessSearch] = useState('');
 
     if (error) {
         return (
@@ -99,12 +98,6 @@ export function ConfigForm() {
     const filteredPages = pages.filter(page =>
         page.name.toLowerCase().includes(pageSearch.toLowerCase()) ||
         page.id.toLowerCase().includes(pageSearch.toLowerCase())
-    );
-
-    // Filter businesses based on search
-    const filteredBusinesses = businesses.filter(business =>
-        business.name.toLowerCase().includes(businessSearch.toLowerCase()) ||
-        business.id.toLowerCase().includes(businessSearch.toLowerCase())
     );
 
     // Select/Deselect all accounts
@@ -143,38 +136,17 @@ export function ConfigForm() {
         }
     };
 
-    // Select/Deselect all businesses
-    const toggleAllBusinesses = () => {
-        if (selectedBusinesses.length === filteredBusinesses.length) {
-            const remaining = selectedBusinesses.filter(
-                b => !filteredBusinesses.some(fb => fb.id === b.id)
-            );
-            setSelectedBusinesses(remaining);
-        } else {
-            const newSelected = [...selectedBusinesses];
-            filteredBusinesses.forEach(business => {
-                if (!newSelected.some(b => b.id === business.id)) {
-                    newSelected.push(business);
-                }
-            });
-            setSelectedBusinesses(newSelected);
-        }
-    };
-
     const allAccountsSelected = filteredAccounts.length > 0 &&
         filteredAccounts.every(account => selectedAccounts.some(acc => acc.id === account.id));
 
     const allPagesSelected = filteredPages.length > 0 &&
         filteredPages.every(page => selectedPages.some(p => p.id === page.id));
 
-    const allBusinessesSelected = filteredBusinesses.length > 0 &&
-        filteredBusinesses.every(business => selectedBusinesses.some(b => b.id === business.id));
-
     return (
         <div className="space-y-6">
             <Tabs value={activeTab} onValueChange={onTabChange} className="w-full">
                 <div className="space-y-2">
-                    <TabsList className="w-full h-auto flex flex-wrap lg:grid lg:grid-cols-3">
+                    <TabsList className="w-full h-auto flex flex-wrap lg:grid lg:grid-cols-2">
                         <TabsTrigger value="accounts" className="flex items-center gap-2">
                             <Building2 className="h-4 w-4" />
                             Ad Accounts ({adAccounts.length})
@@ -182,10 +154,6 @@ export function ConfigForm() {
                         <TabsTrigger value="pages" className="flex items-center gap-2">
                             <FileText className="h-4 w-4" />
                             Pages ({pages.length})
-                        </TabsTrigger>
-                        <TabsTrigger value="businesses" className="flex items-center gap-2">
-                            <Briefcase className="h-4 w-4" />
-                            Business Portfolios ({businesses.length})
                         </TabsTrigger>
                     </TabsList>
                     <p className="text-xs text-muted-foreground">
@@ -227,17 +195,16 @@ export function ConfigForm() {
                         {/* Table Container with Horizontal Scroll */}
                         <div className="border rounded-md overflow-hidden">
                             <div className="overflow-x-auto">
-                                <div className="min-w-[1000px]">
+                                <div className="min-w-[850px]">
                                     <ScrollArea className="h-[400px]">
                                         {/* Table Header - Sticky */}
-                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(150px,1.5fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
                                             <Checkbox
                                                 checked={allAccountsSelected}
                                                 onCheckedChange={toggleAllAccounts}
                                                 className="mt-0.5"
                                             />
                                             <span>Name</span>
-                                            <span>Business Account</span>
                                             <span>ID</span>
                                             <span>Owner</span>
                                             <span>Status</span>
@@ -280,14 +247,13 @@ export function ConfigForm() {
                                                         <div
                                                             key={account.id}
                                                             onClick={() => toggleAccount(account)}
-                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(150px,1.5fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                                         >
                                                             <Checkbox
                                                                 checked={isSelected}
                                                                 onCheckedChange={() => toggleAccount(account)}
                                                             />
                                                             <span className="font-medium text-sm truncate" title={account.name}>{account.name}</span>
-                                                            <span className="text-sm text-muted-foreground truncate" title={account.business_name || '-'}>{account.business_name || '-'}</span>
                                                             <span className="text-sm text-muted-foreground truncate">{account.account_id}</span>
                                                             <span className="text-sm text-muted-foreground truncate">{(account as any)._source?.facebookName || 'Unknown'}</span>
                                                             <div className="flex items-center gap-2">
@@ -340,10 +306,10 @@ export function ConfigForm() {
                         {/* Table Container with Horizontal Scroll */}
                         <div className="border rounded-md overflow-hidden">
                             <div className="overflow-x-auto">
-                                <div className="min-w-[800px]">
+                                <div className="min-w-[850px]">
                                     <ScrollArea className="h-[400px]">
-                                        {/* Table Header - Sticky */}
-                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_minmax(140px,1fr)_140px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
+                                        {/* Table Header - Sticky (same grid as accounts) */}
+                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
                                             <Checkbox
                                                 checked={allPagesSelected}
                                                 onCheckedChange={toggleAllPages}
@@ -383,7 +349,7 @@ export function ConfigForm() {
                                                         <div
                                                             key={page.id}
                                                             onClick={() => togglePage(page)}
-                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_minmax(140px,1fr)_140px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
+                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_120px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
                                                         >
                                                             <Checkbox
                                                                 checked={isSelected}
@@ -404,108 +370,6 @@ export function ConfigForm() {
                                                                                 status === 'UNPUBLISHED' ? 'Unpublished' : status}
                                                                     </span>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </ScrollArea>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="businesses" className="mt-6">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                {selectedBusinesses.length} of {businesses.length} selected
-                            </p>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => refreshData(true)}
-                                className="h-8"
-                            >
-                                <RefreshCw className="h-3 w-3 mr-2" />
-                                Refresh
-                            </Button>
-                        </div>
-
-                        {/* Search Input */}
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search business portfolios..."
-                                value={businessSearch}
-                                onChange={(e) => setBusinessSearch(e.target.value)}
-                                className="pl-9"
-                            />
-                        </div>
-
-                        {/* Table Container with Horizontal Scroll */}
-                        <div className="border rounded-md overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <div className="min-w-[900px]">
-                                    <ScrollArea className="h-[400px]">
-                                        {/* Table Header - Sticky */}
-                                        <div className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_160px_100px] gap-4 py-2 px-2 border-b bg-muted font-medium text-sm sticky top-0 z-10">
-                                            <Checkbox
-                                                checked={allBusinessesSelected}
-                                                onCheckedChange={toggleAllBusinesses}
-                                                className="mt-0.5"
-                                            />
-                                            <span>Name</span>
-                                            <span>ID</span>
-                                            <span>Verification</span>
-                                            <span>Profile</span>
-                                        </div>
-                                        {filteredBusinesses.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center h-40 text-center">
-                                                <Briefcase className="h-12 w-12 text-muted-foreground mb-2" />
-                                                <p className="text-sm text-muted-foreground">
-                                                    {businessSearch ? 'No matching portfolios found' : 'No business portfolios found'}
-                                                </p>
-                                            </div>
-                                        ) : (
-                                            <div className="divide-y">
-                                                {filteredBusinesses.map((business) => {
-                                                    const isSelected = selectedBusinesses.some(b => b.id === business.id);
-                                                    const verificationStatus = business.verification_status || 'unknown';
-
-                                                    return (
-                                                        <div
-                                                            key={business.id}
-                                                            onClick={() => toggleBusiness(business)}
-                                                            className="grid grid-cols-[40px_minmax(200px,2fr)_minmax(140px,1.2fr)_160px_100px] gap-4 py-3 px-2 hover:bg-accent cursor-pointer transition-colors items-center"
-                                                        >
-                                                            <Checkbox
-                                                                checked={isSelected}
-                                                                onCheckedChange={() => toggleBusiness(business)}
-                                                            />
-                                                            <span className="font-medium text-sm truncate">{business.name}</span>
-                                                            <span className="text-sm text-muted-foreground truncate">{business.id}</span>
-                                                            <span className="text-sm text-muted-foreground truncate">
-                                                                {verificationStatus === 'verified' ? (
-                                                                    <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Verified</Badge>
-                                                                ) : (
-                                                                    <Badge variant="secondary">{verificationStatus}</Badge>
-                                                                )}
-                                                            </span>
-                                                            <div className="flex items-center">
-                                                                {business.profile_picture_uri ? (
-                                                                    <img
-                                                                        src={business.profile_picture_uri}
-                                                                        alt={business.name}
-                                                                        className="w-8 h-8 rounded-full border"
-                                                                    />
-                                                                ) : (
-                                                                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs">
-                                                                        {business.name.substring(0, 2).toUpperCase()}
-                                                                    </div>
-                                                                )}
                                                             </div>
                                                         </div>
                                                     );

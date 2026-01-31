@@ -9,7 +9,7 @@ import { fromBasicUnits } from '@/lib/currency-utils';
  * Uses same team resolution and tokens - ensures consistency.
  * REDUCES Meta API calls: 3 per member (businesses, adaccounts, accounts) vs 6+ when called separately.
  */
-const CACHE_TTL = 30 * 60 * 1000; // 30 minutes - reduce rate limit usage
+const CACHE_TTL = 60 * 60 * 1000; // 60 minutes - reduce rate limit usage
 
 declare global {
   var _teamConfigCache: Record<string, { data: any; timestamp: number }> | undefined;

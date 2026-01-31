@@ -3,11 +3,11 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
-// Redirect legacy export-sheet URL to Report Tools
+// Redirect legacy export-sheet URL to Ads Manager
 export default function ExportSheetRedirectPage() {
     const router = useRouter()
     useEffect(() => {
-        router.replace("/report-tools/google-sheets-export")
+        router.replace("/ads-manager/google-sheets-export")
     }, [router])
     return null
 }

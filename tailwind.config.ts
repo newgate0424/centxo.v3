@@ -20,6 +20,7 @@ export default {
         sans: ['var(--font-inter)', 'var(--font-sarabun)', 'sans-serif'],
         body: ['var(--font-inter)', 'var(--font-sarabun)', 'sans-serif'],
         headline: ['var(--font-inter)', 'var(--font-sarabun)', 'sans-serif'],
+        outfit: ['var(--font-outfit)', 'var(--font-inter)', 'sans-serif'],
         code: ['var(--font-roboto)', 'monospace'],
       },
       colors: {

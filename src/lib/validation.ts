@@ -112,6 +112,16 @@ export const campaignCreateSchema = z.object({
             return null;
         }
     }),
+    exclusionAudienceIds: z.string().optional().transform((val) => {
+        if (!val) return [] as string[];
+        try {
+            const parsed = JSON.parse(val);
+            if (!Array.isArray(parsed)) return [] as string[];
+            return parsed.filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+        } catch {
+            return [] as string[];
+        }
+    }),
 });
 
 export type CampaignCreateInput = z.infer<typeof campaignCreateSchema>;

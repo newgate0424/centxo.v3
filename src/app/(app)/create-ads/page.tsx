@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -8,7 +9,7 @@ import { useAdAccount } from '@/contexts/AdAccountContext';
 import {
   Loader2, Upload, FileVideo, FileImage, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft,
   Target, Wallet, Sparkles, Folder, X, Rocket, User, Newspaper, Search, Check, ChevronsUpDown, MessageCircle, Trash2,
-  Globe, MoreHorizontal, ThumbsUp, MessageSquare, Share2, Play,
+  Globe, MoreHorizontal, ThumbsUp, MessageSquare, Share2, Play, Users,
 } from 'lucide-react';
 import {
   type UploadedMedia,
@@ -39,6 +40,7 @@ import {
 import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -88,6 +90,10 @@ export default function CreateAdsPage() {
   const [foundInterests, setFoundInterests] = useState<any[]>([]);
   const [searchingInterests, setSearchingInterests] = useState(false);
 
+  const [exclusionAudiences, setExclusionAudiences] = useState<{ id: string; name: string }[]>([]);
+  const [loadingExclusionAudiences, setLoadingExclusionAudiences] = useState(false);
+  const [useExclusionAudiences, setUseExclusionAudiences] = useState(false);
+
   const [ageMinInput, setAgeMinInput] = useState('20');
   const [ageMaxInput, setAgeMaxInput] = useState('50');
 
@@ -100,6 +106,8 @@ export default function CreateAdsPage() {
 
   const [primaryText, setPrimaryText] = useState('');
   const [headline, setHeadline] = useState('');
+  const [noPrimaryText, setNoPrimaryText] = useState(false);
+  const [noHeadline, setNoHeadline] = useState(false);
   const [greeting, setGreeting] = useState('');
   const [iceBreakers, setIceBreakers] = useState<{ question: string; payload: string }[]>([]);
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
@@ -118,12 +126,13 @@ export default function CreateAdsPage() {
     targetingType: 'ai' as 'ai' | 'manual',
     manualInterests: [] as { id: string; name: string }[],
     beneficiaryId: '',
+    exclusionAudienceIds: [] as string[],
     ageMin: 20,
     ageMax: 50,
     dailyBudget: 20,
     campaignCount: 1,
     adSetCount: 1,
-    adsCount: 3,
+    adsCount: 1,
   });
 
   // Memoize computed values for performance
@@ -186,6 +195,20 @@ export default function CreateAdsPage() {
     }, 400);
     return () => clearTimeout(timer);
   }, [interestSearch]);
+
+  useEffect(() => {
+    if (!form.adAccountId) {
+      setExclusionAudiences([]);
+      setForm((p) => ({ ...p, exclusionAudienceIds: [] }));
+      return;
+    }
+    setLoadingExclusionAudiences(true);
+    fetch(`/api/facebook/custom-audiences?adAccountId=${encodeURIComponent(form.adAccountId.startsWith('act_') ? form.adAccountId : `act_${form.adAccountId}`)}`)
+      .then((r) => r.json())
+      .then((d) => setExclusionAudiences((d.audiences || []).map((a: any) => ({ id: a.id, name: a.name || a.id }))))
+      .catch(() => setExclusionAudiences([]))
+      .finally(() => setLoadingExclusionAudiences(false));
+  }, [form.adAccountId]);
 
   useEffect(() => {
     if (!form.adAccountId) {
@@ -351,8 +374,9 @@ export default function CreateAdsPage() {
       fd.append('ageMax', String(Math.min(65, Math.max(18, form.ageMax))));
       const beneficiaryValue = beneficiaryManualId.trim() || form.beneficiaryId;
       if (beneficiaryValue) fd.append('beneficiaryName', beneficiaryValue);
-      if (primaryText.trim()) fd.append('primaryText', primaryText.trim());
-      if (headline.trim()) fd.append('headline', headline.trim());
+      if (useExclusionAudiences && form.exclusionAudienceIds?.length) fd.append('exclusionAudienceIds', JSON.stringify(form.exclusionAudienceIds));
+      fd.append('primaryText', noPrimaryText ? '' : primaryText);
+      fd.append('headline', noHeadline ? '' : headline);
       if (greeting.trim()) fd.append('greeting', greeting.trim());
       const validIce = iceBreakers.filter((ib) => ib.question?.trim());
       if (validIce.length > 0) fd.append('manualIceBreakers', JSON.stringify(validIce));
@@ -384,6 +408,7 @@ export default function CreateAdsPage() {
       if (s.includes('beneficiary') || s.includes('dsa')) return t('createAds.error.beneficiary', 'ไม่พบผู้รับผลประโยชน์ที่รองรับ กรุณาตั้งค่าใน Meta Business Manager');
       if (s.includes('permission') || s.includes('access')) return t('createAds.error.permission', 'ไม่มีสิทธิ์เข้าถึงบัญชีหรือเพจ กรุณาตรวจสอบ Meta Ads Manager');
       if (s.includes('invalid parameter')) return t('createAds.error.invalidParam', 'พารามิเตอร์แคมเปญไม่ถูกต้อง — ตรวจสอบ objective, Special Ad Categories หรือการตั้งค่าใน Meta Ads Manager');
+      if (s.includes('โหมดพัฒนา') || s.includes('development mode')) return t('createAds.error.appDevMode', 'แอป Facebook อยู่ในโหมดพัฒนา กรุณาไปที่ Meta for Developers แล้วเปลี่ยนแอปเป็นโหมด Live (สาธารณะ) เพื่อสร้างโฆษณาได้');
       return raw;
     };
 
@@ -597,7 +622,7 @@ export default function CreateAdsPage() {
                               className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                             />
                           </div>
-                          <ScrollArea className="max-h-60">
+                          <div className="max-h-60 overflow-y-auto overscroll-contain scrollbar-minimal">
                             <div className="p-1">
                               {adAccounts
                                 .filter((a) =>
@@ -641,7 +666,7 @@ export default function CreateAdsPage() {
                                 </div>
                               )}
                             </div>
-                          </ScrollArea>
+                          </div>
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -677,7 +702,7 @@ export default function CreateAdsPage() {
                               className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                             />
                           </div>
-                          <ScrollArea className="max-h-60">
+                          <div className="max-h-60 overflow-y-auto overscroll-contain scrollbar-minimal">
                             <div className="p-1">
                               {pages
                                 .filter((p) =>
@@ -719,7 +744,7 @@ export default function CreateAdsPage() {
                                 </div>
                               )}
                             </div>
-                          </ScrollArea>
+                          </div>
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -986,9 +1011,9 @@ export default function CreateAdsPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <Label>{t('createAds.strategy.age', 'ช่วงอายุ')}</Label>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <Input
                             type="text"
                             inputMode="numeric"
@@ -1005,9 +1030,9 @@ export default function CreateAdsPage() {
                               setAgeMinInput(String(minVal));
                               setAgeMaxInput(String(maxVal));
                             }}
-                            className="w-16"
+                            className="w-14 h-8 text-sm"
                           />
-                          <span className="text-sm text-muted-foreground shrink-0">–</span>
+                          <span className="text-muted-foreground text-sm">–</span>
                           <Input
                             type="text"
                             inputMode="numeric"
@@ -1024,12 +1049,79 @@ export default function CreateAdsPage() {
                               setAgeMinInput(String(minVal));
                               setAgeMaxInput(String(maxVal));
                             }}
-                            className="w-16"
+                            className="w-14 h-8 text-sm"
                           />
-                          <span className="text-sm text-muted-foreground shrink-0">{t('createAds.strategy.years', 'ปี')}</span>
+                          <span className="text-muted-foreground text-sm shrink-0">{t('createAds.strategy.years', 'ปี')}</span>
+                          <Button
+                            type="button"
+                            variant={form.ageMin >= 25 ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-8 px-2 text-xs shrink-0"
+                            onClick={() => {
+                              const minVal = 25;
+                              const maxVal = Math.max(form.ageMax, 25);
+                              setForm((p) => ({ ...p, ageMin: minVal, ageMax: maxVal }));
+                              setAgeMinInput('25');
+                              setAgeMaxInput(String(maxVal));
+                            }}
+                          >
+                            25+
+                          </Button>
                         </div>
+                        <p className="text-[11px] text-muted-foreground leading-tight">
+                          {t('createAds.strategy.ageNoteShort', 'อ้างอิงจากโปรไฟล์ FB · เด็กอาจใส่อายุผิด ลอง 25+')}
+                        </p>
                       </div>
                     </div>
+
+                    {/* กลุ่มยกเว้น - เลือกใช้อันไหนบ้าง */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="flex items-center gap-2">
+                          <Users className="h-4 w-4 shrink-0" />
+                          {t('createAds.exclusion.title', 'กลุ่มยกเว้น')}
+                        </Label>
+                        <Switch checked={useExclusionAudiences} onCheckedChange={setUseExclusionAudiences} />
+                      </div>
+                      {useExclusionAudiences && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          {loadingExclusionAudiences ? (
+                            <span className="flex items-center gap-1.5 text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              {t('createAds.exclusion.loading', 'โหลด...')}
+                            </span>
+                          ) : exclusionAudiences.length === 0 ? (
+                            <span className="text-muted-foreground">
+                              {t('createAds.exclusion.empty', 'ยังไม่มีกลุ่ม')}{' '}
+                              <Link href="/audiences" className="text-primary hover:underline">{t('createAds.exclusion.goToAudiences', 'ไปที่กลุ่มเป้าหมาย')}</Link>
+                            </span>
+                          ) : (
+                            exclusionAudiences.map((a) => {
+                              const selected = form.exclusionAudienceIds?.includes(a.id);
+                              return (
+                                <Badge
+                                  key={a.id}
+                                  variant={selected ? 'default' : 'outline'}
+                                  className="cursor-pointer gap-1 pr-1 py-0.5 text-xs"
+                                  onClick={() => {
+                                    setForm((p) => ({
+                                      ...p,
+                                      exclusionAudienceIds: selected
+                                        ? (p.exclusionAudienceIds || []).filter((id) => id !== a.id)
+                                        : [...(p.exclusionAudienceIds || []), a.id],
+                                    }));
+                                  }}
+                                >
+                                  {selected && <Check className="h-3 w-3" />}
+                                  <span className="truncate max-w-[140px]">{a.name}</span>
+                                </Badge>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="space-y-2">
                       <Label>{t('createAds.strategy.placements', 'Placements')}</Label>
                       <div className="flex flex-wrap gap-4">
@@ -1196,19 +1288,11 @@ export default function CreateAdsPage() {
                                 const data = await res.json();
                                 if (!res.ok) throw new Error(data.error || 'Analyze failed');
                                 const d = data.data || data;
-                                setPrimaryText(d.primaryText || '');
-                                setHeadline(d.headline || '');
+                                if (!noPrimaryText) setPrimaryText(d.primaryText || '');
+                                if (!noHeadline) setHeadline(d.headline || '');
                                 setGreeting(typeof d.greeting === 'string' ? d.greeting : '');
                                 setIceBreakers(Array.isArray(d.iceBreakers) ? d.iceBreakers : []);
-                                if (typeof d.ageMin === 'number' && typeof d.ageMax === 'number') {
-                                  const min = Math.min(65, Math.max(18, d.ageMin));
-                                  const max = Math.min(65, Math.max(18, d.ageMax));
-                                  const lo = Math.min(min, max);
-                                  const hi = Math.max(min, max);
-                                  setForm((p) => ({ ...p, ageMin: lo, ageMax: hi }));
-                                  setAgeMinInput(String(lo));
-                                  setAgeMaxInput(String(hi));
-                                }
+                                // Age range stays from Strategy & Budget step — do NOT overwrite with AI
                                 toast({ title: t('createAds.ads.analyzed', 'วิเคราะห์สื่อเสร็จแล้ว'), variant: 'default' });
                               } catch (e) {
                                 const msg = e instanceof Error ? e.message : 'Analyze failed';
@@ -1230,22 +1314,52 @@ export default function CreateAdsPage() {
                     )}
                     <div className="space-y-4">
                       <div>
-                        <Label>{t('createAds.ads.primaryText', 'ข้อความหลัก')}</Label>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <Label>{t('createAds.ads.primaryText', 'ข้อความหลัก')}</Label>
+                          <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={noPrimaryText}
+                              onChange={(e) => {
+                                setNoPrimaryText(e.target.checked);
+                                if (e.target.checked) setPrimaryText('');
+                              }}
+                              className="h-4 w-4 rounded"
+                            />
+                            <span className="text-xs">{t('createAds.ads.noPrimaryText', 'ไม่ใส่ข้อความในโพสต์')}</span>
+                          </label>
+                        </div>
                         <Textarea
                           value={primaryText}
                           onChange={(e) => setPrimaryText(e.target.value)}
                           placeholder={t('createAds.ads.primaryPlaceholder', 'ข้อความโฆษณาหลัก — สอดคล้องกับวิดีโอ/รูป')}
                           rows={4}
                           className="resize-none mt-1"
+                          disabled={noPrimaryText}
                         />
                       </div>
                       <div>
-                        <Label>{t('createAds.ads.headline', 'ข้อความพาดหัว')}</Label>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <Label>{t('createAds.ads.headline', 'ข้อความพาดหัว')}</Label>
+                          <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={noHeadline}
+                              onChange={(e) => {
+                                setNoHeadline(e.target.checked);
+                                if (e.target.checked) setHeadline('');
+                              }}
+                              className="h-4 w-4 rounded"
+                            />
+                            <span className="text-xs">{t('createAds.ads.noHeadline', 'ไม่ใส่พาดหัว')}</span>
+                          </label>
+                        </div>
                         <Input
                           value={headline}
                           onChange={(e) => setHeadline(e.target.value)}
                           placeholder={t('createAds.ads.headlinePlaceholder', 'หัวข้อสั้นๆ ให้คลิก')}
                           className="mt-1"
+                          disabled={noHeadline}
                         />
                       </div>
                     </div>

@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No file provided' }, { status: 400 });
         }
 
-        // Use videoStorage helper which handles both local and R2 logic seamlessly
+        // Use videoStorage helper (local storage only)
         // It also supports images despite the name (logic is file generic usually)
         // If videoStorage is strict about extensions, we might need a separate image handler,
         // but typically it just returns a path.

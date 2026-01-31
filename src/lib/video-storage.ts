@@ -19,49 +19,13 @@ export class VideoStorage {
   }
 
   /**
-   * Delete video file from storage (Local + R2)
+   * Delete video file from local storage
    */
   async delete(fileName: string, userId: string): Promise<{ success: boolean; error?: string }> {
-    let deletedFromR2 = false;
     let deletedFromLocal = false;
     let errorMsg = '';
 
-    // 1. Try R2 Deletion
-    if (process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME) {
-      try {
-        console.log(`🗑️ Deleting from R2: ${fileName}`);
-
-        // R2 usually organizes by simple keys. If we stored it with "videos/folder/name",
-        // we need to match that key. 
-        // Our 'list' API returns simple names usually, but R2 keys might be 'videos/userId/filename'
-        // Construct likely R2 Key
-        const r2Key = `videos/${userId}/${fileName}`;
-
-        const accountId = process.env.R2_ACCOUNT_ID;
-        const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-        const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-        const bucketName = process.env.R2_BUCKET_NAME;
-
-        const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-        const s3Client = new S3Client({
-          region: 'auto',
-          endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-          credentials: { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey! },
-        });
-
-        await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: r2Key })).catch(err => console.error('Failed to delete specific R2 key', err));
-        // Also try deleting flat key just in case (legacy)
-        await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: fileName })).catch(() => { });
-
-        deletedFromR2 = true;
-        console.log('✅ Deleted from R2');
-      } catch (err: any) {
-        console.error('R2 deletion failed:', err);
-        errorMsg += `R2: ${err.message}. `;
-      }
-    }
-
-    // 2. Try Local Deletion
+    // Local Deletion
     try {
       // Possible local paths
       const possiblePaths = [
@@ -88,13 +52,13 @@ export class VideoStorage {
       }
     }
 
-    if (deletedFromR2 || deletedFromLocal) {
+    if (deletedFromLocal) {
       return { success: true };
     }
 
     return {
       success: false,
-      error: errorMsg || 'File not found in R2 or Local storage'
+      error: errorMsg || 'File not found in local storage'
     };
   }
 
@@ -135,10 +99,10 @@ export class VideoStorage {
 
       console.log(`✅ Video uploaded successfully (${fileSizeMB.toFixed(2)}MB): ${filePath}`);
 
-      // Generate URL path
+      // Generate URL path (served via /api/uploads/[...path])
       const urlPath = folderName
-        ? `/uploads/videos/${folderName}/${fileName}`
-        : `/uploads/videos/${fileName}`;
+        ? `/api/uploads/videos/${folderName}/${fileName}`
+        : `/api/uploads/videos/${fileName}`;
 
       return {
         success: true,
@@ -155,150 +119,10 @@ export class VideoStorage {
   }
 
   /**
-   * Upload video file to Cloudflare R2 or AWS S3
-   */
-  async uploadToR2(file: File, folderName?: string): Promise<UploadResult> {
-    try {
-      // Log file size for tracking
-      const fileSizeMB = file.size / (1024 * 1024);
-      console.log(`📤 Uploading file to R2: ${file.name} (${fileSizeMB.toFixed(2)}MB)`);
-
-      // Check if R2 is configured
-      const accountId = process.env.R2_ACCOUNT_ID;
-      const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-      const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-      const bucketName = process.env.R2_BUCKET_NAME;
-      const publicUrl = process.env.R2_PUBLIC_URL; // Optional: custom domain
-
-      if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
-        return {
-          success: false,
-          error: 'Cloudflare R2 not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME in .env',
-        };
-      }
-
-      // Dynamic import of AWS SDK (only when needed)
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-
-      // Create S3 client configured for R2
-      const s3Client = new S3Client({
-        region: 'auto',
-        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      });
-
-      // Generate unique filename with folder structure
-      const timestamp = Date.now();
-      const randomStr = Math.random().toString(36).substring(7);
-      const fileExtension = file.name.split('.').pop();
-      const fileName = folderName
-        ? `videos/${folderName}/video_${timestamp}_${randomStr}.${fileExtension}`
-        : `videos/video_${timestamp}_${randomStr}.${fileExtension}`;
-
-      // Convert File to Buffer
-      console.log(`⏳ Converting file to buffer...`);
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
-      // Upload to R2
-      console.log(`☁️ Uploading to R2 bucket: ${bucketName}`);
-      const command = new PutObjectCommand({
-        Bucket: bucketName,
-        Key: fileName,
-        Body: buffer,
-        ContentType: file.type,
-      });
-
-      await s3Client.send(command);
-
-      const uploadedSizeMB = file.size / (1024 * 1024);
-      console.log(`✅ Video uploaded successfully to R2 (${uploadedSizeMB.toFixed(2)}MB)`);
-
-      // Generate public URL
-      // Don't use localhost URLs for R2 - use R2 dev URL instead
-      const shouldUsePublicUrl = publicUrl && !publicUrl.includes('localhost');
-      const fileUrl = shouldUsePublicUrl
-        ? `${publicUrl}/${fileName}`
-        : `https://pub-${accountId}.r2.dev/${fileName}`; // R2 dev URL
-
-      console.log(`Video uploaded to R2: ${fileUrl}`);
-
-      return {
-        success: true,
-        filePath: fileName, // R2 key
-        url: fileUrl,
-      };
-    } catch (error) {
-      console.error('Error uploading video to R2:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'R2 upload failed',
-      };
-    }
-  }
-
-  /**
-   * Upload video - automatically chooses between local and R2
-   * For videos, also generates thumbnails and uploads them to R2
+   * Upload video - uses local storage only
+   * For videos, also generates thumbnails and saves them locally
    */
   async upload(file: File, folderName?: string): Promise<UploadResult> {
-    // Try R2 first if configured, fallback to local
-    if (process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME) {
-      const r2Result = await this.uploadToR2(file, folderName);
-      if (r2Result.success) {
-        // Generate thumbnails for videos
-        if (file.type.startsWith('video/') && r2Result.filePath && folderName) {
-          try {
-            console.log('🎬 Generating thumbnails for R2-uploaded video...');
-            const { generateAndUploadThumbnails } = await import('./thumbnail-generator');
-
-            // Extract video ID from R2 key (e.g., "videos/userId/video_123.mp4" -> "video_123")
-            const videoId = path.basename(r2Result.filePath, path.extname(r2Result.filePath));
-
-            // Save video to temp directory for thumbnail generation
-            const tempDir = path.join(process.cwd(), 'uploads', 'temp');
-            if (!existsSync(tempDir)) {
-              await mkdir(tempDir, { recursive: true });
-            }
-
-            const tempVideoPath = path.join(tempDir, `${videoId}${path.extname(r2Result.filePath)}`);
-
-            // Convert File to Buffer and save temporarily
-            const bytes = await file.arrayBuffer();
-            const buffer = Buffer.from(bytes);
-            await writeFile(tempVideoPath, buffer);
-
-            console.log(`📁 Saved temp video for thumbnail generation: ${tempVideoPath}`);
-
-            // Generate and upload thumbnails
-            const thumbResult = await generateAndUploadThumbnails(
-              tempVideoPath,
-              folderName,
-              videoId,
-              18
-            );
-
-            // Clean up temp file
-            await unlink(tempVideoPath).catch(() => { });
-            console.log('🗑️ Cleaned up temp video file');
-
-            if (thumbResult.success && thumbResult.thumbnailUrls) {
-              r2Result.thumbnailUrls = thumbResult.thumbnailUrls;
-              console.log(`✅ Generated ${thumbResult.thumbnailUrls.length} thumbnails for R2 video`);
-            }
-          } catch (thumbError) {
-            console.error('Thumbnail generation failed:', thumbError);
-            // Don't fail the upload if thumbnail generation fails
-          }
-        }
-        return r2Result;
-      }
-      console.warn('R2 upload failed, falling back to local storage:', r2Result.error);
-    }
-
     // Local upload
     const localResult = await this.uploadToLocal(file, folderName);
 

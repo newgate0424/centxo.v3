@@ -110,28 +110,40 @@ export async function GET(request: NextRequest) {
     }
 
     const beneficiaries: Array<{ id: string; name: string }> = [];
-    let adAccountData: { business?: { id: string }; default_dsa_beneficiary?: string; dsa_beneficiary?: string } | null = null;
+    let adAccountData: { business?: { id: string }; default_dsa_beneficiary?: string; dsa_beneficiary?: string; error?: unknown } | null = null;
 
     try {
-      // Fetch ad account + ad sets + dsa_recommendations in parallel (all independent)
+      // Fetch ad account (basic fields only — dsa_beneficiary not supported on all ad accounts)
+      // + ad sets + dsa_recommendations in parallel
       const [adAccountResponse, adSetsRes, recRes] = await Promise.all([
-        fetch(`https://graph.facebook.com/v22.0/${actId}?fields=id,name,account_id,business,funding_source_details,default_dsa_beneficiary,default_dsa_payor,dsa_beneficiary,dsa_payor&access_token=${accessToken}`),
+        fetch(`https://graph.facebook.com/v22.0/${actId}?fields=id,name,account_id,business,funding_source_details&access_token=${accessToken}`),
         fetch(`https://graph.facebook.com/v22.0/${actId}/adsets?fields=id,name,regional_regulation_identities&limit=100&access_token=${accessToken}`),
         fetch(`https://graph.facebook.com/v22.0/${actId}/dsa_recommendations?fields=recommendations&access_token=${accessToken}`),
       ]);
 
+      // DSA fields (default_dsa_beneficiary, dsa_beneficiary) — optional, may not exist on all ad accounts
+      let dsaData: { default_dsa_beneficiary?: string; dsa_beneficiary?: string } | null = null;
+      try {
+        const dsaRes = await fetch(`https://graph.facebook.com/v22.0/${actId}?fields=default_dsa_beneficiary,dsa_beneficiary&access_token=${accessToken}`);
+        const dsaJson = await dsaRes.json();
+        if (!dsaJson.error) dsaData = dsaJson;
+      } catch {
+        /* DSA fields not supported — skip */
+      }
+
       // ========== METHOD 3: Ad Account Settings (DSA beneficiary/payor) ==========
       try {
         adAccountData = await adAccountResponse.json();
-        console.log('💼 Ad Account Data:', JSON.stringify(adAccountData, null, 2));
+        if (dsaData) adAccountData = { ...adAccountData, ...dsaData };
+        if (!adAccountData?.error) console.log('💼 Ad Account Data:', JSON.stringify(adAccountData, null, 2));
 
-        if (adAccountData?.default_dsa_beneficiary) {
+        if (adAccountData && !adAccountData.error && adAccountData?.default_dsa_beneficiary) {
           const v = String(adAccountData.default_dsa_beneficiary);
           beneficiaries.push({ id: v, name: /^\d+$/.test(v) ? `ID ${v}` : v });
           console.log(`✅ Method 3: default_dsa_beneficiary ${v}`);
         }
 
-        if (adAccountData?.dsa_beneficiary) {
+        if (adAccountData && !adAccountData.error && adAccountData?.dsa_beneficiary) {
           const v = String(adAccountData.dsa_beneficiary);
           if (!beneficiaries.some((b) => b.id === v)) {
             beneficiaries.push({ id: v, name: /^\d+$/.test(v) ? `ID ${v}` : v });
@@ -212,10 +224,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Remove duplicates by ID; prefer numeric IDs (valid for universal_beneficiary)
+    // Filter out non-numeric IDs (e.g. page names like "คิง มหาเฮง") — Meta Beneficiary must be numeric
     const byId = new Map<string, { id: string; name: string }>();
     for (const b of beneficiaries) {
       const id = String(b.id).trim();
-      if (id && !byId.has(id)) byId.set(id, { id, name: b.name });
+      if (!id || byId.has(id)) continue;
+      if (!/^\d+$/.test(id)) {
+        console.log(`🚫 Excluding non-numeric (likely Page name): ${id}`);
+        continue;
+      }
+      byId.set(id, { id, name: b.name });
     }
     let unique = Array.from(byId.values());
     const numericFirst = (a: { id: string }, b: { id: string }) => {
@@ -226,34 +244,41 @@ export async function GET(request: NextRequest) {
     };
     unique.sort(numericFirst);
 
-    // Display like Meta: "ชื่อ (ID: xxx)". Resolve all numeric IDs then set name.
+    // Display like Meta: "ชื่อ (ID: xxx)". Resolve numeric IDs and filter out Pages (category = Page).
     const numericIds = unique.filter((u) => /^\d+$/.test(u.id)).map((u) => u.id);
     const chunk = numericIds.slice(0, 50);
+    const pageIdsToExclude = new Set<string>();
     if (chunk.length > 0) {
       try {
         const r = await fetch(
-          `https://graph.facebook.com/v22.0/?ids=${encodeURIComponent(chunk.join(','))}&fields=name&access_token=${accessToken}`
+          `https://graph.facebook.com/v22.0/?ids=${encodeURIComponent(chunk.join(','))}&fields=name,category&access_token=${accessToken}`
         );
-        const data = (await r.json()) as Record<string, { name?: string; error?: { message: string } }>;
+        const data = (await r.json()) as Record<string, { name?: string; category?: string; error?: { message: string } }>;
         for (const id of chunk) {
+          const node = data[id];
+          if (node?.category) {
+            pageIdsToExclude.add(id);
+            console.log(`🚫 Excluding Page (not Beneficiary): ${id} → ${node.name}`);
+            continue;
+          }
           const u = unique.find((x) => x.id === id);
           if (!u) continue;
-          const node = data[id];
           const n = node && !node.error && typeof node.name === 'string' ? node.name.trim() : null;
-          u.name = n ? `${n} (ID: ${id})` : `— (ID: ${id})`;
+          u.name = n ? `${n} (ID: ${id})` : `Beneficiary (ID: ${id})`;
           if (n) console.log(`📌 Resolved beneficiary ${id} → ${n}`);
         }
       } catch (e: any) {
         console.log('⚠️ Resolve names failed:', e?.message);
         for (const id of chunk) {
           const u = unique.find((x) => x.id === id);
-          if (u) u.name = `— (ID: ${id})`;
+          if (u) u.name = `Beneficiary (ID: ${id})`;
         }
       }
     }
+    unique = unique.filter((u) => !pageIdsToExclude.has(u.id));
     for (const u of unique) {
       if (!/^\d+$/.test(u.id)) continue;
-      if (!u.name.includes(' (ID: ')) u.name = `— (ID: ${u.id})`;
+      if (!u.name.includes(' (ID: ')) u.name = `Beneficiary (ID: ${u.id})`;
     }
     // Non-numeric: use name as-is (no " (ID: ...)" suffix).
     for (const u of unique) {

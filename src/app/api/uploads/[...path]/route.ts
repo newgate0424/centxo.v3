@@ -24,11 +24,22 @@ export async function GET(
 
     // Reconstruct the file path
     const filePath = params.path.join('/');
-    const fullPath = path.join(process.cwd(), 'uploads', filePath);
 
-    // Security: Ensure the path is within uploads directory
+    // Security: Reject path traversal attempts
+    if (filePath.includes('..') || filePath.startsWith('/') || /[<>:"|?*]/.test(filePath)) {
+      return NextResponse.json(
+        { error: 'Invalid path' },
+        { status: 403 }
+      );
+    }
+
+    const fullPath = path.join(process.cwd(), 'uploads', filePath);
     const uploadsDir = path.join(process.cwd(), 'uploads');
-    if (!fullPath.startsWith(uploadsDir)) {
+
+    // Security: Ensure resolved path is within uploads directory
+    const resolvedPath = path.resolve(fullPath);
+    const resolvedUploads = path.resolve(uploadsDir);
+    if (!resolvedPath.startsWith(resolvedUploads + path.sep) && resolvedPath !== resolvedUploads) {
       return NextResponse.json(
         { error: 'Invalid path' },
         { status: 403 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
     try {
@@ -53,6 +54,15 @@ export async function POST(req: NextRequest) {
                 userId: user.id,
                 provider: provider,
             },
+        });
+
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+        await createAuditLog({
+            userId: user.id,
+            action: 'DISCONNECT_ACCOUNT',
+            details: { provider, email: user.email },
+            ipAddress,
+            userAgent,
         });
 
         return NextResponse.json({

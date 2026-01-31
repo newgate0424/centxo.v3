@@ -9,12 +9,14 @@ import { type TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import os from 'os';
 import { analyzeMediaForAd } from '@/ai/flows/analyze-media-for-ad';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
 import { promisify } from 'util';
 import { campaignCreateSchema, formDataToObject } from '@/lib/validation';
 import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,7 +84,7 @@ async function getVerifiedBeneficiary(
   const token = `access_token=${accessToken}`;
 
   const [accountRes, agenciesRes] = await Promise.all([
-    fetch(`https://graph.facebook.com/v22.0/${pref}?fields=default_dsa_beneficiary,dsa_beneficiary,dsa_payor&${token}`),
+    fetch(`https://graph.facebook.com/v22.0/${pref}?fields=default_dsa_beneficiary&${token}`),
     fetch(`https://graph.facebook.com/v22.0/${pref}/agencies?${token}`),
   ]);
   const [accountData, agenciesData] = await Promise.all([
@@ -90,7 +92,8 @@ async function getVerifiedBeneficiary(
     agenciesRes.json().catch(() => ({})),
   ]);
 
-  const v = accountData?.default_dsa_beneficiary || accountData?.dsa_beneficiary;
+  // dsa_beneficiary not supported on all ad accounts — use default_dsa_beneficiary only
+  const v = accountData?.error ? null : accountData?.default_dsa_beneficiary;
   if (v && String(v).trim()) {
     return { id: String(v).trim(), name: String(v) };
   }
@@ -192,9 +195,12 @@ export async function POST(request: NextRequest) {
     if (ageMin > ageMax) [ageMin, ageMax] = [ageMax, ageMin];
     const primaryTextOverride = validatedData.primaryText?.trim() || null;
     const headlineOverride = validatedData.headline?.trim() || null;
+    const useEmptyPrimary = formData.has('primaryText') && !primaryTextOverride;
+    const useEmptyHeadline = formData.has('headline') && !headlineOverride;
     const greetingOverride = validatedData.greeting?.trim() || null;
     const manualIceBreakersParsed = validatedData.manualIceBreakers;
-    console.log('📍 Placements:', placements, 'Age:', ageMin, '-', ageMax);
+    const exclusionAudienceIds = validatedData.exclusionAudienceIds ?? [];
+    console.log('📍 Placements:', placements, 'Age:', ageMin, '-', ageMax, 'Exclusions:', exclusionAudienceIds.length);
 
     // Strip 'act_' prefix if present to avoid 'act_act_' duplication in all API calls
     const cleanAdAccountId = adAccountId.replace(/^act_/, '');
@@ -370,6 +376,9 @@ export async function POST(request: NextRequest) {
             publisher_platforms: placements,
             targeting_automation: { advantage_audience: 0 },
           };
+          if (exclusionAudienceIds.length > 0) {
+            targeting.excluded_custom_audiences = exclusionAudienceIds.map((id) => ({ id }));
+          }
 
           const adSetBody: Record<string, unknown> = {
             name: `AdSet ${s + 1} - Boost Post - ${new Date().toLocaleDateString('en-US')}`,
@@ -458,6 +467,17 @@ export async function POST(request: NextRequest) {
       }
 
       await invalidateUserCache(session.user.id);
+
+      const { ipAddress, userAgent } = getRequestMetadata(request);
+      await createAuditLog({
+        userId: session.user.id,
+        action: 'BOOST_POST',
+        entityId: campaignIds[0],
+        details: { structure: `${campaignCount}-${adSetCount}-${adsCount}`, pageId },
+        ipAddress,
+        userAgent,
+      });
+
       return NextResponse.json({
         success: true,
         campaignId: campaignIds[0],
@@ -502,46 +522,6 @@ export async function POST(request: NextRequest) {
         if (existsSync(testPath)) {
           foundPath = testPath;
           break;
-        }
-      }
-
-      // If not found locally, try R2
-      if (!foundPath && process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME) {
-        console.log('File not found locally, trying R2...');
-        try {
-          const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-          const accountId = process.env.R2_ACCOUNT_ID;
-          const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-          const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-          const bucketName = process.env.R2_BUCKET_NAME;
-
-          const s3Client = new S3Client({
-            region: 'auto',
-            endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-            credentials: { accessKeyId: accessKeyId!, secretAccessKey: secretAccessKey! },
-          });
-
-          const r2Key = `videos/${session.user.id}/${existingVideo}`;
-          const command = new GetObjectCommand({ Bucket: bucketName, Key: r2Key });
-          const response = await s3Client.send(command);
-
-          if (response.Body) {
-            // Download to temp folder for processing
-            const tempDir = path.join(process.cwd(), 'uploads', 'temp');
-            if (!existsSync(tempDir)) {
-              await fs.mkdir(tempDir, { recursive: true });
-            }
-            const tempPath = path.join(tempDir, existingVideo);
-
-            // Stream to file
-            const bodyContents = await response.Body.transformToByteArray();
-            await fs.writeFile(tempPath, Buffer.from(bodyContents));
-
-            foundPath = tempPath;
-            console.log('✓ Downloaded from R2 to temp:', tempPath);
-          }
-        } catch (r2Error) {
-          console.error('R2 download failed:', r2Error);
         }
       }
 
@@ -918,15 +898,15 @@ export async function POST(request: NextRequest) {
         if (thumbnailFile) {
           console.log('🖼️ Using user-provided thumbnail...');
 
-          // [NEW] Upload Custom Thumbnail to R2 (for persistence/library)
+          // Save custom thumbnail to local storage (for persistence/library)
           try {
-            console.log('☁️ Uploading custom thumbnail to R2 storage...');
+            console.log('💾 Saving custom thumbnail to local storage...');
             const thumbUploadRes = await videoStorage.upload(thumbnailFile, session.user.id);
             if (thumbUploadRes.success) {
-              console.log('✅ Custom thumbnail saved to R2:', thumbUploadRes.url);
+              console.log('✅ Custom thumbnail saved:', thumbUploadRes.url);
             }
           } catch (thumbStorageErr) {
-            console.warn('⚠️ Failed to save thumbnail to R2 (continuing):', thumbStorageErr);
+            console.warn('⚠️ Failed to save thumbnail (continuing):', thumbStorageErr);
           }
 
           const thumbBytes = await thumbnailFile.arrayBuffer();
@@ -942,22 +922,29 @@ export async function POST(request: NextRequest) {
             console.log('✅ User thumbnail uploaded:', thumbnailHash);
           }
         } else {
-          // Auto-generate a simple placeholder thumbnail (gradient image)
-          console.log('🎨 Generating auto-thumbnail for video ad...');
+          // Auto-extract frame from video as thumbnail (instead of purple placeholder)
+          console.log('🎬 Extracting frame from video for auto-thumbnail...');
+          let tempVideoPath: string | null = null;
           try {
-            const sharp = (await import('sharp')).default;
+            let videoPathToUse: string;
+            if (mediaPath && existsSync(mediaPath)) {
+              videoPathToUse = mediaPath;
+            } else {
+              tempVideoPath = path.join(os.tmpdir(), `video_thumb_${Date.now()}.mp4`);
+              await fs.writeFile(tempVideoPath, mediaBuffer);
+              videoPathToUse = tempVideoPath;
+            }
 
-            // Create a simple 1200x628 gradient image
-            const autoThumbBuffer = await sharp({
-              create: {
-                width: 1200,
-                height: 628,
-                channels: 3,
-                background: { r: 99, g: 102, b: 241 } // Indigo color
-              }
-            })
+            const frameBuffer = await extractVideoFrame(videoPathToUse);
+
+            // Resize to 1200x628 for Facebook ad thumbnail spec
+            const sharp = (await import('sharp')).default;
+            const autoThumbBuffer = await sharp(frameBuffer)
+              .resize(1200, 628, { fit: 'cover' })
               .jpeg({ quality: 85 })
               .toBuffer();
+
+            if (tempVideoPath) await fs.unlink(tempVideoPath).catch(() => {});
 
             const autoThumbFormData = new FormData();
             autoThumbFormData.append('file', new Blob([new Uint8Array(autoThumbBuffer)], { type: 'image/jpeg' }), 'auto_thumbnail.jpg');
@@ -968,11 +955,30 @@ export async function POST(request: NextRequest) {
             if (autoThumbData.images) {
               const key = Object.keys(autoThumbData.images)[0];
               thumbnailHash = autoThumbData.images[key].hash;
-              console.log('✅ Auto-thumbnail generated and uploaded:', thumbnailHash);
+              console.log('✅ Auto-thumbnail extracted from video and uploaded:', thumbnailHash);
             }
-          } catch (sharpErr) {
-            console.error('⚠️ Failed to generate auto-thumbnail:', sharpErr);
-            // Will continue without thumbnail - Ad creation might fail
+          } catch (extractErr) {
+            console.warn('⚠️ Frame extraction failed, falling back to neutral placeholder:', extractErr);
+            if (tempVideoPath) await fs.unlink(tempVideoPath).catch(() => {});
+            // Fallback: neutral gray placeholder (not purple)
+            try {
+              const sharp = (await import('sharp')).default;
+              const autoThumbBuffer = await sharp({
+                create: { width: 1200, height: 628, channels: 3, background: { r: 107, g: 114, b: 128 } }
+              }).jpeg({ quality: 85 }).toBuffer();
+
+              const autoThumbFormData = new FormData();
+              autoThumbFormData.append('file', new Blob([new Uint8Array(autoThumbBuffer)], { type: 'image/jpeg' }), 'auto_thumbnail.jpg');
+              autoThumbFormData.append('access_token', accessToken);
+              const autoThumbResponse = await fetch(`https://graph.facebook.com/v22.0/act_${cleanAdAccountId}/adimages`, { method: 'POST', body: autoThumbFormData });
+              const autoThumbData = await autoThumbResponse.json();
+              if (autoThumbData.images) {
+                const key = Object.keys(autoThumbData.images)[0];
+                thumbnailHash = autoThumbData.images[key].hash;
+              }
+            } catch (fallbackErr) {
+              console.error('⚠️ Fallback thumbnail failed:', fallbackErr);
+            }
           }
         }
       } else {
@@ -1066,6 +1072,34 @@ export async function POST(request: NextRequest) {
       // Step 4: Ad Sets Loop
       const currentCampaignAdSetIds: string[] = [];
 
+      // Ensure each Ad Set gets a DISTINCT targeting group — expand if AI returned fewer groups than Ad Sets
+      const rawGroups = aiAnalysis.interestGroups || [];
+      const baseInterests = aiAnalysis.interests || [];
+      const totalAdSets = validCampaignCount * adSetsPerCampaign;
+      let effectiveGroups: Array<{ name: string; interests: string[] }> = rawGroups;
+
+      if (totalAdSets > 1 && rawGroups.length < totalAdSets) {
+        // Collect all unique interests from groups + base
+        const allInterestNames = new Set<string>();
+        rawGroups.forEach((g: { interests?: string[] }) => {
+          (g.interests || []).forEach((i: string) => allInterestNames.add(typeof i === 'string' ? i : (i as any)?.name || ''));
+        });
+        baseInterests.forEach((i: string) => allInterestNames.add(typeof i === 'string' ? i : (i as any)?.name || ''));
+        const interestList = Array.from(allInterestNames).filter(Boolean);
+
+        // Create distinct groups: each Ad Set gets a different subset (round-robin split)
+        effectiveGroups = [];
+        for (let i = 0; i < totalAdSets; i++) {
+          const subset = interestList.filter((_, j) => j % totalAdSets === i).slice(0, 5);
+          const fallback = interestList.slice(0, Math.min(3, interestList.length));
+          effectiveGroups.push({
+            name: rawGroups[i]?.name || `กลุ่มเป้าหมาย ${i + 1}`,
+            interests: subset.length > 0 ? subset : fallback
+          });
+        }
+        console.log(`📊 Expanded to ${effectiveGroups.length} distinct targeting groups for ${totalAdSets} Ad Sets`);
+      }
+
       for (let s = 0; s < adSetsPerCampaign; s++) {
         if (s > 0) {
           const delay = getRandomDelay();
@@ -1073,15 +1107,12 @@ export async function POST(request: NextRequest) {
           await sleep(delay);
         }
 
-        // Global AdSet Index
+        // Global AdSet Index — each Ad Set gets a unique interest group
         const globalAdSetIndex = (c * adSetsPerCampaign) + s;
-
-        // Use distinct interest group per Ad Set (cycle only if more Ad Sets than groups)
-        const igLen = aiAnalysis.interestGroups?.length || 0;
-        const igIdx = igLen > 0 ? (globalAdSetIndex < igLen ? globalAdSetIndex : globalAdSetIndex % igLen) : 0;
-        const interestGroup = aiAnalysis.interestGroups?.[igIdx] ?? {
+        const igIdx = Math.min(globalAdSetIndex, effectiveGroups.length - 1);
+        const interestGroup = effectiveGroups[igIdx] ?? {
           name: 'General',
-          interests: aiAnalysis.interests || []
+          interests: baseInterests
         };
 
         // Start with BROAD targeting. Age from form (default 20–50).
@@ -1092,6 +1123,9 @@ export async function POST(request: NextRequest) {
           publisher_platforms: placements,
           targeting_automation: { advantage_audience: 0 },
         };
+        if (exclusionAudienceIds.length > 0) {
+          loopTargeting.excluded_custom_audiences = exclusionAudienceIds.map((id) => ({ id }));
+        }
 
         // NOTE: Skipping interests for now to avoid "audience too narrow" errors
         // Especially when USD account targets a different country (e.g. TH from PH account)
@@ -1190,16 +1224,18 @@ export async function POST(request: NextRequest) {
           const copyIndex = (c * adSetsPerCampaign * adsPerAdSet + s * adsPerAdSet + a) % (aiAnalysis.adCopyVariations?.length || 1);
           const baseCopy = aiAnalysis.adCopyVariations?.[copyIndex] ?? { primaryText: aiAnalysis.primaryText, headline: aiAnalysis.headline };
           const useOverrides = adsCount <= 1;
-          const rawPrimary = (primaryTextOverride && primaryTextOverride.trim())
-            ? primaryTextOverride.trim()
-            : useOverrides ? (baseCopy.primaryText || aiAnalysis.primaryText) : baseCopy.primaryText;
-          const rawHeadline = (headlineOverride && headlineOverride.trim())
-            ? headlineOverride.trim()
-            : useOverrides ? (baseCopy.headline || aiAnalysis.headline) : baseCopy.headline;
+          const rawPrimary = useEmptyPrimary ? ''
+            : (primaryTextOverride && primaryTextOverride.trim())
+              ? primaryTextOverride.trim()
+              : useOverrides ? (baseCopy.primaryText || aiAnalysis.primaryText) : baseCopy.primaryText;
+          const rawHeadline = useEmptyHeadline ? ''
+            : (headlineOverride && headlineOverride.trim())
+              ? headlineOverride.trim()
+              : useOverrides ? (baseCopy.headline || aiAnalysis.headline) : baseCopy.headline;
           const fallbackHeadline = '✨ คลิกดูสินค้าและทักแชทเลย!';
           const adCopyVariation = {
-            primaryText: (rawPrimary && String(rawPrimary).trim()) ? String(rawPrimary).trim() : (aiAnalysis.primaryText || ''),
-            headline: (rawHeadline && String(rawHeadline).trim()) ? String(rawHeadline).trim() : (baseCopy.headline || aiAnalysis.headline || fallbackHeadline),
+            primaryText: useEmptyPrimary ? '' : ((rawPrimary && String(rawPrimary).trim()) ? String(rawPrimary).trim() : (aiAnalysis.primaryText || '')),
+            headline: useEmptyHeadline ? '' : ((rawHeadline && String(rawHeadline).trim()) ? String(rawHeadline).trim() : (baseCopy.headline || aiAnalysis.headline || fallbackHeadline)),
           };
 
           console.log(`Creating Ad ${a + 1}/${adsPerAdSet} for AdSet ${adSetId}...`);
@@ -1279,6 +1315,12 @@ export async function POST(request: NextRequest) {
             const msg = err.error_user_msg || err.message || err.error_user_title || 'Unknown';
             console.error('[campaigns/create] Creative failed:', JSON.stringify(creativeData));
             console.error('[campaigns/create] Creative payload (token redacted):', JSON.stringify({ ...creativePayload, access_token: '[REDACTED]' }));
+            // error_subcode 1885183 = App in Development mode — must switch to Live in Meta for Developers
+            if (err.error_subcode === 1885183) {
+              throw new Error(
+                'แอป Facebook อยู่ในโหมดพัฒนา กรุณาไปที่ Meta for Developers แล้วเปลี่ยนแอปเป็นโหมด Live (สาธารณะ) เพื่อสร้างโฆษณาได้'
+              );
+            }
             throw new Error(`Failed to create Ad Creative ${a + 1}: ${msg}${err.code != null ? ` (code ${err.code})` : ''}`);
           }
 
@@ -1346,6 +1388,21 @@ export async function POST(request: NextRequest) {
 
     // Invalidate all caches for this user to ensure fresh data
     await invalidateUserCache(session.user.id);
+
+    const { ipAddress, userAgent } = getRequestMetadata(request);
+    await createAuditLog({
+      userId: session.user.id,
+      action: 'CREATE_CAMPAIGN',
+      entityId: campaignIds[0],
+      details: {
+        structure: `${campaignCount}-${adSetCount}-${adsCount}`,
+        category: aiAnalysis.productCategory,
+        ageRange: `${ageMin}-${ageMax}`,
+        mediaType: isVideo ? 'video' : 'image',
+      },
+      ipAddress,
+      userAgent,
+    });
 
     return NextResponse.json({
       success: true,

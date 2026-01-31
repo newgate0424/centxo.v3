@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
         // Log the request (This is compliant - we log the REQUEST to delete)
         await createAuditLog({
-            action: 'API_ERROR', // Reusing this for now, or add 'DATA_DELETION' to types
+            action: 'DATA_DELETION_REQUEST',
             entityType: 'DataDeletionRequest',
             details: { fbUserId: userId, confirmationCode },
             userId: 'SYSTEM'

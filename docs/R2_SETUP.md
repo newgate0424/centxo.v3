@@ -1,6 +1,9 @@
-# วิธีตั้งค่า Cloudflare R2 สำหรับ Video Storage
+# Cloudflare R2 สำหรับ Video Storage (เลิกใช้แล้ว)
 
-## ขั้นตอนการตั้งค่า:
+> **หมายเหตุ:** ระบบเลิกใช้ Cloudflare R2 แล้ว ใช้ local storage แทน
+> เอกสารด้านล่างเก็บไว้เพื่ออ้างอิงเท่านั้น
+
+## ขั้นตอนการตั้งค่า (อ้างอิง):
 
 ### 1. สร้าง R2 Bucket
 1. ไปที่ https://dash.cloudflare.com/

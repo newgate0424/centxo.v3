@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 export async function POST(req: NextRequest) {
     try {
@@ -61,6 +62,15 @@ export async function POST(req: NextRequest) {
         await prisma.user.update({
             where: { email: session.user.email },
             data: { password: hashedPassword },
+        });
+
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+        await createAuditLog({
+            userId: user.id,
+            action: user.password ? 'PASSWORD_CHANGE' : 'PASSWORD_ADD',
+            details: { email: user.email },
+            ipAddress,
+            userAgent,
         });
 
         return NextResponse.json({

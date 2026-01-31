@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import {
@@ -94,14 +94,16 @@ interface ConfigContextType {
   // Loading states
   loading: boolean;
   error: string | null;
-  refreshData: (force?: boolean) => Promise<void>;
+  refreshData: (force?: boolean, options?: { bypassCooldown?: boolean }) => Promise<void>;
 }
 
 // Create context with proper initial value
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
-// Cache duration in milliseconds (15 minutes) - reduces Meta API rate limit usage
-const CACHE_DURATION = 15 * 60 * 1000;
+// Cache duration in milliseconds (60 minutes) - reduces Meta API rate limit usage
+const CACHE_DURATION = 60 * 60 * 1000;
+// Manual Refresh cooldown (10 minutes) - prevent unnecessary API calls when user clicks Refresh repeatedly
+const REFRESH_COOLDOWN = 10 * 60 * 1000;
 
 export function ConfigProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
@@ -232,6 +234,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     return [];
   });
 
+  const lastManualRefreshRef = useRef<number>(0);
+
   const [lastFetched, setLastFetched] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -251,7 +255,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       const cached = localStorage.getItem('adPilotCache_v9');
       if (!cached) return false;
       const data = JSON.parse(cached);
-      return (data.accounts?.length > 0 || data.pages?.length > 0 || data.businesses?.length > 0);
+      const hasAny = data.accounts?.length > 0 || data.pages?.length > 0 || data.businesses?.length > 0 ||
+        data.businessPages?.length > 0 || data.businessAccounts?.length > 0;
+      const age = data.timestamp ? Date.now() - data.timestamp : Infinity;
+      return hasAny && age < CACHE_DURATION;
     } catch { return false; }
   };
   const [loading, setLoading] = useState(!hasCachedData());
@@ -352,7 +359,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   };
 
   // Refresh - single API call instead of 3 (reduces Meta rate limit usage)
-  const refreshData = async (force: boolean = false) => {
+  const refreshData = async (force: boolean = false, options?: { bypassCooldown?: boolean }) => {
     if (isRateLimited) {
       if (adAccounts.length > 0 || pages.length > 0 || businesses.length > 0) {
         setLoading(false);
@@ -364,6 +371,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
 
     const now = Date.now();
+    // Manual Refresh cooldown: if user clicked Refresh within 5 min, use cache (don't force API call) - refresh works normally but data comes from cache
+    const useCacheDueToCooldown = force && !options?.bypassCooldown && lastManualRefreshRef.current > 0 && (now - lastManualRefreshRef.current < REFRESH_COOLDOWN);
+    if (force && !useCacheDueToCooldown) lastManualRefreshRef.current = now;
+
     const hasDataToShow = adAccounts.length > 0 || pages.length > 0 || businesses.length > 0;
     // When we have no data, always refetch (don't trust stale empty cache)
     const skipCache = !hasDataToShow;
@@ -377,7 +388,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
     setError(null);
     try {
-      const result = await fetchConfig(force);
+      const result = await fetchConfig(useCacheDueToCooldown ? false : force);
       const { accounts, pages: p, businesses: b, businessPages: bp, businessAccounts: ba } = result;
 
       setLastFetched(Date.now());
@@ -392,10 +403,10 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Initial load - force fetch on full page load (e.g. Ctrl+Shift+R) to bypass cache and get fresh data
+  // Initial load - use cache when valid (localStorage + server in-memory). User can click Refresh for fresh data.
   useEffect(() => {
     if (session?.user) {
-      refreshData(true);
+      refreshData(false);
     }
   }, [session?.user?.email]);
 

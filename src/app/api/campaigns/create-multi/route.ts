@@ -4,6 +4,7 @@ import { invalidateUserCache } from '@/lib/cache/redis';
 import { authOptions } from '@/lib/auth';
 import { videoStorage } from '@/lib/video-storage';
 import { prisma } from '@/lib/prisma';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -491,6 +492,16 @@ export async function POST(request: NextRequest) {
 
     // Invalidate all caches for this user
     await invalidateUserCache(session.user.id);
+
+    const { ipAddress, userAgent } = getRequestMetadata(request);
+    await createAuditLog({
+      userId: session.user.id,
+      action: 'CREATE_CAMPAIGN_MULTI',
+      entityId: campaignId,
+      details: { mediaCount: mediaFiles.length, adSetCount: adSetIds.length, adsCount: adIds.length },
+      ipAddress,
+      userAgent,
+    });
 
     return NextResponse.json({
       success: true,

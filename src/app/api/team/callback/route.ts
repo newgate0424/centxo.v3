@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {
     try {
@@ -98,6 +99,15 @@ export async function GET(req: NextRequest) {
                 accessTokenExpires: new Date(Date.now() + expiresIn * 1000),
                 role: 'MEMBER',
             },
+        });
+
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+        await createAuditLog({
+            userId: targetHostId,
+            action: 'TEAM_ADD_MEMBER',
+            details: { fbUserId: fbUser.id, fbName: fbUser.name, fbEmail: fbUser.email },
+            ipAddress,
+            userAgent,
         });
 
         const successUrl = returnTo.includes('?')

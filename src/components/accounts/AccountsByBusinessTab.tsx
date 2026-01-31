@@ -27,21 +27,21 @@ export function AccountsByBusinessTab() {
             </div>
 
             {loading ? (
-                <div className="flex flex-col items-center justify-center h-32 text-center border rounded-md">
+                <div className="flex flex-col items-center justify-center h-32 text-center border rounded-md bg-card">
                     <Loader2 className="h-10 w-10 text-muted-foreground mb-2 animate-spin" />
                     <p className="text-sm text-muted-foreground">
                         Loading...
                     </p>
                 </div>
             ) : businesses.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-center border rounded-md">
+                <div className="flex flex-col items-center justify-center h-32 text-center border rounded-md bg-card">
                     <Briefcase className="h-12 w-12 text-muted-foreground mb-2" />
                     <p className="text-sm text-muted-foreground">
                         No business portfolios found
                     </p>
                 </div>
             ) : businessAccounts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-center border rounded-md">
+                <div className="flex flex-col items-center justify-center h-32 text-center border rounded-md bg-card">
                     <Briefcase className="h-12 w-12 text-muted-foreground mb-2" />
                     <p className="text-sm text-muted-foreground">
                         No ad accounts found in business portfolios
@@ -63,8 +63,8 @@ export function AccountsByBusinessTab() {
                         return businessGroups.map(([businessName, accounts]) => {
                             const matchingBusiness = businesses.find(b => b.name === businessName);
                             return (
-                                <div key={businessName} className="border rounded-md overflow-hidden">
-                                    <div className="bg-muted px-3 py-2 flex items-center justify-between">
+                                <div key={businessName} className="border rounded-md overflow-hidden bg-card">
+                                    <div className="bg-card px-3 py-2 flex items-center justify-between border-b">
                                         <div className="flex items-center gap-2 min-w-0">
                                             {matchingBusiness?.profile_picture_uri ? (
                                                 <img
@@ -91,7 +91,7 @@ export function AccountsByBusinessTab() {
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm table-fixed">
                                             <thead>
-                                                <tr className="border-b bg-muted/50">
+                                                <tr className="border-b bg-card">
                                                     <th className="text-left px-3 py-2 font-medium w-auto min-w-0">Account</th>
                                                     <th className="text-center px-3 py-2 font-medium w-28">Access</th>
                                                     <th className="text-center px-3 py-2 font-medium w-28">Status</th>

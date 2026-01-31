@@ -97,7 +97,7 @@ export const DEFAULT_FORM_STATE: FormState = {
   ageMax: 50,
   campaignCount: 1,
   adSetsCount: 1,
-  adsCount: 3,
+  adsCount: 1,
   productContext: '',
   beneficiaryId: '',
 };

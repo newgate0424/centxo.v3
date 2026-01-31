@@ -59,8 +59,8 @@ export function ConnectionsPage() {
                 </TabsList>
             </div>
 
-            {/* Content Box - Centered */}
-            <div className="flex-1 w-full max-w-[1400px] mx-auto p-6 md:p-10">
+            {/* Content Box - Centered (same as settings/account) */}
+            <div className="flex-1 w-full max-w-5xl mx-auto p-6 md:p-10">
                 <div className="border border-border rounded-xl bg-card shadow-sm overflow-hidden">
                     <div className="h-full overflow-y-auto px-6 md:px-8 lg:px-10 py-6 md:py-8">
                         <TabsContent value="connections" className="space-y-6 mt-0">

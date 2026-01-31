@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { Edit2, Trash2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, FileImage, LayoutGrid, Briefcase, Folder, Columns2 } from "lucide-react";
+import { Edit2, Play, Pause, Loader2, Search, Filter, RefreshCw, Download, Plus, X, ExternalLink, ArrowUp, ArrowDown, ArrowUpDown, FileImage, LayoutGrid, Briefcase, Folder, Columns2 } from "lucide-react";
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -39,9 +39,6 @@ import {
 import { ChevronDown } from "lucide-react";
 
 import { showCustomToast, showErrorToast, showWarningToast } from "@/utils/custom-toast";
-
-
-import { toast } from "sonner";
 import { ExportDialog } from "@/components/ExportDialog";
 import { cn } from "@/lib/utils";
 import { formatCurrencyByCode } from "@/lib/currency-utils";
@@ -126,6 +123,12 @@ interface Ad {
   results?: number;
   costPerResult?: number;
   budget?: number;
+  budgetSource?: 'campaign' | 'adset';
+  budgetType?: 'daily' | 'lifetime';
+  campaignDailyBudget?: number;
+  campaignLifetimeBudget?: number;
+  adsetDailyBudget?: number;
+  adsetLifetimeBudget?: number;
   reach?: number;
   impressions?: number;
   postEngagements?: number;
@@ -203,7 +206,7 @@ const defaultVisibleSet = (tab: TabKey) => new Set(COLUMN_CONFIG[tab].map(c => c
 
 export default function CampaignsPage() {
   const { data: session } = useSession();
-  const { selectedAccounts, adAccounts } = useAdAccount();
+  const { selectedAccounts, adAccounts, refreshData } = useAdAccount();
 
 
 
@@ -269,7 +272,7 @@ export default function CampaignsPage() {
   // 2. UI State — always init to 'campaigns' to avoid hydration mismatch; sync from URL after mount
   const [activeTab, setActiveTab] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'completed' | 'rejected' | 'with_issues' | 'in_review'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'completed' | 'rejected' | 'with_issues' | 'in_review' | 'other'>('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfDay(new Date()),
     to: endOfDay(new Date()),
@@ -310,6 +313,13 @@ export default function CampaignsPage() {
     ads: defaultVisibleSet('ads'),
   });
   const [columnsPopoverOpen, setColumnsPopoverOpen] = useState(false);
+  const [editingBudgetCampaignId, setEditingBudgetCampaignId] = useState<string | null>(null);
+  const [editingBudgetAdSetId, setEditingBudgetAdSetId] = useState<string | null>(null);
+  const [editingBudgetAdId, setEditingBudgetAdId] = useState<string | null>(null);
+  const [editingBudgetAdSource, setEditingBudgetAdSource] = useState<'campaign' | 'adset' | null>(null);
+  const [budgetEditValue, setBudgetEditValue] = useState('');
+  const [budgetEditType, setBudgetEditType] = useState<'daily' | 'lifetime'>('daily');
+  const [budgetUpdating, setBudgetUpdating] = useState(false);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -591,6 +601,7 @@ export default function CampaignsPage() {
       case 'PENDING_REVIEW':
       case 'IN_PROCESS':
       case 'PREAPPROVAL':
+      case 'PREAPPROVED':
         return { label: t('status.campaigns.inReview'), color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
       case 'CREDIT_CARD_NEEDED':
         return { label: t('status.creditCardNeeded'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
@@ -661,6 +672,7 @@ export default function CampaignsPage() {
       case 'PENDING_REVIEW':
       case 'IN_PROCESS':
       case 'PREAPPROVAL':
+      case 'PREAPPROVED':
         return { label: t('status.adsets.inReview'), color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
       case 'CREDIT_CARD_NEEDED':
         return { label: t('status.creditCardNeeded'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
@@ -710,6 +722,7 @@ export default function CampaignsPage() {
       case 'PENDING_REVIEW':
       case 'IN_PROCESS':
       case 'PREAPPROVAL':
+      case 'PREAPPROVED':
         return { label: t('status.ads.inReview'), color: 'bg-blue-500', textColor: 'text-blue-600', type: 'in_review' };
       case 'CREDIT_CARD_NEEDED':
         return { label: t('status.creditCardNeeded'), color: 'bg-orange-500', textColor: 'text-orange-600', type: 'with_issues' };
@@ -979,6 +992,8 @@ export default function CampaignsPage() {
   const lastFetchedAccountsRef = useRef<string>('');
   const lastFetchedDateRangeRef = useRef<string>('');
   const isFetchingRef = useRef(false);
+  const lastManualRefreshRef = useRef<number>(0);
+  const REFRESH_COOLDOWN = 5 * 60 * 1000; // 5 minutes - prevent unnecessary API calls when user clicks Refresh repeatedly
 
   // Prefetch all tabs in parallel for instant tab switching (must be defined before useEffects that use it)
   const fetchAllTabsInParallel = useCallback(async (forceRefresh = false, silent = false) => {
@@ -1046,7 +1061,7 @@ export default function CampaignsPage() {
           costPerMessage: a.metrics?.costPerMessage || 0,
           results: a.metrics?.results || 0,
           costPerResult: a.metrics?.costPerResult || 0,
-          budget: a.metrics?.budget || 0,
+          budget: (a.dailyBudget > 0 ? a.dailyBudget : a.lifetimeBudget) || 0,
           reach: a.metrics?.reach || 0,
           impressions: a.metrics?.impressions || 0,
           postEngagements: a.metrics?.postEngagements || 0,
@@ -1074,6 +1089,12 @@ export default function CampaignsPage() {
           results: ad.metrics?.results || 0,
           costPerResult: ad.metrics?.costPerResult || 0,
           budget: ad.budget || 0,
+          budgetSource: ad.budgetSource,
+          budgetType: ad.budgetType,
+          campaignDailyBudget: ad.campaignDailyBudget,
+          campaignLifetimeBudget: ad.campaignLifetimeBudget,
+          adsetDailyBudget: ad.adsetDailyBudget,
+          adsetLifetimeBudget: ad.adsetLifetimeBudget,
           reach: ad.metrics?.reach || 0,
           impressions: ad.metrics?.impressions || 0,
           postEngagements: ad.metrics?.postEngagements || 0,
@@ -1098,6 +1119,13 @@ export default function CampaignsPage() {
       if (!silent) setLoading(false);
     }
   }, [viewSelectedAccountIds, dateRange, statusFilter]);
+
+  const handleRefreshClick = useCallback(async () => {
+    const now = Date.now();
+    const useCacheDueToCooldown = lastManualRefreshRef.current > 0 && (now - lastManualRefreshRef.current < REFRESH_COOLDOWN);
+    if (!useCacheDueToCooldown) lastManualRefreshRef.current = now;
+    await fetchAllTabsInParallel(!useCacheDueToCooldown);
+  }, [fetchAllTabsInParallel]);
 
   // Check for refresh param on mount
   const shouldForceRefresh = searchParams?.get('refresh') === 'true';
@@ -1152,6 +1180,7 @@ export default function CampaignsPage() {
     const fetchData = async () => {
       const refreshParam = shouldForceRefresh || dateChanged;
       await fetchAllTabsInParallel(refreshParam);
+      if (refreshParam) lastManualRefreshRef.current = Date.now();
 
       if (shouldForceRefresh) {
         const url = new URL(window.location.href);
@@ -1377,6 +1406,12 @@ export default function CampaignsPage() {
           results: ad.metrics?.results || 0,
           costPerResult: ad.metrics?.costPerResult || 0,
           budget: ad.budget || 0,
+          budgetSource: ad.budgetSource,
+          budgetType: ad.budgetType,
+          campaignDailyBudget: ad.campaignDailyBudget,
+          campaignLifetimeBudget: ad.campaignLifetimeBudget,
+          adsetDailyBudget: ad.adsetDailyBudget,
+          adsetLifetimeBudget: ad.adsetLifetimeBudget,
           reach: ad.metrics?.reach || 0,
           impressions: ad.metrics?.impressions || 0,
           postEngagements: ad.metrics?.postEngagements || 0,
@@ -1412,7 +1447,10 @@ export default function CampaignsPage() {
         method: 'POST',
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        lastManualRefreshRef.current = Date.now();
+        fetchAllTabsInParallel(true, true);
+      } else {
         // Revert on error
         setCampaigns(prev =>
           prev.map(c => c.id === campaignId ? { ...c, status: currentStatus } : c)
@@ -1442,7 +1480,10 @@ export default function CampaignsPage() {
         method: 'POST',
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        lastManualRefreshRef.current = Date.now();
+        fetchAllTabsInParallel(true, true);
+      } else {
         // Revert on error
         setAdSets(prev =>
           prev.map(a => a.id === adSetId ? { ...a, status: currentStatus } : a)
@@ -1472,7 +1513,10 @@ export default function CampaignsPage() {
         method: 'POST',
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        lastManualRefreshRef.current = Date.now();
+        fetchAllTabsInParallel(true, true);
+      } else {
         // Revert on error
         setAds(prev =>
           prev.map(a => a.id === adId ? { ...a, status: currentStatus } : a)
@@ -1488,12 +1532,6 @@ export default function CampaignsPage() {
       console.error('Error toggling ad:', error);
       showErrorToast('Failed to toggle ad status');
     }
-  };
-
-  const handleDeleteCampaign = async (campaignId: string) => {
-    if (!confirm(t('campaigns.deleteConfirm', 'Are you sure you want to delete this campaign?'))) return;
-    // TODO: Implement delete
-    console.log('Delete campaign:', campaignId);
   };
 
   // Helper function to get ad account name from ID
@@ -1513,6 +1551,92 @@ export default function CampaignsPage() {
   // Helper function to format currency (uses formatCurrencyByCode for correct symbol & decimal places per currency)
   const formatCurrency = (amount: number, currency?: string) => {
     return formatCurrencyByCode(amount, currency || 'USD');
+  };
+
+  const handleUpdateCampaignBudget = async (campaignId: string, adAccountId: string, currency: string, fromAd = false) => {
+    const num = parseFloat(budgetEditValue);
+    if (isNaN(num) || num <= 0) {
+      showErrorToast(t('campaigns.budget.invalidAmount', 'Please enter a valid positive amount'));
+      return;
+    }
+    setBudgetUpdating(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/budget`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adAccountId,
+          currency: currency || 'USD',
+          ...(budgetEditType === 'daily' ? { dailyBudget: num } : { lifetimeBudget: num }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update budget');
+      showCustomToast(t('campaigns.budget.updated', 'Budget updated successfully'), { type: 'success' });
+      setEditingBudgetCampaignId(null);
+      setBudgetEditValue('');
+      if (fromAd) {
+        setEditingBudgetAdId(null);
+        setEditingBudgetAdSource(null);
+      }
+      setCampaigns(prev => prev.map(c => {
+        if (c.id !== campaignId) return c;
+        return {
+          ...c,
+          dailyBudget: budgetEditType === 'daily' ? num : 0,
+          lifetimeBudget: budgetEditType === 'lifetime' ? num : 0,
+        };
+      }));
+      await refreshData(true, { bypassCooldown: true });
+      await fetchAllTabsInParallel(true, true);
+    } catch (e) {
+      showErrorToast(e instanceof Error ? e.message : t('campaigns.budget.updateFailed', 'Failed to update budget'));
+    } finally {
+      setBudgetUpdating(false);
+    }
+  };
+
+  const handleUpdateAdSetBudget = async (adSetId: string, adAccountId: string, currency: string, fromAd = false) => {
+    const num = parseFloat(budgetEditValue);
+    if (isNaN(num) || num <= 0) {
+      showErrorToast(t('campaigns.budget.invalidAmount', 'Please enter a valid positive amount'));
+      return;
+    }
+    setBudgetUpdating(true);
+    try {
+      const res = await fetch(`/api/adsets/${adSetId}/budget`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adAccountId,
+          currency: currency || 'USD',
+          ...(budgetEditType === 'daily' ? { dailyBudget: num } : { lifetimeBudget: num }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update budget');
+      showCustomToast(t('campaigns.budget.updated', 'Budget updated successfully'), { type: 'success' });
+      setEditingBudgetAdSetId(null);
+      setBudgetEditValue('');
+      if (fromAd) {
+        setEditingBudgetAdId(null);
+        setEditingBudgetAdSource(null);
+      }
+      setAdSets(prev => prev.map(a => {
+        if (a.id !== adSetId) return a;
+        return {
+          ...a,
+          dailyBudget: budgetEditType === 'daily' ? num : 0,
+          lifetimeBudget: budgetEditType === 'lifetime' ? num : 0,
+        };
+      }));
+      await refreshData(true, { bypassCooldown: true });
+      await fetchAllTabsInParallel(true, true);
+    } catch (e) {
+      showErrorToast(e instanceof Error ? e.message : t('campaigns.budget.updateFailed', 'Failed to update budget'));
+    } finally {
+      setBudgetUpdating(false);
+    }
   };
 
   // Helper function to format targeting data
@@ -1768,14 +1892,13 @@ export default function CampaignsPage() {
               <SelectItem value="rejected">{t('campaigns.filter.rejected', 'Rejected')}</SelectItem>
               <SelectItem value="with_issues">{t('campaigns.filter.withIssues', 'With Issues')}</SelectItem>
               <SelectItem value="in_review">{t('campaigns.filter.inReview', 'In Review')}</SelectItem>
+              <SelectItem value="other">{t('campaigns.filter.other', 'Other')}</SelectItem>
             </SelectContent>
           </Select>
 
           {/* Refresh Button */}
           <Button
-            onClick={() => {
-              fetchAllTabsInParallel(true);
-            }}
+            onClick={handleRefreshClick}
             variant="outline"
             size="sm"
             className="gap-2 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800"
@@ -1824,7 +1947,7 @@ export default function CampaignsPage() {
                   {COLUMN_CONFIG[activeTab].map(({ id, labelKey }) => (
                     <label
                       key={id}
-                      className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-800/50 cursor-pointer text-sm"
+                      className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-gray-50 dark:hover:bg-zinc-800/50 cursor-pointer text-sm"
                     >
                       <Checkbox
                         checked={visible(activeTab, id)}
@@ -1950,8 +2073,8 @@ export default function CampaignsPage() {
             <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
                 <div className="overflow-auto flex-1 min-h-0 scrollbar-minimal-table [&>div]:overflow-visible">
-                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0">
-                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
+                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0 [&_tbody_td]:!py-1 [&_tbody_td]:!px-3">
+                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 shadow-[0_1px_0_0_rgb(229_231_235)] dark:shadow-[0_1px_0_0_rgb(39_39_42)]">
                       <TableRow>
                         <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle">
                           <div className="flex justify-center items-center w-full">
@@ -2025,14 +2148,13 @@ export default function CampaignsPage() {
                         </TableHead>
                         )}
                         {visible('campaigns', 'createdAt') && <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />}
-                        <TableHead className="text-right max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800">
+                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800 [&_td]:!py-1 [&_td]:!px-3">
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                           <TableRow key={i} className="animate-pulse">
-                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
                             <TableCell><div className="h-4 w-8 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto"></div></TableCell>
                             {visible('campaigns', 'adAccount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('campaigns', 'name') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></TableCell>}
@@ -2047,12 +2169,11 @@ export default function CampaignsPage() {
                             {visible('campaigns', 'messagingContacts') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
                             {visible('campaigns', 'amountSpent') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
                             {visible('campaigns', 'createdAt') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
-                            <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></TableCell>
                           </TableRow>
                         ))
                       ) : filteredCampaigns.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3 + visibleColumns.campaigns.size} className="text-center py-16">
+                          <TableCell colSpan={3 + visibleColumns.campaigns.size} className="text-center !py-16">
                             <div className="flex flex-col items-center gap-4">
                               <Folder className="h-12 w-12 text-blue-400 dark:text-blue-500" aria-hidden />
                               <p className="text-gray-600 dark:text-gray-400">{campaigns.length === 0 ? t('campaigns.noCampaigns', 'No campaigns yet') : t('campaigns.noMatch', 'No campaigns match your filters')}</p>
@@ -2070,7 +2191,7 @@ export default function CampaignsPage() {
                         filteredCampaigns.map((campaign, index) => (
                           <TableRow key={campaign.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors border-b border-gray-200 dark:border-zinc-800 cursor-pointer" onClick={() => handleToggleCampaignSelection(campaign.id, !selectedCampaignIds.has(campaign.id))}>
                             <TableCell
-                              className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle text-sm text-gray-600 dark:text-gray-400"
+                              className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1 !pr-3 !pl-3 text-center align-middle text-sm text-gray-600 dark:text-gray-400"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex justify-center items-center w-full">
@@ -2083,7 +2204,7 @@ export default function CampaignsPage() {
                               </div>
                             </TableCell>
 
-                            <TableCell className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleCampaign(campaign.id, campaign.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${campaign.status === 'ACTIVE'
@@ -2099,7 +2220,7 @@ export default function CampaignsPage() {
                               </button>
                             </TableCell>
                             {visible('campaigns', 'adAccount') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
@@ -2119,7 +2240,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'name') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                            <TableCell className="px-3 py-1 text-sm text-gray-900 dark:text-gray-100">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
@@ -2138,7 +2259,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'status') && (
-                            <TableCell className="px-4 py-2 text-sm">
+                            <TableCell className="px-3 py-1 text-sm">
                               {(() => {
                                 const status = getCampaignStatus(campaign, accountMap);
                                 return (
@@ -2153,7 +2274,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'results') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2168,7 +2289,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'costPerResult') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2183,7 +2304,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'budget') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right" onClick={(e) => e.stopPropagation()}>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2196,45 +2317,96 @@ export default function CampaignsPage() {
                                       if (budget > 0) {
                                         return (
                                           <div className="flex flex-col items-end">
-                                            <span className="text-xs text-gray-500 dark:text-gray-400">Campaign {budgetType}</span>
                                             <span className="font-medium">{formatCurrency(budget, campaign.currency)}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">Campaign {budgetType}</span>
                                           </div>
                                         );
                                       }
                                       return (
                                         <div className="flex flex-col items-end">
-                                          <span className="text-xs text-gray-500 dark:text-gray-400">Ad Set Budget</span>
                                           <span className="text-gray-400">-</span>
+                                          <span className="text-xs text-gray-500 dark:text-gray-400">Ad Set Budget</span>
                                         </div>
                                       );
                                     })()}
                                   </div>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-64" align="start">
+                                <PopoverContent className="w-72" align="start" onClick={(e) => e.stopPropagation()}>
                                   <div className="text-sm font-medium mb-2">{t('campaigns.tooltips.budgetInfo', 'Budget Information')}</div>
-                                  {campaign.dailyBudget && campaign.dailyBudget > 0 && (
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                      <span className="font-medium">{t('campaigns.tooltips.campaignDaily', 'Campaign Daily:')}</span> {formatCurrency(campaign.dailyBudget, campaign.currency)}
+                                  {editingBudgetCampaignId === campaign.id ? (
+                                    <div className="space-y-3">
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          className={cn("flex-1 px-2 py-1.5 text-xs rounded border", budgetEditType === 'daily' ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-zinc-700")}
+                                          onClick={() => { setBudgetEditType('daily'); setBudgetEditValue(String(campaign.dailyBudget || '')); }}
+                                        >
+                                          {t('campaigns.budget.daily', 'Daily')}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={cn("flex-1 px-2 py-1.5 text-xs rounded border", budgetEditType === 'lifetime' ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-zinc-700")}
+                                          onClick={() => { setBudgetEditType('lifetime'); setBudgetEditValue(String(campaign.lifetimeBudget || '')); }}
+                                        >
+                                          {t('campaigns.budget.lifetime', 'Lifetime')}
+                                        </button>
+                                      </div>
+                                      <div className="flex gap-2 items-center">
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={budgetEditValue}
+                                          onChange={(e) => setBudgetEditValue(e.target.value)}
+                                          className="flex-1 h-9 px-2 rounded border border-input bg-background text-sm"
+                                          placeholder={t('campaigns.budget.amount', 'Amount')}
+                                        />
+                                        <span className="text-xs text-muted-foreground">{campaign.currency || 'USD'}</span>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Button size="sm" className="flex-1" disabled={budgetUpdating} onClick={() => campaign.adAccountId && handleUpdateCampaignBudget(campaign.id, campaign.adAccountId, campaign.currency || 'USD')}>
+                                          {budgetUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : t('campaigns.budget.save', 'Save')}
+                                        </Button>
+                                        <Button size="sm" variant="outline" disabled={budgetUpdating} onClick={() => { setEditingBudgetCampaignId(null); setBudgetEditValue(''); }}>
+                                          {t('common.cancel', 'Cancel')}
+                                        </Button>
+                                      </div>
                                     </div>
-                                  )}
-                                  {campaign.lifetimeBudget && campaign.lifetimeBudget > 0 && (
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
-                                      <span className="font-medium">{t('campaigns.tooltips.campaignLifetime', 'Campaign Lifetime:')}</span> {formatCurrency(campaign.lifetimeBudget, campaign.currency)}
-                                    </div>
-                                  )}
-                                  {(!campaign.dailyBudget || campaign.dailyBudget === 0) && (!campaign.lifetimeBudget || campaign.lifetimeBudget === 0) && (
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      {t('campaigns.tooltips.noBudget', 'No campaign budget set.\nBudget is managed at ad set level.').split('\n').map((line, i) => (
-                                        <span key={i} className="block">{line}</span>
-                                      ))}
-                                    </div>
+                                  ) : (
+                                    <>
+                                      {campaign.dailyBudget && campaign.dailyBudget > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                          <span className="font-medium">{t('campaigns.tooltips.campaignDaily', 'Campaign Daily:')}</span> {formatCurrency(campaign.dailyBudget, campaign.currency)}
+                                        </div>
+                                      )}
+                                      {campaign.lifetimeBudget && campaign.lifetimeBudget > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                          <span className="font-medium">{t('campaigns.tooltips.campaignLifetime', 'Campaign Lifetime:')}</span> {formatCurrency(campaign.lifetimeBudget, campaign.currency)}
+                                        </div>
+                                      )}
+                                      {(!campaign.dailyBudget || campaign.dailyBudget === 0) && (!campaign.lifetimeBudget || campaign.lifetimeBudget === 0) && (
+                                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                          {t('campaigns.tooltips.noBudget', 'No campaign budget set.\nBudget is managed at ad set level.').split('\n').map((line, i) => (
+                                            <span key={i} className="block">{line}</span>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => {
+                                        setEditingBudgetCampaignId(campaign.id);
+                                        const hasDaily = (campaign.dailyBudget || 0) > 0;
+                                        setBudgetEditType(hasDaily ? 'daily' : 'lifetime');
+                                        setBudgetEditValue(String(hasDaily ? campaign.dailyBudget : campaign.lifetimeBudget || ''));
+                                      }}>
+                                        <Edit2 className="h-4 w-4 mr-1" />
+                                        {t('campaigns.budget.edit', 'Edit Budget')}
+                                      </Button>
+                                    </>
                                   )}
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
                             )}
                             {visible('campaigns', 'reach') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2249,7 +2421,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'impressions') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2264,7 +2436,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'postEngagements') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2279,7 +2451,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'clicks') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2294,7 +2466,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'messagingContacts') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2309,7 +2481,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'amountSpent') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2324,7 +2496,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('campaigns', 'createdAt') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2338,30 +2510,6 @@ export default function CampaignsPage() {
                               </Popover>
                             </TableCell>
                             )}
-                            <TableCell className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => handleToggleCampaign(campaign.id, campaign.status)}
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  title={campaign.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-                                >
-                                  {campaign.status === 'ACTIVE' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                </button>
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteCampaign(campaign.id)}
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </TableCell>
                           </TableRow>
                         ))
                       )}
@@ -2379,8 +2527,8 @@ export default function CampaignsPage() {
             <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
                 <div className="overflow-auto flex-1 min-h-0 scrollbar-minimal-table [&>div]:overflow-visible">
-                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0">
-                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50">
+                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0 [&_tbody_td]:!py-1 [&_tbody_td]:!px-3">
+                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 shadow-[0_1px_0_0_rgb(229_231_235)] dark:shadow-[0_1px_0_0_rgb(39_39_42)]">
                       <TableRow>
                         <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle">
                           <div className="flex justify-center items-center w-full">
@@ -2398,7 +2546,7 @@ export default function CampaignsPage() {
                         <TableHead className="text-center w-20">{t('campaigns.columns.toggle', 'Active')}</TableHead>
                         {visible('adsets', 'adAccount') && <TableHead className="max-w-[280px]">{t('campaigns.columns.adAccount', 'Ad Acc')}</TableHead>}
                         {visible('adsets', 'name') && <SortableHeader columnKey="name" label={t('campaigns.columns.adSetName', 'Ad Set Name')} align="left" className="max-w-[280px]" />}
-                        {visible('adsets', 'target') && <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[280px]" />}
+                        {visible('adsets', 'target') && <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[200px]" />}
                         {visible('adsets', 'status') && <SortableHeader columnKey="status" label={t('campaigns.columns.status', 'Status')} align="left" className="max-w-[280px]" />}
                         {visible('adsets', 'results') && <SortableHeader columnKey="results" label={t('campaigns.columns.results', 'Results')} align="right" className="max-w-[280px]" />}
                         {visible('adsets', 'costPerResult') && <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />}
@@ -2413,18 +2561,17 @@ export default function CampaignsPage() {
                         {visible('adsets', 'optimization') && <SortableHeader columnKey="optimization" label={t('campaigns.columns.optimization', 'Optimization')} align="left" className="max-w-[280px]" />}
                         {visible('adsets', 'bidAmount') && <SortableHeader columnKey="bidAmount" label={t('campaigns.columns.bidAmount', 'Bid Amount')} align="right" className="max-w-[280px]" />}
                         {visible('adsets', 'createdAt') && <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />}
-                        <TableHead className="text-right max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800">
+                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800 [&_td]:!py-1 [&_td]:!px-3">
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                           <TableRow key={i} className="animate-pulse">
-                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
                             <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-11 mx-auto"></div></TableCell>
                             {visible('adsets', 'adAccount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('adsets', 'name') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div></TableCell>}
-                            {visible('adsets', 'target') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-40"></div></TableCell>}
+                            {visible('adsets', 'target') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('adsets', 'status') && <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>}
                             {visible('adsets', 'results') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
                             {visible('adsets', 'costPerResult') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
@@ -2439,18 +2586,11 @@ export default function CampaignsPage() {
                             {visible('adsets', 'optimization') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('adsets', 'bidAmount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
                             {visible('adsets', 'createdAt') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
-                            <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></TableCell>
                           </TableRow>
                         ))
-                      ) : filteredAdSets.filter(a => {
-                        const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase());
-                        const matchesStatus = statusFilter === 'all' ||
-                          (statusFilter === 'active' && a.status === 'ACTIVE') ||
-                          (statusFilter === 'paused' && a.status === 'PAUSED');
-                        return matchesSearch && matchesStatus;
-                      }).length === 0 ? (
+                      ) : filteredAdSets.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3 + visibleColumns.adsets.size} className="text-center py-16">
+                          <TableCell colSpan={3 + visibleColumns.adsets.size} className="text-center !py-16">
                             <div className="flex flex-col items-center gap-4">
                               <LayoutGrid className="h-12 w-12 text-violet-400 dark:text-violet-500" aria-hidden />
                               <p className="text-gray-600 dark:text-gray-400">{adSets.length === 0 ? t('campaigns.noAdSets', 'No ad sets yet') : t('campaigns.noAdSetsMatch', 'No ad sets match your filters')}</p>
@@ -2465,16 +2605,10 @@ export default function CampaignsPage() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredAdSets.filter(a => {
-                          const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase());
-                          const matchesStatus = statusFilter === 'all' ||
-                            (statusFilter === 'active' && a.status === 'ACTIVE') ||
-                            (statusFilter === 'paused' && a.status === 'PAUSED');
-                          return matchesSearch && matchesStatus;
-                        }).map((adSet, index) => (
+                        filteredAdSets.map((adSet, index) => (
                           <TableRow key={adSet.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => handleToggleAdSetSelection(adSet.id, !selectedAdSetIds.has(adSet.id))}>
                             <TableCell
-                              className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle text-sm text-gray-600 dark:text-gray-400"
+                              className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1 !pr-3 !pl-3 text-center align-middle text-sm text-gray-600 dark:text-gray-400"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex justify-center items-center w-full">
@@ -2486,7 +2620,7 @@ export default function CampaignsPage() {
                                 />
                               </div>
                             </TableCell>
-                            <TableCell className="px-4 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleAdSet(adSet.id, adSet.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${adSet.status === 'ACTIVE'
@@ -2502,7 +2636,7 @@ export default function CampaignsPage() {
                               </button>
                             </TableCell>
                             {visible('adsets', 'adAccount') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
@@ -2522,7 +2656,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'name') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                            <TableCell className="px-3 py-1 text-sm text-gray-900 dark:text-gray-100">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
@@ -2541,12 +2675,11 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'target') && (
-                            <TableCell className="px-4 py-1 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 max-w-[200px]">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
-                                    className="whitespace-pre-line text-xs line-clamp-3 cursor-pointer hover:text-blue-600"
-                                    style={{ maxWidth: '280px' }}
+                                    className="whitespace-pre-line text-xs line-clamp-3 cursor-pointer hover:text-blue-600 truncate max-w-[200px]"
                                     title={formatTargeting(adSet.targeting)}
                                   >
                                     {formatTargeting(adSet.targeting)}
@@ -2560,7 +2693,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'status') && (
-                            <TableCell className="px-4 py-2 text-sm">
+                            <TableCell className="px-3 py-1 text-sm">
                               {(() => {
                                 const status = getAdSetStatus(adSet, accountMap);
                                 return (
@@ -2575,7 +2708,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'results') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2590,7 +2723,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'costPerResult') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2605,22 +2738,99 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'budget') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right" onClick={(e) => e.stopPropagation()}>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {adSet.budget ? formatCurrency(adSet.budget, adSet.currency) : '-'}
+                                    {(() => {
+                                      const daily = adSet.dailyBudget || 0;
+                                      const lifetime = adSet.lifetimeBudget || 0;
+                                      const budget = daily > 0 ? daily : lifetime > 0 ? lifetime : 0;
+                                      const budgetType = daily > 0 ? t('campaigns.budget.daily', 'Daily') : lifetime > 0 ? t('campaigns.budget.lifetime', 'Lifetime') : '';
+                                      if (budget > 0) {
+                                        return (
+                                          <div className="flex flex-col items-end">
+                                            <span className="font-medium">{formatCurrency(budget, adSet.currency)}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{t('campaigns.budget.adSet', 'Ad Set')} {budgetType}</span>
+                                          </div>
+                                        );
+                                      }
+                                      return <span className="text-gray-400">-</span>;
+                                    })()}
                                   </div>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-64" align="start">
-                                  <div className="text-sm font-medium mb-2">Budget</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{adSet.budget ? formatCurrency(adSet.budget, adSet.currency) : '-'}</div>
+                                <PopoverContent className="w-72" align="start" onClick={(e) => e.stopPropagation()}>
+                                  <div className="text-sm font-medium mb-2">{t('campaigns.columns.budget', 'Budget')}</div>
+                                  {editingBudgetAdSetId === adSet.id ? (
+                                    <div className="space-y-3">
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          className={cn("flex-1 px-2 py-1.5 text-xs rounded border", budgetEditType === 'daily' ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-zinc-700")}
+                                          onClick={() => { setBudgetEditType('daily'); setBudgetEditValue(String(adSet.dailyBudget || '')); }}
+                                        >
+                                          {t('campaigns.budget.daily', 'Daily')}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={cn("flex-1 px-2 py-1.5 text-xs rounded border", budgetEditType === 'lifetime' ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-zinc-700")}
+                                          onClick={() => { setBudgetEditType('lifetime'); setBudgetEditValue(String(adSet.lifetimeBudget || '')); }}
+                                        >
+                                          {t('campaigns.budget.lifetime', 'Lifetime')}
+                                        </button>
+                                      </div>
+                                      <div className="flex gap-2 items-center">
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={budgetEditValue}
+                                          onChange={(e) => setBudgetEditValue(e.target.value)}
+                                          className="flex-1 h-9 px-2 rounded border border-input bg-background text-sm"
+                                          placeholder={t('campaigns.budget.amount', 'Amount')}
+                                        />
+                                        <span className="text-xs text-muted-foreground">{adSet.currency || 'USD'}</span>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Button size="sm" className="flex-1" disabled={budgetUpdating} onClick={() => adSet.adAccountId && handleUpdateAdSetBudget(adSet.id, adSet.adAccountId, adSet.currency || 'USD')}>
+                                          {budgetUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : t('campaigns.budget.save', 'Save')}
+                                        </Button>
+                                        <Button size="sm" variant="outline" disabled={budgetUpdating} onClick={() => { setEditingBudgetAdSetId(null); setBudgetEditValue(''); }}>
+                                          {t('common.cancel', 'Cancel')}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {adSet.dailyBudget > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                          <span className="font-medium">{t('campaigns.budget.daily', 'Daily')}:</span> {formatCurrency(adSet.dailyBudget, adSet.currency)}
+                                        </div>
+                                      )}
+                                      {adSet.lifetimeBudget > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                                          <span className="font-medium">{t('campaigns.budget.lifetime', 'Lifetime')}:</span> {formatCurrency(adSet.lifetimeBudget, adSet.currency)}
+                                        </div>
+                                      )}
+                                      {(!adSet.dailyBudget || adSet.dailyBudget === 0) && (!adSet.lifetimeBudget || adSet.lifetimeBudget === 0) && (
+                                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">-</div>
+                                      )}
+                                      <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => {
+                                        setEditingBudgetAdSetId(adSet.id);
+                                        const hasDaily = (adSet.dailyBudget || 0) > 0;
+                                        setBudgetEditType(hasDaily ? 'daily' : 'lifetime');
+                                        setBudgetEditValue(String(hasDaily ? adSet.dailyBudget : adSet.lifetimeBudget || ''));
+                                      }}>
+                                        <Edit2 className="h-4 w-4 mr-1" />
+                                        {t('campaigns.budget.edit', 'Edit Budget')}
+                                      </Button>
+                                    </>
+                                  )}
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
                             )}
                             {visible('adsets', 'reach') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2635,7 +2845,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'impressions') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2650,7 +2860,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'postEngagements') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2665,7 +2875,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'clicks') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2680,7 +2890,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'messagingContacts') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2695,7 +2905,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'amountSpent') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2710,7 +2920,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'dailyBudget') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2725,7 +2935,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'optimization') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="truncate cursor-pointer hover:text-blue-600" title={adSet.optimizationGoal}>
@@ -2740,7 +2950,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'bidAmount') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2755,7 +2965,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('adsets', 'createdAt') && (
-                            <TableCell className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -2769,28 +2979,6 @@ export default function CampaignsPage() {
                               </Popover>
                             </TableCell>
                             )}
-                            <TableCell className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  title={adSet.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-                                >
-                                  {adSet.status === 'ACTIVE' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                </button>
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </TableCell>
                           </TableRow>
                         ))
                       )}
@@ -2808,10 +2996,10 @@ export default function CampaignsPage() {
             <div className="bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 overflow-hidden flex-1 flex flex-col min-h-0 rounded-tr-xl rounded-b-xl">
               <>
                 <div className="overflow-auto flex-1 min-h-0 scrollbar-minimal-table [&>div]:overflow-visible">
-                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0">
-                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 [&_th]:!py-1.5 [&_th]:!h-auto">
+                  <Table className="w-full min-w-max [&_th]:border-r [&_th]:border-gray-200 dark:[&_th]:border-zinc-800 [&_th:last-child]:border-r-0 [&_td]:border-r [&_td]:border-gray-200 dark:[&_td]:border-zinc-800 [&_td:last-child]:border-r-0 [&_tbody_td]:!py-1 [&_tbody_td]:!px-3">
+                    <TableHeader className="bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 sticky top-0 z-50 shadow-[0_1px_0_0_rgb(229_231_235)] dark:shadow-[0_1px_0_0_rgb(39_39_42)]">
                       <TableRow>
-                        <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1.5 !pr-3 !pl-3 text-center align-middle">
+                        <TableHead className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-2 !pr-3 !pl-3 text-center align-middle">
                           <div className="flex justify-center items-center w-full">
                             <Checkbox
                               checked={ads.length > 0 && selectedAdIds.size === ads.length}
@@ -2826,8 +3014,8 @@ export default function CampaignsPage() {
                         {visible('ads', 'page') && <SortableHeader columnKey="page" label={t('campaigns.columns.page', 'Page')} align="left" className="max-w-[280px]" />}
                         {visible('ads', 'campaignName') && <SortableHeader columnKey="campaignName" label={t('campaigns.columns.campaign', 'Campaign')} align="left" className="max-w-[280px]" />}
                         {visible('ads', 'adSetName') && <SortableHeader columnKey="adSetName" label={t('campaigns.columns.adSet', 'Ad set')} align="left" className="max-w-[280px]" />}
-                        {visible('ads', 'name') && <SortableHeader columnKey="name" label={t('campaigns.columns.adName', 'Ad Name')} align="left" className="max-w-[280px]" />}
-                        {visible('ads', 'target') && <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[280px]" />}
+                        {visible('ads', 'name') && <SortableHeader columnKey="name" label={t('campaigns.columns.adName', 'Ad Name')} align="left" className="max-w-[250px]" />}
+                        {visible('ads', 'target') && <SortableHeader columnKey="target" label={t('campaigns.columns.target', 'Target')} align="left" className="max-w-[200px]" />}
                         {visible('ads', 'status') && <SortableHeader columnKey="status" label={t('campaigns.columns.status', 'Status')} align="left" className="max-w-[280px]" />}
                         {visible('ads', 'results') && <SortableHeader columnKey="results" label={t('campaigns.columns.results', 'Results')} align="right" className="max-w-[280px]" />}
                         {visible('ads', 'costPerResult') && <SortableHeader columnKey="costPerResult" label={t('campaigns.columns.costPerResult', 'Cost per result')} align="right" className="max-w-[280px]" />}
@@ -2841,31 +3029,30 @@ export default function CampaignsPage() {
                         {visible('ads', 'title') && <SortableHeader columnKey="title" label={t('campaigns.columns.title', 'Title')} align="left" className="max-w-[280px]" />}
                         {visible('ads', 'body') && <SortableHeader columnKey="body" label={t('campaigns.columns.body', 'Body')} align="left" className="max-w-[280px]" />}
                         {visible('ads', 'createdAt') && <SortableHeader columnKey="createdAt" label={t('campaigns.columns.created', 'Created')} align="left" className="max-w-[280px]" />}
-                        <TableHead className="text-right max-w-[280px]">{t('campaigns.columns.actions', 'Actions')}</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800 [&_td]:!py-1.5">
+                    <TableBody className="[&_tr:last-child]:!border-b [&_tr:last-child]:!border-gray-200 dark:[&_tr:last-child]:!border-zinc-800 [&_td]:!py-1 [&_td]:!px-3">
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
                           <TableRow key={i} className="animate-pulse">
-                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1.5 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1 !pr-3 !pl-3 text-center align-middle"><div className="flex justify-center items-center w-full"><div className="h-5 w-5 bg-gray-200 dark:bg-zinc-800 rounded-[6px]"></div></div></TableCell>
                             <TableCell><div className="h-4 w-8 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto"></div></TableCell>
                             {visible('ads', 'adAccount') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('ads', 'page') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('ads', 'campaignName') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('ads', 'adSetName') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('ads', 'name') && (
-                            <TableCell className="px-4 py-1.5">
+                            <TableCell className="px-3 py-1 max-w-[250px]">
                               <div className="flex items-center gap-2">
-                                <div className="w-9 h-9 bg-gray-200 dark:bg-zinc-800 rounded"></div>
-                                <div className="flex-1 space-y-2">
-                                  <div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-48"></div>
+                                <div className="w-9 h-9 bg-gray-200 dark:bg-zinc-800 rounded flex-shrink-0"></div>
+                                <div className="flex-1 space-y-2 min-w-0">
+                                  <div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-40"></div>
                                   <div className="h-3 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div>
                                 </div>
                               </div>
                             </TableCell>
                             )}
-                            {visible('ads', 'target') && <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded-full w-16"></div></TableCell>}
+                            {visible('ads', 'target') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('ads', 'status') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
                             {visible('ads', 'results') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
                             {visible('ads', 'costPerResult') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-16 ml-auto"></div></TableCell>}
@@ -2879,12 +3066,11 @@ export default function CampaignsPage() {
                             {visible('ads', 'title') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
                             {visible('ads', 'body') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-32"></div></TableCell>}
                             {visible('ads', 'createdAt') && <TableCell><div className="h-4 bg-gray-200 dark:bg-zinc-800 rounded w-24"></div></TableCell>}
-                            <TableCell><div className="h-6 bg-gray-200 dark:bg-zinc-800 rounded w-24 ml-auto"></div></TableCell>
                           </TableRow>
                         ))
                       ) : filteredAds.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3 + visibleColumns.ads.size} className="text-center py-16">
+                          <TableCell colSpan={3 + visibleColumns.ads.size} className="text-center !py-16">
                             <div className="flex flex-col items-center gap-4">
                               <Briefcase className="h-12 w-12 text-amber-400 dark:text-amber-500" aria-hidden />
                               <p className="text-gray-600 dark:text-gray-400">{ads.length === 0 ? t('campaigns.noAds', 'No ads yet') : t('campaigns.noAdsMatch', 'No ads match your filters')}</p>
@@ -2901,7 +3087,7 @@ export default function CampaignsPage() {
                       ) : (
                         filteredAds.map((ad, index) => (
                           <TableRow key={ad.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer" onClick={() => handleToggleAdSelection(ad.id, !selectedAdIds.has(ad.id))}>
-                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1.5 !pr-3 !pl-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="w-12 min-w-[3rem] max-w-[3rem] px-3 py-1 !pr-3 !pl-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                               <div className="flex justify-center items-center w-full">
                                 <Checkbox
                                   checked={selectedAdIds.has(ad.id)}
@@ -2911,7 +3097,7 @@ export default function CampaignsPage() {
                                 />
                               </div>
                             </TableCell>
-                            <TableCell className="px-4 py-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                            <TableCell className="px-3 py-1 text-center" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => handleToggleAd(ad.id, ad.status)}
                                 className={`group relative inline-flex h-4 w-8 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 ${ad.status === 'ACTIVE'
@@ -2928,7 +3114,7 @@ export default function CampaignsPage() {
                             </TableCell>
 
                             {visible('ads', 'adAccount') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
@@ -2948,7 +3134,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'page') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
                               <div
                                 className="flex flex-col gap-0 cursor-pointer hover:text-blue-600 min-w-0"
                                 title={[ad.pageName || '-', ad.pageUsername ? `@${ad.pageUsername}` : '-', ad.pageId ? `ID: ${ad.pageId}` : '-'].join('\n')}
@@ -2967,37 +3153,36 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'campaignName') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
                               <div className="truncate" title={ad.campaignName || undefined}>{ad.campaignName || '-'}</div>
                             </TableCell>
                             )}
                             {visible('ads', 'adSetName') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400" style={{ maxWidth: '280px' }}>
                               <div className="truncate" title={ad.adSetName || undefined}>{ad.adSetName || '-'}</div>
                             </TableCell>
                             )}
                             {visible('ads', 'name') && (
-                            <TableCell className="px-4 py-1.5">
-                              <div className="flex items-center gap-2">
+                            <TableCell className="px-3 py-1 max-w-[250px]">
+                              <div className="flex items-center gap-2 min-w-0">
                                 {ad.imageUrl ? (
                                   <img
                                     src={ad.imageUrl}
                                     alt={ad.name}
-                                    className="w-9 h-9 object-cover rounded border border-gray-200 dark:border-zinc-800"
+                                    className="w-9 h-9 object-cover rounded border border-gray-200 dark:border-zinc-800 flex-shrink-0"
                                     onError={(e) => {
                                       (e.target as HTMLImageElement).style.display = 'none';
                                     }}
                                   />
                                 ) : (
-                                  <div className="w-9 h-9 bg-gray-100 rounded border border-gray-200 dark:border-zinc-800 flex items-center justify-center">
+                                  <div className="w-9 h-9 bg-gray-100 rounded border border-gray-200 dark:border-zinc-800 flex items-center justify-center flex-shrink-0">
                                     <span className="text-[10px] text-gray-400">No</span>
                                   </div>
                                 )}
                                 <Popover>
                                   <PopoverTrigger asChild>
                                     <div
-                                      className="flex flex-col min-w-0 cursor-pointer group"
-                                      style={{ maxWidth: '280px' }}
+                                      className="flex flex-col min-w-0 cursor-pointer group overflow-hidden"
                                     >
                                       <div className="flex items-center gap-2">
                                         <div className="text-sm text-gray-900 dark:text-gray-100 truncate hover:text-blue-600" title={ad.name}>
@@ -3031,26 +3216,25 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'target') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 max-w-[200px]">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div
-                                    className="whitespace-pre-line text-xs line-clamp-2 cursor-pointer hover:text-blue-600"
-                                    style={{ maxWidth: '280px' }}
+                                    className="whitespace-pre-line text-xs line-clamp-3 cursor-pointer hover:text-blue-600 truncate max-w-[200px]"
                                     title={formatTargeting(ad.targeting)}
                                   >
                                     {formatTargeting(ad.targeting)}
                                   </div>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-96 max-h-64 overflow-auto" align="start">
-                                  <div className="text-sm font-medium mb-2">Target</div>
+                                  <div className="text-sm font-medium mb-2">{t('campaigns.columns.target', 'Target')}</div>
                                   <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{formatTargetingFull(ad.targeting)}</div>
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
                             )}
                             {visible('ads', 'status') && (
-                            <TableCell className="px-4 py-1.5 text-sm">
+                            <TableCell className="px-3 py-1 text-sm">
                               {(() => {
                                 const status = getAdStatus(ad, accountMap && ad.adAccountId ? accountMap[ad.adAccountId] : undefined);
                                 return (
@@ -3065,7 +3249,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'results') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3080,7 +3264,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'costPerResult') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3095,22 +3279,141 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'budget') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right" onClick={(e) => e.stopPropagation()}>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
-                                    {ad.budget ? formatCurrency(ad.budget, ad.currency) : '-'}
+                                    {(() => {
+                                      if (!ad.budget) return <span className="text-gray-400">-</span>;
+                                      const source = ad.budgetSource === 'campaign' ? t('campaigns.budget.campaign', 'Campaign') : t('campaigns.budget.adSet', 'Ad Set');
+                                      const type = ad.budgetType === 'daily' ? t('campaigns.budget.daily', 'Daily') : t('campaigns.budget.lifetime', 'Lifetime');
+                                      return (
+                                        <div className="flex flex-col items-end">
+                                          <span className="font-medium">{formatCurrency(ad.budget, ad.currency)}</span>
+                                          <span className="text-xs text-gray-500 dark:text-gray-400">{source} {type}</span>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-64" align="start">
-                                  <div className="text-sm font-medium mb-2">Budget</div>
-                                  <div className="text-sm text-gray-700 dark:text-gray-300">{ad.budget ? formatCurrency(ad.budget, ad.currency) : '-'}</div>
+                                <PopoverContent className="w-72" align="start" onClick={(e) => e.stopPropagation()}>
+                                  <div className="text-sm font-medium mb-2">{t('campaigns.columns.budget', 'Budget')}</div>
+                                  {editingBudgetAdId === ad.id ? (
+                                    <div className="space-y-3">
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          className={cn("flex-1 px-2 py-1.5 text-xs rounded border", budgetEditType === 'daily' ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-zinc-700")}
+                                          onClick={() => {
+                                            setBudgetEditType('daily');
+                                            const val = editingBudgetAdSource === 'campaign' ? (ad.campaignDailyBudget || 0) : (ad.adsetDailyBudget || 0);
+                                            setBudgetEditValue(String(val || ''));
+                                          }}
+                                        >
+                                          {t('campaigns.budget.daily', 'Daily')}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className={cn("flex-1 px-2 py-1.5 text-xs rounded border", budgetEditType === 'lifetime' ? "border-blue-600 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300" : "border-gray-200 dark:border-zinc-700")}
+                                          onClick={() => {
+                                            setBudgetEditType('lifetime');
+                                            const val = editingBudgetAdSource === 'campaign' ? (ad.campaignLifetimeBudget || 0) : (ad.adsetLifetimeBudget || 0);
+                                            setBudgetEditValue(String(val || ''));
+                                          }}
+                                        >
+                                          {t('campaigns.budget.lifetime', 'Lifetime')}
+                                        </button>
+                                      </div>
+                                      <div className="flex gap-2 items-center">
+                                        <input
+                                          type="text"
+                                          inputMode="decimal"
+                                          value={budgetEditValue}
+                                          onChange={(e) => setBudgetEditValue(e.target.value)}
+                                          className="flex-1 h-9 px-2 rounded border border-input bg-background text-sm"
+                                          placeholder={t('campaigns.budget.amount', 'Amount')}
+                                        />
+                                        <span className="text-xs text-muted-foreground">{ad.currency || 'USD'}</span>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Button
+                                          size="sm"
+                                          className="flex-1"
+                                          disabled={budgetUpdating}
+                                          onClick={() => {
+                                            if (!ad.adAccountId) return;
+                                            if (editingBudgetAdSource === 'campaign') {
+                                              handleUpdateCampaignBudget(ad.campaignId, ad.adAccountId, ad.currency || 'USD', true);
+                                            } else if (editingBudgetAdSource === 'adset') {
+                                              handleUpdateAdSetBudget(ad.adsetId, ad.adAccountId, ad.currency || 'USD', true);
+                                            }
+                                          }}
+                                        >
+                                          {budgetUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : t('campaigns.budget.save', 'Save')}
+                                        </Button>
+                                        <Button size="sm" variant="outline" disabled={budgetUpdating} onClick={() => { setEditingBudgetAdId(null); setEditingBudgetAdSource(null); setBudgetEditValue(''); }}>
+                                          {t('common.cancel', 'Cancel')}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {(ad.campaignDailyBudget || 0) > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                          <span className="font-medium">{t('campaigns.budget.campaign', 'Campaign')} {t('campaigns.budget.daily', 'Daily')}:</span> {formatCurrency(ad.campaignDailyBudget!, ad.currency)}
+                                        </div>
+                                      )}
+                                      {(ad.campaignLifetimeBudget || 0) > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                          <span className="font-medium">{t('campaigns.budget.campaign', 'Campaign')} {t('campaigns.budget.lifetime', 'Lifetime')}:</span> {formatCurrency(ad.campaignLifetimeBudget!, ad.currency)}
+                                        </div>
+                                      )}
+                                      {(ad.adsetDailyBudget || 0) > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mb-1">
+                                          <span className="font-medium">{t('campaigns.budget.adSet', 'Ad Set')} {t('campaigns.budget.daily', 'Daily')}:</span> {formatCurrency(ad.adsetDailyBudget!, ad.currency)}
+                                        </div>
+                                      )}
+                                      {(ad.adsetLifetimeBudget || 0) > 0 && (
+                                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                                          <span className="font-medium">{t('campaigns.budget.adSet', 'Ad Set')} {t('campaigns.budget.lifetime', 'Lifetime')}:</span> {formatCurrency(ad.adsetLifetimeBudget!, ad.currency)}
+                                        </div>
+                                      )}
+                                      {!(ad.campaignDailyBudget || ad.campaignLifetimeBudget || ad.adsetDailyBudget || ad.adsetLifetimeBudget) && (
+                                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">-</div>
+                                      )}
+                                      {((ad.campaignDailyBudget || ad.campaignLifetimeBudget) || (ad.adsetDailyBudget || ad.adsetLifetimeBudget)) && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="w-full mt-2"
+                                          onClick={() => {
+                                            const source: 'campaign' | 'adset' = (ad.budgetSource === 'campaign' || ((ad.campaignDailyBudget || ad.campaignLifetimeBudget) && !(ad.adsetDailyBudget || ad.adsetLifetimeBudget)))
+                                              ? 'campaign'
+                                              : 'adset';
+                                            setEditingBudgetAdId(ad.id);
+                                            setEditingBudgetAdSource(source);
+                                            const hasDaily = source === 'campaign'
+                                              ? (ad.campaignDailyBudget || 0) > 0
+                                              : (ad.adsetDailyBudget || 0) > 0;
+                                            const val = hasDaily
+                                              ? (source === 'campaign' ? ad.campaignDailyBudget : ad.adsetDailyBudget) || ''
+                                              : (source === 'campaign' ? ad.campaignLifetimeBudget : ad.adsetLifetimeBudget) || '';
+                                            setBudgetEditType(hasDaily ? 'daily' : 'lifetime');
+                                            setBudgetEditValue(String(val));
+                                          }}
+                                        >
+                                          <Edit2 className="h-4 w-4 mr-1" />
+                                          {t('campaigns.budget.edit', 'Edit Budget')}
+                                        </Button>
+                                      )}
+                                    </>
+                                  )}
                                 </PopoverContent>
                               </Popover>
                             </TableCell>
                             )}
                             {visible('ads', 'reach') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3125,7 +3428,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'impressions') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3140,7 +3443,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'postEngagements') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3155,7 +3458,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'clicks') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3170,7 +3473,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'messagingContacts') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3185,7 +3488,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'amountSpent') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400 text-right">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 text-right">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3200,7 +3503,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'title') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="truncate cursor-pointer hover:text-blue-600" title={ad.title}>
@@ -3215,7 +3518,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'body') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="truncate cursor-pointer hover:text-blue-600" style={{ maxWidth: '280px' }} title={ad.body}>
@@ -3230,7 +3533,7 @@ export default function CampaignsPage() {
                             </TableCell>
                             )}
                             {visible('ads', 'createdAt') && (
-                            <TableCell className="px-4 py-1.5 text-sm text-gray-600 dark:text-gray-400">
+                            <TableCell className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <div className="cursor-pointer hover:text-blue-600 whitespace-nowrap">
@@ -3244,28 +3547,6 @@ export default function CampaignsPage() {
                               </Popover>
                             </TableCell>
                             )}
-                            <TableCell className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  title={ad.status === 'ACTIVE' ? 'Pause' : 'Resume'}
-                                >
-                                  {ad.status === 'ACTIVE' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                </button>
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded transition-colors"
-                                  title="Edit"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button
-                                  className="inline-flex items-center justify-center p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Delete"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </TableCell>
                           </TableRow>
                         ))
                       )}

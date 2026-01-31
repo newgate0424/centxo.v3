@@ -18,7 +18,6 @@ import {
     Sparkles,
     Zap,
     FileSpreadsheet,
-    BarChart3,
 } from 'lucide-react';
 import {
     AlertDialog,
@@ -76,6 +75,7 @@ const navStructure: NavGroup[] = [
                 translationKey: 'nav.campaigns',
                 children: [
                     { name: "Create Ads (Auto)", href: "/create-ads", icon: Rocket, iconClass: "text-amber-500", translationKey: 'nav.createAdsAuto', isChild: true },
+                    { name: "Target Audiences", href: "/audiences", icon: Users, iconClass: "text-indigo-500", translationKey: 'nav.targetAudiences', isChild: true },
                     { name: "A/B Creative Lab", href: "/tools/creative-variants", icon: Sparkles, iconClass: "text-violet-500", translationKey: 'nav.abCreativeLab', isChild: true },
                     { name: "Auto Rules", href: "/tools/auto-rules", icon: Zap, iconClass: "text-amber-500", translationKey: 'tools.autoRules.title', isChild: true },
                 ]
@@ -88,15 +88,7 @@ const navStructure: NavGroup[] = [
                 children: [
                     { name: "Accounts", href: "/ads-manager/accounts-vcid", icon: Users, iconClass: "text-indigo-500", translationKey: 'adsManager.accounts', isChild: true },
                     { name: "Campaigns", href: "/ads-manager/campaigns", icon: LayoutDashboard, iconClass: "text-blue-500", translationKey: 'adsManager.campaigns', isChild: true },
-                ]
-            },
-            {
-                name: "Report Tools",
-                icon: BarChart3,
-                iconClass: "text-emerald-500",
-                translationKey: 'nav.reportTools',
-                children: [
-                    { name: "Google Sheets Export", href: "/report-tools/google-sheets-export", icon: FileSpreadsheet, iconClass: "text-green-500", translationKey: 'nav.googleSheetsExport', isChild: true },
+                    { name: "Google Sheets Export", href: "/ads-manager/google-sheets-export", icon: FileSpreadsheet, iconClass: "text-green-500", translationKey: 'nav.googleSheetsExport', isChild: true },
                 ]
             },
             {
@@ -124,7 +116,6 @@ export default function AppSidebar({ isCollapsed, toggleSidebar, onMobileClose, 
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
         "Campaigns": true,
         "Ads Manager": true,
-        "Report Tools": true,
         "Settings": true
     })
 

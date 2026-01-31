@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import { encryptToken } from '@/lib/services/metaClient';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 const prisma = new PrismaClient();
 
@@ -79,6 +80,15 @@ export async function GET(request: NextRequest) {
         accessToken: encryptedToken,
         accessTokenExpires: expiresAt,
       },
+    });
+
+    const { ipAddress, userAgent } = getRequestMetadata(request);
+    await createAuditLog({
+      userId: user.id,
+      action: 'META_CONNECT',
+      details: { metaUserId: userInfo.id, metaName: userInfo.name, email: user.email },
+      ipAddress,
+      userAgent,
     });
 
     // Redirect to settings page

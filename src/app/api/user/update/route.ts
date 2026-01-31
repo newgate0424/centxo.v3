@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 export async function PATCH(req: NextRequest) {
     try {
@@ -28,6 +29,15 @@ export async function PATCH(req: NextRequest) {
         const updatedUser = await prisma.user.update({
             where: { email: session.user.email },
             data: { name },
+        });
+
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+        await createAuditLog({
+            userId: session.user.id,
+            action: 'UPDATE_USER_PROFILE',
+            details: { name: updatedUser.name, email: updatedUser.email },
+            ipAddress,
+            userAgent,
         });
 
         return NextResponse.json({

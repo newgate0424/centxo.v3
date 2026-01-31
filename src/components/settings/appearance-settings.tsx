@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useThemeColor } from '@/contexts/ThemeColorContext';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Moon, Sun, Monitor, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,7 +23,6 @@ export function AppearanceSettings() {
     const { t } = useLanguage();
     const { theme, setTheme } = useTheme();
     const { colors, setPrimaryColor, resetColors } = useThemeColor();
-    const [compactMode, setCompactMode] = useState(false);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -117,19 +115,6 @@ export function AppearanceSettings() {
                         </PopoverContent>
                     </Popover>
                 </div>
-            </div>
-
-            {/* Compact Mode */}
-            <div className="flex items-center justify-between py-1">
-                <div>
-                    <Label htmlFor="compact-mode" className="text-sm font-medium">
-                        {t('settings.appearance.compact', 'Compact Mode')}
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        {t('settings.appearance.compactDesc', 'Reduce spacing and padding')}
-                    </p>
-                </div>
-                <Switch id="compact-mode" checked={compactMode} onCheckedChange={setCompactMode} />
             </div>
 
             {/* Language */}

@@ -8,6 +8,7 @@ import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { z } from 'zod';
 import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
+import { createAuditLog, getRequestMetadata } from '@/lib/audit';
 
 const prisma = new PrismaClient();
 
@@ -62,6 +63,15 @@ export async function POST(request: NextRequest) {
         email,
         password: hashedPassword,
       },
+    });
+
+    const { ipAddress, userAgent } = getRequestMetadata(request);
+    await createAuditLog({
+      userId: user.id,
+      action: 'USER_REGISTER',
+      details: { email: user.email, name: user.name },
+      ipAddress,
+      userAgent,
     });
 
     return NextResponse.json(

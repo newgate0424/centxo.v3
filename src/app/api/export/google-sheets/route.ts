@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createAuditLog, getRequestMetadata } from '@/lib/audit'
 
 // GET - Fetch all export configs for user
 export async function GET(request: NextRequest) {
@@ -80,6 +81,16 @@ export async function POST(request: NextRequest) {
             }
         })
 
+        const { ipAddress, userAgent } = getRequestMetadata(request)
+        await createAuditLog({
+            userId: session.user.id,
+            action: 'ADD_EXPORT_CONFIG',
+            entityId: config.id,
+            details: { name: config.name, dataType: config.dataType },
+            ipAddress,
+            userAgent,
+        })
+
         return NextResponse.json({ config, success: true })
     } catch (error) {
         console.error('Error creating export config:', error)
@@ -127,6 +138,16 @@ export async function PUT(request: NextRequest) {
             data: updateData
         })
 
+        const { ipAddress, userAgent } = getRequestMetadata(request)
+        await createAuditLog({
+            userId: session.user.id,
+            action: 'UPDATE_EXPORT_CONFIG',
+            entityId: config.id,
+            details: { name: config.name },
+            ipAddress,
+            userAgent,
+        })
+
         return NextResponse.json({ config, success: true })
     } catch (error) {
         console.error('Error updating export config:', error)
@@ -159,6 +180,16 @@ export async function DELETE(request: NextRequest) {
         }
 
         await (prisma as any).exportConfig.delete({ where: { id } })
+
+        const { ipAddress, userAgent } = getRequestMetadata(request)
+        await createAuditLog({
+            userId: session.user.id,
+            action: 'DELETE_EXPORT_CONFIG',
+            entityId: id,
+            details: { configName: existing.name },
+            ipAddress,
+            userAgent,
+        })
 
         return NextResponse.json({ success: true })
     } catch (error) {

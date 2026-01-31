@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { rateLimit, RateLimitPresets } from '@/lib/middleware/rateLimit';
 import { withCache, withCacheSWR, generateCacheKey, CacheTTL, deleteCache } from '@/lib/cache/redis';
-import { TokenInfo, getValidTokenForAdAccount, getValidTokenForPage } from '@/lib/facebook/token-helper';
+import { TokenInfo, getValidTokenForAdAccount } from '@/lib/facebook/token-helper';
 
 export async function GET(request: NextRequest) {
   try {
@@ -250,7 +250,7 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
         const accountData = await accountResponse.json();
         const accountCurrency = accountData.currency || 'USD';
 
-        const initialUrl = `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{name,targeting,daily_budget,lifetime_budget},campaign{name},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id,actor_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=200&access_token=${token}`;
+        const initialUrl = `https://graph.facebook.com/v22.0/${accountId}/ads?fields=id,name,status,adset_id,campaign_id,adset{name,targeting,daily_budget,lifetime_budget},campaign{name,daily_budget,lifetime_budget},creative{id,name,title,body,image_url,thumbnail_url,object_story_spec,asset_feed_spec,effective_object_story_id,object_story_id,actor_id},effective_status,configured_status,issues_info,created_time,insights.${insightsTimeRange}{spend,actions,reach,impressions,clicks}&limit=200&access_token=${token}`;
 
         const ads = await fetchAllPages(initialUrl, token);
 
@@ -303,7 +303,7 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
 
   const pageIds = new Set(pageIdToAdAccount.keys());
 
-  // Batch fetch page names + usernames - use ad account token per page for better permission
+  // Batch fetch page names + usernames - use Meta ids param to reduce API calls (1 call per ~50 pages vs N calls)
   type PageInfo = { name: string; username?: string };
   const pageInfoCache: Record<string, string | PageInfo> = {};
   if (pageIds.size > 0) {
@@ -317,31 +317,42 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
       async (): Promise<Record<string, PageInfo>> => {
         const info: Record<string, PageInfo> = {};
 
-        // Fetch each page using the token from its ad account (better permission match)
-        await Promise.all(
-          pageIdsArray.map(async (pageId) => {
-            const adAccountId = pageIdToAdAccount.get(pageId);
-            const token = adAccountId
-              ? await getValidTokenForAdAccount(adAccountId, tokens)
-              : await getValidTokenForPage(pageId, tokens);
-            if (!token) return;
+        // Group pageIds by adAccountId (same token per ad account)
+        const adAccountToPageIds = new Map<string, string[]>();
+        for (const pageId of pageIdsArray) {
+          const adAccountId = pageIdToAdAccount.get(pageId);
+          if (!adAccountId) continue;
+          if (!adAccountToPageIds.has(adAccountId)) adAccountToPageIds.set(adAccountId, []);
+          adAccountToPageIds.get(adAccountId)!.push(pageId);
+        }
+
+        const IDS_PER_REQUEST = 50; // Meta API limit
+        for (const [adAccountId, ids] of adAccountToPageIds) {
+          const token = await getValidTokenForAdAccount(adAccountId, tokens);
+          if (!token) continue;
+          for (let i = 0; i < ids.length; i += IDS_PER_REQUEST) {
+            const chunk = ids.slice(i, i + IDS_PER_REQUEST);
+            const idsParam = chunk.join(',');
             try {
               const res = await fetch(
-                `https://graph.facebook.com/v22.0/${pageId}?fields=name,username&access_token=${token}`
+                `https://graph.facebook.com/v22.0/?ids=${encodeURIComponent(idsParam)}&fields=name,username&access_token=${token}`
               );
               if (res.ok) {
-                const pageData = await res.json();
-                const name = pageData.name ?? '';
-                const username = pageData.username;
-                if (name) {
-                  info[pageId] = { name, username };
+                const data = await res.json();
+                for (const pageId of chunk) {
+                  const pageData = data[pageId];
+                  if (pageData && !pageData.error) {
+                    const name = pageData.name ?? '';
+                    const username = pageData.username;
+                    if (name) info[pageId] = { name, username };
+                  }
                 }
               }
             } catch {
               /* ignore */
             }
-          })
-        );
+          }
+        }
         return info;
       }
     );
@@ -416,14 +427,24 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
     const postEngagementAction = actions.find((a: any) => a.action_type === 'post_engagement');
     const postEngagements = parseInt(postEngagementAction?.value || '0');
 
-    // Get Budget from Ad Set
+    // Get Budget - Campaign level (CBO) or Ad Set level
+    const campaignDaily = ad.campaign?.daily_budget ? parseFloat(ad.campaign.daily_budget) / 100 : 0;
+    const campaignLifetime = ad.campaign?.lifetime_budget ? parseFloat(ad.campaign.lifetime_budget) / 100 : 0;
+    const adsetDaily = ad.adset?.daily_budget ? parseFloat(ad.adset.daily_budget) / 100 : 0;
+    const adsetLifetime = ad.adset?.lifetime_budget ? parseFloat(ad.adset.lifetime_budget) / 100 : 0;
+
     let budget = 0;
-    if (ad.adset) {
-      if (ad.adset.daily_budget) {
-        budget = parseFloat(ad.adset.daily_budget) / 100;
-      } else if (ad.adset.lifetime_budget) {
-        budget = parseFloat(ad.adset.lifetime_budget) / 100;
-      }
+    let budgetSource: 'campaign' | 'adset' = 'adset';
+    let budgetType: 'daily' | 'lifetime' = 'daily';
+
+    if (campaignDaily > 0 || campaignLifetime > 0) {
+      budget = campaignDaily > 0 ? campaignDaily : campaignLifetime;
+      budgetSource = 'campaign';
+      budgetType = campaignDaily > 0 ? 'daily' : 'lifetime';
+    } else if (adsetDaily > 0 || adsetLifetime > 0) {
+      budget = adsetDaily > 0 ? adsetDaily : adsetLifetime;
+      budgetSource = 'adset';
+      budgetType = adsetDaily > 0 ? 'daily' : 'lifetime';
     }
 
     return {
@@ -450,6 +471,12 @@ async function fetchAdsFromMeta(adAccountIds: string[], tokens: TokenInfo[], dat
       pageName: pageName || (pageId ? `Page ${pageId}` : null),
       pageUsername: pageUsername,
       budget: budget,
+      budgetSource: budgetSource,
+      budgetType: budgetType,
+      campaignDailyBudget: campaignDaily,
+      campaignLifetimeBudget: campaignLifetime,
+      adsetDailyBudget: adsetDaily,
+      adsetLifetimeBudget: adsetLifetime,
       metrics: {
         spend: spend,
         reach: parseInt(insights?.reach || '0'),

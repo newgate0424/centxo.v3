@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 import type { Session } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { createAuditLog, getRequestMetadata } from '@/lib/audit'
 import { refreshAccessToken, getGoogleSheetsClient } from '@/lib/google-auth'
 import { getAdAccounts, getCampaignsWithDeliveryStatus, getAdSetsWithDeliveryStatus, getAds, getInsights } from '@/lib/facebook'
 
@@ -538,6 +539,16 @@ export async function POST(request: NextRequest) {
                 lastExportStatus: 'success',
                 lastExportError: null
             }
+        })
+
+        const { ipAddress, userAgent } = getRequestMetadata(request)
+        await createAuditLog({
+            userId,
+            action: 'EXPORT_GOOGLE_SHEET_TRIGGER',
+            entityId: config.id,
+            details: { configName: config.name, count: rows.length, dataType: config.dataType, triggeredBy: cronOk ? 'cron' : 'manual' },
+            ipAddress,
+            userAgent,
         })
 
         return NextResponse.json({ success: true, count: rows.length })

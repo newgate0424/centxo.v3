@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg';
-import { writeFile, mkdir, unlink } from 'fs/promises';
+import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
 import sharp from 'sharp';
@@ -13,12 +13,12 @@ export interface ThumbnailGenerationResult {
 }
 
 /**
- * Generate thumbnails from a video file and upload to R2
+ * Generate thumbnails from a video file and save locally
  * @param videoPath - Local path to the video file
- * @param userId - User ID for organizing thumbnails in R2
+ * @param userId - User ID for organizing thumbnails
  * @param videoId - Unique video identifier
  * @param count - Number of thumbnails to generate (default: 18)
- * @returns Array of thumbnail URLs in R2
+ * @returns Array of thumbnail URLs (local API paths)
  */
 export async function generateAndUploadThumbnails(
     videoPath: string,
@@ -28,19 +28,6 @@ export async function generateAndUploadThumbnails(
 ): Promise<ThumbnailGenerationResult> {
     try {
         console.log(`🎬 Generating ${count} thumbnails for video: ${videoPath}`);
-
-        // Check if R2 is configured
-        const accountId = process.env.R2_ACCOUNT_ID;
-        const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-        const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-        const bucketName = process.env.R2_BUCKET_NAME;
-
-        if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
-            return {
-                success: false,
-                error: 'Cloudflare R2 not configured',
-            };
-        }
 
         // Get video duration
         const duration = await getVideoDuration(videoPath);
@@ -60,61 +47,35 @@ export async function generateAndUploadThumbnails(
             timestamps.push(interval * i);
         }
 
-        // Create temp directory for thumbnails
-        const tempDir = path.join(process.cwd(), 'uploads', 'temp', 'thumbnails');
-        if (!existsSync(tempDir)) {
-            await mkdir(tempDir, { recursive: true });
+        // Create local directory for thumbnails: uploads/thumbnails/userId/videoId/
+        const thumbDir = path.join(process.cwd(), 'uploads', 'thumbnails', userId, videoId);
+        if (!existsSync(thumbDir)) {
+            await mkdir(thumbDir, { recursive: true });
         }
 
-        // Extract thumbnails
-        const thumbnailPaths: string[] = [];
+        // Extract and save thumbnails locally
+        const thumbnailUrls: string[] = [];
         for (let i = 0; i < timestamps.length; i++) {
             const timestamp = timestamps[i];
-            const tempPath = path.join(tempDir, `thumb_${i}.jpg`);
+            const thumbFileName = `thumb-${i}.jpg`;
+            const thumbPath = path.join(thumbDir, thumbFileName);
 
-            await extractFrameAtTime(videoPath, timestamp, tempPath);
-            thumbnailPaths.push(tempPath);
-        }
+            await extractFrameAtTime(videoPath, timestamp, thumbPath);
 
-        console.log(`✅ Extracted ${thumbnailPaths.length} thumbnails`);
-
-        // Upload thumbnails to R2
-        const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-        const s3Client = new S3Client({
-            region: 'auto',
-            endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-            credentials: { accessKeyId, secretAccessKey },
-        });
-
-        const thumbnailUrls: string[] = [];
-        for (let i = 0; i < thumbnailPaths.length; i++) {
-            const thumbnailPath = thumbnailPaths[i];
-            const r2Key = `thumbnails/${userId}/${videoId}/thumb-${i}.jpg`;
-
-            // Optimize thumbnail before upload
-            // Resize with fixed height 180px, width auto to maintain aspect ratio
-            const buffer = await sharp(thumbnailPath)
+            // Optimize thumbnail: resize with fixed height 180px, width auto
+            const buffer = await sharp(thumbPath)
                 .resize({ height: 180 })
                 .jpeg({ quality: 80 })
                 .toBuffer();
 
-            // Upload to R2
-            await s3Client.send(new PutObjectCommand({
-                Bucket: bucketName,
-                Key: r2Key,
-                Body: buffer,
-                ContentType: 'image/jpeg',
-            }));
+            await writeFile(thumbPath, buffer);
 
-            // Generate URL (using proxy API route)
-            const thumbnailUrl = `/api/r2/${r2Key}`;
+            // Return local API URL for serving
+            const thumbnailUrl = `/api/uploads/thumbnails/${userId}/${videoId}/${thumbFileName}`;
             thumbnailUrls.push(thumbnailUrl);
-
-            // Clean up temp file
-            await unlink(thumbnailPath).catch(() => { });
         }
 
-        console.log(`✅ Uploaded ${thumbnailUrls.length} thumbnails to R2`);
+        console.log(`✅ Saved ${thumbnailUrls.length} thumbnails locally`);
 
         return {
             success: true,
