@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
                             stripeCustomerId: session.customer as string,
                             plan: plan.name,
                             subscriptionStatus: 'active',
-                            currentPeriodEnd: new Date((sub as any).current_period_end * 1000),
+                            currentPeriodEnd: new Date(sub.items.data[0].current_period_end * 1000),
                         },
                     });
                 }
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
                         data: {
                             subscriptionStatus: sub.status,
                             plan: isCanceled ? 'FREE' : plan.name, // Revert to FREE if canceled
-                            currentPeriodEnd: new Date((sub as any).current_period_end * 1000),
+                            currentPeriodEnd: new Date(sub.items.data[0].current_period_end * 1000),
                         },
                     });
                 }
